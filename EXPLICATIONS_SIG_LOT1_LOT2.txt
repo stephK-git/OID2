@@ -1,0 +1,182 @@
+================================================================================
+O.I.D (Observatoire Inondations & Dommages — District Autonome d'Abidjan)
+PRESENTATION DE LA REFONTE GEOMATIQUE & GEOSTATISTIQUE (LOT 1 ET LOT 2)
+OBJECTIFS DU PROJET ET APPORTS OPERATIONNELS DE CHAQUE ELEMENT
+================================================================================
+
+1. OBJECTIF FONDAMENTAL DU PROJET O.I.D
+--------------------------------------------------------------------------------
+L'objectif fondamental d'O.I.D est de transformer en temps reel des signalements
+citoyens heterogenes a Abidjan en :
+  1. Decisions operationnelles de secours immediates (affectation prioritaire des
+     enqueteurs et des equipes de secours ONPC/Protection Civile, estimation des
+     vies humaines menacees, identification des quartiers enclaves).
+  2. Detection precoce des ruptures reseau (identifier les secteurs inondables
+     qui ne remontent plus d'alerte suite a des coupures de courant ou telecomes).
+  3. Bilans post-crise (RETEX - Retour d'Experience) scientifiquement et
+     institutionnellement opposables pour l'amenagement urbain et la prevention.
+
+Avant cette refonte, le module SIG reposait sur des simplifications non
+exploitables (5 rectangles factices, disques arbitraires de 600 m, absence
+d'enjeux humains et relief). Les Lots 1 et 2 ont permis de mettre en place une
+chaine geographique complete conforme aux standards d'un geomaticien.
+
+
+================================================================================
+2. LOT 1 — LE SOCLE GEOMATIQUE, TOPOLOGIQUE ET DEMOGRAPHIQUE
+================================================================================
+Le Lot 1 pose les fondations cartographiques exactes : sans referentiel metrique
+ni population reelle, tout calcul de risque produit des biais geographiques.
+
+--------------------------------------------------------------------------------
+POINT 1.1 : Vraies limites administratives des 13 communes d'Abidjan (OSM / OCHA)
+--------------------------------------------------------------------------------
+* Ce qui a ete fait :
+  - Remplacement definitif des rectangles du seed par les veritables polygones
+    des 13 communes du District Autonome d'Abidjan (Abobo, Adjame, Anyama,
+    Attecoube, Bingerville, Cocody, Koumassi, Marcory, Plateau, Port-Bouet,
+    Songon, Treichville, Yopougon), totalisant 1 031,24 km2 terrestres.
+  - Detourage topologique precis du trait de cote de la lagune Ebrie pour
+    exclure les plans d'eau des superficies communales.
+
+* Avantage pour O.I.D :
+  - Rattachement administratif sans erreur (ST_Intersects) : chaque incident est
+    attribue a la bonne mairie ou cellule communale de crise, y compris sur les
+    rives et presqu'iles lagunaires (Marcory, Koumassi, Treichville, Port-Bouet).
+  - Densites vraies : l'eau lagunaire etant deduite, les superficies terrestres
+    sont exactes et ne diluent plus artificiellement la densite humaine.
+
+--------------------------------------------------------------------------------
+POINT 1.2 : Demographie carroyee WorldPop 100 m sur maillage hexagonal de 300 m
+--------------------------------------------------------------------------------
+* Ce qui a ete fait :
+  - Ingestion du raster officiel WorldPop 2020 UNadj Maxar-Constrained (100 m).
+  - Agregation spatiale des 5,33 millions d'habitants par commune et sur un
+    maillage hexagonal regulier de 300 m de cote (ST_HexagonGrid, 4 947 mailles
+    terrestres de 0,234 km2 couvrant le District).
+
+* Avantage pour O.I.D :
+  - Priorisation par l'enjeu humain reel : a gravite ou hauteur d'eau egale, le
+    coordinateur sait immediatement s'il fait face a une inondation dans une zone
+    industrielle peu peuplee ou dans un quartier residentiel hyper-dense
+    (ex. Abobo, Adjame, Yopougon).
+  - Finesse infra-communale : des communes comme Yopougon ou Cocody font plus de
+    100 km2. L'hexagone de 300 m localise l'exposition a l'echelle du quartier
+    avec une symetrie parfaite dans toutes les directions.
+
+--------------------------------------------------------------------------------
+POINT 1.3 : Projection metrique officielle EPSG:32630 et habillage SIG complet
+--------------------------------------------------------------------------------
+* Ce qui a ete fait :
+  - Tous les calculs de distances (metres) et surfaces (km2) sont effectues dans
+    la projection metrique officielle WGS 84 / UTM zone 30N (EPSG:32630).
+  - Discretisation statistique par l'algorithme exact des seuils naturels de
+    Fisher-Jenks avec calcul de la variance expliquee (GVF).
+  - Habillage cartographique : echelle metrique, fleche du Nord, lecture temps
+    reel des coordonnees curseur WGS84 + UTM 30N, legende dynamique, et fonds
+    cartographiques OSM libres sans cle API ni filigrane.
+
+* Avantage pour O.I.D :
+  - Zero distorsion angulaire : fin des calculs approximatifs en degres
+    decimaux ; les coordonnees UTM en metres sont directement exploitables par
+    les services de secours sur le terrain.
+  - Lisibilite decisionnelle : Fisher-Jenks garantit que les cartes ne sont pas
+    saturees par une couleur unique malgre les contrastes extremes d'Abidjan.
+
+
+================================================================================
+3. LOT 2 — L'INTELLIGENCE GEOSTATISTIQUE ET L'AIDE A LA DECISION DE CRISE
+================================================================================
+Le Lot 2 repond aux trois questions cruciales d'une cellule de crise :
+1. Ou se situe exactement le corridor physique d'inondation ?
+2. Quelles communes cumulent le plus haut niveau de risque structurel ?
+3. Quels quartiers sont coupes du monde et ne peuvent plus appeler a l'aide ?
+
+--------------------------------------------------------------------------------
+POINT 2.1 : Corridors ST_ClusterDBSCAN + ST_ConcaveHull & Getis-Ord Gi*
+--------------------------------------------------------------------------------
+* Ce qui a ete fait :
+  - Suppression radicale des cercles arbitraires de 600 m.
+  - Clustering spatial metrique deterministe PostGIS ST_ClusterDBSCAN
+    (eps = 450 m, minpoints = 2) en EPSG:32630, filtrant automatiquement les
+    signalements isoles comme "bruit spatial".
+  - Generation de l'enveloppe concave (ST_ConcaveHull) epaulee d'un tampon de
+    voirie de 65 m pour restituer la forme reelle du corridor submerge.
+  - Statistique locale d'autocorrelation Getis-Ord Gi* (z-score et p-value sur
+    voisinage de 900 m) sur les 4 947 mailles hexagonales.
+
+* Avantage pour O.I.D :
+  - Delimitation fidele des axes inondes : a Abidjan, l'eau suit les talwegs,
+    canaux et bas-fonds. L'enveloppe concave epouse la rue ou le ravin submerge
+    (ex. 0,013 km2 au lieu d'un cercle fictif de 1,13 km2 debordant sur des zones
+    seches ou la lagune).
+  - Validation statistique des foyers (Getis-Ord Gi*) : confirme si une
+    accumulation d'appels constitue un point chaud statistiquement significatif
+    (95 % ou 99 %, |Z| >= 1,96) justifiant le deplacement de motopompes lourdes.
+
+--------------------------------------------------------------------------------
+POINT 2.2 : Indice Multicritere Documente (Alea x Exposition x Vulnerabilite)
+--------------------------------------------------------------------------------
+* Ce qui a ete fait :
+  - Integration du Modele Numerique de Terrain (~38 m, altitudes de 0 a 190 m)
+    et de la distance metrique au reseau hydrographique OSM (1 190 troncons
+    de rivieres, canaux, dalots et lagune).
+  - Formulation mathematique normalisee [0, 100] conforme au cadre UNDRR :
+      IV_i = 100 * (Alea_i^0.40) * (Exposition_i^0.35) * (Vulnerabilite_i^0.25)
+    ou Alea combine MNT/hydro et sinistres, Exposition reflete la population
+    WorldPop en bas-fonds, et Vulnerabilite mesure la part de population a risque.
+
+* Avantage pour O.I.D :
+  - Capacite preventive en amont : permet d'anticiper les secteurs critiques
+    avant meme que les premiers signalements n'arrivent (communes basses proches
+    des exutoires comme Cocody, Marcory, Koumassi).
+  - Transparence et opposabilite : la decomposition separee (Alea, Exposition,
+    Vulnerabilite) oriente la nature de l'intervention (pompage vs evacuation) et
+    fournit un indicateur solide pour les bilans post-crise (rapport RETEX PDF).
+
+--------------------------------------------------------------------------------
+POINT 2.3 : Zones Silencieuses par Modele Statistique de Poisson (Oi vs Ei)
+--------------------------------------------------------------------------------
+* Ce qui a ete fait :
+  - Remplacement du seuil naif "0 signalement" par un modele stochastique
+    de Poisson ou le nombre attendu d'appels E_i est proportionnel a la population
+    reelle ponderee par l'alea d'inondation :
+      E_i = N_crise * (Somme_{m in i} Pop_m * Alea_m) / Somme_globale
+  - Calcul du residu de deviance r_D et de la p-value unilaterale gauche.
+
+* Avantage majeur pour O.I.D (Gestion de l'angle mort en crise) :
+  - Fin du faux sentiment de securite : auparavant, des qu'un unique citoyen
+    envoyait 1 signalement dans une commune d'un million d'habitants (Yopougon ou
+    Abobo), celle-ci disparaissait totalement des alertes de silence radio !
+  - Alerte de rupture reseau et enclavement : desormais, 1 signalement observe la
+    ou l'exposition en fait attendre 10 (r_D = -3,67, p < 0,001) declenche
+    immediatement une alerte pour "Suspicion de coupure CIE / panne telecome /
+    isolement", orientant une patrouille de reconnaissance vers les sinistres
+    qui ne peuvent plus appeler a l'aide.
+
+
+================================================================================
+4. TABLEAU RECAPITULATIF : AVANT VS APRES LA REFONTE
+================================================================================
++---------------------+------------------------+-------------------------------+
+| Dimension Projet    | Avant la refonte       | Apres Lot 1 + Lot 2           |
++---------------------+------------------------+-------------------------------+
+| Decoupage           | 5 rectangles fictifs   | 13 vraies communes detourees  |
+| territorial         | du seed                | de la lagune (OSM / OCHA)     |
++---------------------+------------------------+-------------------------------+
+| Enjeu humain        | Absent (points bruts)  | WorldPop 100 m sur 4 947      |
+|                     |                        | hexagones de 300 m (UTM 30N)  |
++---------------------+------------------------+-------------------------------+
+| Points chauds       | Glouton + cercles 600m | ST_ClusterDBSCAN +            |
+|                     | (debordements lagune)  | ST_ConcaveHull + Getis-Ord    |
++---------------------+------------------------+-------------------------------+
+| Vulnerabilite       | Formule empirique      | Indice UNDRR documente :      |
+|                     | opaque                 | Alea x Exposition x Vuln.     |
++---------------------+------------------------+-------------------------------+
+| Zones silencieuses  | Seuil binaire          | Modele de Poisson Oi vs Ei    |
+|                     | "0 incident"           | (detecte sous-signalement)    |
++---------------------+------------------------+-------------------------------+
+| Rendu cartographique| Degres non projetes,   | EPSG:32630 metrique, legende  |
+| et RETEX            | filigrane API CARTO    | GVF, rapport RETEX PDF auto   |
++---------------------+------------------------+-------------------------------+
+

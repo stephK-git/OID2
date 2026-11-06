@@ -1,0 +1,29 @@
+[project]
+name = "oid"
+version = "0.1.0"
+description = "O.I.D — Observatoire Inondations & Dommages (API FastAPI + PostGIS)"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["app", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle erreurs
+    "W",     # warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # bugbear
+    "SIM",   # simplify
+]
+ignore = [
+    "E501",  # longueur de ligne tolérée dans les messages / docstrings
+    "B008",  # FastAPI injection de dépendances via Depends() dans les signatures
+]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

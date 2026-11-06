@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Environnement
+.env
+!.env.example
+
+# Tests / outils
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Éditeurs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Photos téléversées (stockage local de démonstration)
+app/static/uploads/
+
+# Dumps et backups base de données
+*.dump
+backup_oid_avant_migration.dump
+
+
+# Rasters bruts lourds téléchargés (WorldPop, archives brutes)
+data/raw/

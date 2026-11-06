@@ -1,0 +1,38 @@
+{
+  "territoire": "District Autonome d'Abidjan (13 communes)",
+  "scr_stockage": "EPSG:4326 (WGS 84)",
+  "scr_calcul_metrique": "EPSG:32630 (WGS 84 / UTM zone 30N)",
+  "maillage_hexagonal": {
+    "methode": "PostGIS ST_HexagonGrid (EPSG:32630)",
+    "cote_m": 300,
+    "superficie_theorique_km2": 0.233827
+  },
+  "sources": {
+    "limites_administratives": {
+      "fournisseur": "OpenStreetMap Contributors (admin_level=8/7) & OCHA COD-AB Côte d'Ivoire",
+      "licence": "ODbL 1.0 / CC-BY-IGO",
+      "nb_communes": 13,
+      "superficie_terrestre_totale_km2": 1031.24
+    },
+    "population": {
+      "fournisseur": "WorldPop (University of Southampton) — UN-adjusted Population Counts",
+      "resolution": "3 arc-secondes (~100 m à l'équateur)",
+      "millesime": 2020,
+      "url_source": "https://data.worldpop.org/GIS/Population/Global_2000_2020_Constrained/2020/maxar_v1/CIV/civ_ppp_2020_UNadj_constrained.tif",
+      "licence": "CC-BY 4.0",
+      "population_totale_district": 5332136.0
+    },
+    "hydrographie": {
+      "fournisseur": "OpenStreetMap Contributors (waterway=river|stream|canal|drain + berges Lagune Ébrié)",
+      "licence": "ODbL 1.0",
+      "nb_troncons": 1190
+    },
+    "modele_numerique_terrain": {
+      "fournisseur": "AWS Open Data Terrain Tiles (SRTM / Copernicus DEM composite, Terrarium z=12)",
+      "resolution": "~38 m natif (agrégé par maille 300 m en EPSG:32630)",
+      "altitude_min_m": 0.0,
+      "altitude_max_m": 190.2
+    }
+  },
+  "genere_le": "2026-11-06T14:46:35.910433+00:00"
+}

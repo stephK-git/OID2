@@ -1,0 +1,65 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "name": "OID Design System Tokens",
+  "version": "2.0.0",
+  "description": "Tokens de design pour l'Observatoire Inondations & Dommages (O.I.D) - District Autonome d'Abidjan",
+  "color": {
+    "brand": {
+      "primary": { "value": "#0284c7", "type": "color", "description": "Bleu urgence / action principale" },
+      "primaryHover": { "value": "#0369a1", "type": "color", "description": "Survol bouton principal" },
+      "primaryLight": { "value": "#e0f2fe", "type": "color", "description": "Fonds de surbrillance bleutes" },
+      "navy": { "value": "#0b1f3a", "type": "color", "description": "Bleu institutionnel / titres / en-tetes" },
+      "navyLight": { "value": "#1e293b", "type": "color", "description": "Gris bleute sombre" }
+    },
+    "background": {
+      "page": { "value": "#f8fafc", "type": "color", "description": "Fond principal de l'application" },
+      "card": { "value": "#ffffff", "type": "color", "description": "Fond des cartes et conteneurs" },
+      "cardAlt": { "value": "#f1f5f9", "type": "color", "description": "Fond alternatif pour les zones secondaires" }
+    },
+    "text": {
+      "main": { "value": "#0f172a", "type": "color", "description": "Texte principal a fort contraste" },
+      "muted": { "value": "#64748b", "type": "color", "description": "Labels, sous-titres et metadonnees" },
+      "inverse": { "value": "#ffffff", "type": "color", "description": "Texte sur fond sombre" }
+    },
+    "border": {
+      "default": { "value": "#e2e8f0", "type": "color", "description": "Bordure des cartes et tableaux" },
+      "focus": { "value": "#0284c7", "type": "color", "description": "Bordure d'accentuation / champ actif" }
+    },
+    "status": {
+      "danger": { "value": "#dc2626", "type": "color", "description": "Peril vital, inondation critique, alerte maximale" },
+      "dangerLight": { "value": "#fef2f2", "type": "color", "description": "Fond d'alerte critique" },
+      "warning": { "value": "#d97706", "type": "color", "description": "Vigilance moyenne, retard SLA, doublon suspect" },
+      "warningLight": { "value": "#fffbeb", "type": "color", "description": "Fond d'avertissement" },
+      "success": { "value": "#16a34a", "type": "color", "description": "Incident cloture, dossier valide, confirmation" },
+      "successLight": { "value": "#f0fdf4", "type": "color", "description": "Fond de succes" },
+      "info": { "value": "#0284c7", "type": "color", "description": "Information neutre ou geographique" }
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": { "value": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" },
+      "mono": { "value": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", "description": "Coordonnees UTM 30N, WGS84, codes de suivi" }
+    },
+    "fontSize": {
+      "xs": { "value": "0.75rem" },
+      "sm": { "value": "0.85rem" },
+      "base": { "value": "1rem" },
+      "lg": { "value": "1.125rem" },
+      "xl": { "value": "1.25rem" },
+      "2xl": { "value": "1.5rem" },
+      "kpi": { "value": "2.25rem" }
+    }
+  },
+  "borderRadius": {
+    "sm": { "value": "6px" },
+    "md": { "value": "10px" },
+    "lg": { "value": "16px" },
+    "full": { "value": "9999px" }
+  },
+  "boxShadow": {
+    "sm": { "value": "0 1px 2px rgba(0, 0, 0, 0.05)" },
+    "md": { "value": "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)" },
+    "lg": { "value": "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)" }
+  }
+}
+

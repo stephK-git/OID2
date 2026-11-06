@@ -1,0 +1,23 @@
+# Base PostGIS locale — développement UNIQUEMENT (la prod utilise Supabase).
+# Usage : docker compose up -d  →  base « oid » sur le port 5432.
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: oid-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: oid
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - oid_postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d oid"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  oid_postgis_data:
