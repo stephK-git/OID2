@@ -120,7 +120,7 @@ export const LandingPage: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="oid-landing-page bg-slate-50 text-slate-900 font-sans antialiased selection:bg-blue-600 selection:text-white pb-24 md:pb-0">
+    <div className="oid-landing-page font-sans antialiased selection:bg-accent selection:text-white pb-24 md:pb-0">
       <a
         className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 z-[100] px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-lg"
         href="#contenu"
@@ -403,10 +403,10 @@ export const LandingPage: React.FC = () => {
 
         {/* Suivi de dossier (chevauche le hero, marge de sécurité en dessous) */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6 -mt-24 sm:-mt-28 relative z-30" id="suivi">
-          <div className="bg-white rounded-3xl p-5 sm:p-10 shadow-2xl shadow-slate-900/10 border border-slate-200/90">
+          <div className="bg-surface rounded-3xl p-5 sm:p-10 shadow-2xl shadow-slate-900/10 border border-line">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 items-center">
               <div className="md:col-span-5 space-y-2">
-                <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md">
+                <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-accent bg-[var(--water-dim)] px-2.5 py-1 rounded-md">
                   <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20" aria-hidden="true">
                     <path
                       clipRule="evenodd"
@@ -416,21 +416,21 @@ export const LandingPage: React.FC = () => {
                   </svg>
                   Espace citoyen
                 </div>
-                <h2 className="font-display font-bold text-xl sm:text-2xl text-slate-900">
+                <h2 className="font-display font-bold text-xl sm:text-2xl text-ink">
                   Suivre votre signalement
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-ink2">
                   Saisissez la référence reçue lors de votre dépôt pour suivre l&apos;intervention des équipes.
                 </p>
               </div>
               <div className="md:col-span-7">
                 <form className="space-y-2" id="suivi-form" onSubmit={handleSuiviSubmit} noValidate>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider" htmlFor="ref">
+                  <label className="block text-xs font-bold text-ink uppercase tracking-wider" htmlFor="ref">
                     Référence unique
                   </label>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-ink2">
                         <svg
                           className="w-5 h-5"
                           fill="none"
@@ -456,7 +456,7 @@ export const LandingPage: React.FC = () => {
                           setRefValue(e.target.value);
                           if (refError) setRefError('');
                         }}
-                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border-2 border-slate-200 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 font-mono font-bold text-slate-800 uppercase tracking-wide text-base outline-none transition"
+                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border-2 border-line bg-surface focus:border-accent focus:ring-4 focus:ring-[var(--water-dim)] font-mono font-bold text-ink uppercase tracking-wide text-base outline-none transition"
                         id="ref"
                         name="reference_suivi"
                         placeholder="Ex : OID-2026-X892"
@@ -465,7 +465,7 @@ export const LandingPage: React.FC = () => {
                       />
                     </div>
                     <button
-                      className="px-7 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-500/25 transition"
+                      className="px-7 py-3.5 bg-accent hover:bg-[var(--water-hi)] active:bg-[var(--water-hi)] text-[var(--water-ink)] font-bold text-sm rounded-xl shadow-lg shadow-[var(--water-dim)] transition"
                       type="submit"
                     >
                       Consulter
@@ -488,13 +488,13 @@ export const LandingPage: React.FC = () => {
         {/* Situation en direct */}
         <section className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="situation">
           <div className="mb-8 sm:mb-12 space-y-3 max-w-2xl">
-            <span className="inline-block text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-3 py-1 rounded-md">
+            <span className="inline-block text-xs font-bold uppercase tracking-wider text-accent bg-[var(--water-dim)] px-3 py-1 rounded-md">
               Cartographie collaborative
             </span>
-            <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-slate-900 tracking-tight">
+            <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-ink tracking-tight">
               Situation hydrologique en direct
             </h2>
-            <p className="text-slate-600 text-[15px] sm:text-base">
+            <p className="text-ink2 text-[15px] sm:text-base">
               Consultez en temps réel les signalements confirmés par les autorités locales et les usagers pour
               anticiper vos déplacements.
             </p>
@@ -661,12 +661,12 @@ export const LandingPage: React.FC = () => {
 
             {/* Statistiques : 3 colonnes compactes sur mobile, pile sur desktop */}
             <div className="lg:col-span-4 grid grid-cols-3 lg:grid-cols-1 gap-3 lg:gap-4">
-              <div className="p-3.5 sm:p-5 lg:p-6 rounded-2xl lg:rounded-3xl bg-white border border-slate-200 shadow-sm">
+              <div className="p-3.5 sm:p-5 lg:p-6 rounded-2xl lg:rounded-3xl bg-surface border border-line shadow-sm">
                 <div className="flex items-center justify-between mb-1.5 lg:mb-2">
-                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 leading-tight">
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-ink2 leading-tight">
                     Activité du jour
                   </span>
-                  <span className="hidden lg:inline-flex p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <span className="hidden lg:inline-flex p-2 rounded-xl bg-[var(--water-dim)] text-accent">
                     <svg
                       className="w-5 h-5"
                       fill="none"
@@ -684,21 +684,21 @@ export const LandingPage: React.FC = () => {
                   </span>
                 </div>
                 <div
-                  className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-slate-900 tracking-tight"
+                  className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-ink tracking-tight"
                   id="stat-traites"
                 >
                   {stats.signalements_traites}
                 </div>
-                <p className="text-[11px] sm:text-sm text-slate-500 mt-1 leading-snug">
+                <p className="text-[11px] sm:text-sm text-ink2 mt-1 leading-snug">
                   Signalements traités &amp; coordonnés
                 </p>
               </div>
-              <div className="p-3.5 sm:p-5 lg:p-6 rounded-2xl lg:rounded-3xl bg-white border border-slate-200 shadow-sm">
+              <div className="p-3.5 sm:p-5 lg:p-6 rounded-2xl lg:rounded-3xl bg-surface border border-line shadow-sm">
                 <div className="flex items-center justify-between mb-1.5 lg:mb-2">
-                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 leading-tight">
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-ink2 leading-tight">
                     Réactivité moyenne
                   </span>
-                  <span className="hidden lg:inline-flex p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                  <span className="hidden lg:inline-flex p-2 rounded-xl bg-[var(--ok-dim)] text-[var(--ok)]">
                     <svg
                       className="w-5 h-5"
                       fill="none"
@@ -716,21 +716,21 @@ export const LandingPage: React.FC = () => {
                   </span>
                 </div>
                 <div
-                  className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-emerald-600 tracking-tight"
+                  className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-[var(--ok)] tracking-tight"
                   id="stat-delai"
                 >
                   {stats.delai_moyen_min} min
                 </div>
-                <p className="text-[11px] sm:text-sm text-slate-500 mt-1 leading-snug">
+                <p className="text-[11px] sm:text-sm text-ink2 mt-1 leading-snug">
                   Délai d&apos;évaluation par les services locaux
                 </p>
               </div>
-              <div className="p-3.5 sm:p-5 lg:p-6 rounded-2xl lg:rounded-3xl bg-white border border-slate-200 shadow-sm">
+              <div className="p-3.5 sm:p-5 lg:p-6 rounded-2xl lg:rounded-3xl bg-surface border border-line shadow-sm">
                 <div className="flex items-center justify-between mb-1.5 lg:mb-2">
-                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 leading-tight">
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-ink2 leading-tight">
                     Périmètre d&apos;action
                   </span>
-                  <span className="hidden lg:inline-flex p-2 rounded-xl bg-purple-50 text-purple-600">
+                  <span className="hidden lg:inline-flex p-2 rounded-xl bg-[var(--water-dim)] text-accent">
                     <svg
                       className="w-5 h-5"
                       fill="none"
@@ -748,12 +748,12 @@ export const LandingPage: React.FC = () => {
                   </span>
                 </div>
                 <div
-                  className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-slate-900 tracking-tight"
+                  className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-ink tracking-tight"
                   id="stat-communes"
                 >
                   {stats.communes_raccordees}
                 </div>
-                <p className="text-[11px] sm:text-sm text-slate-500 mt-1 leading-snug">
+                <p className="text-[11px] sm:text-sm text-ink2 mt-1 leading-snug">
                   Communes raccordées au dispositif OID
                 </p>
               </div>
@@ -762,16 +762,16 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* Que signaler */}
-        <section className="py-16 sm:py-20 bg-slate-100 border-y border-slate-200/80" id="quoi">
+        <section className="py-16 sm:py-20 bg-surface2 border-y border-line" id="quoi">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl mb-8 sm:mb-10 space-y-3">
-              <span className="inline-block text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-3 py-1 rounded-md">
+              <span className="inline-block text-xs font-bold uppercase tracking-wider text-accent bg-[var(--water-dim)] px-3 py-1 rounded-md">
                 Typologie d&apos;incidents
               </span>
-              <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-slate-900 tracking-tight">
+              <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-ink tracking-tight">
                 Que pouvez-vous signaler ?
               </h2>
-              <p className="text-slate-600 text-[15px] sm:text-base">
+              <p className="text-ink2 text-[15px] sm:text-base">
                 Nos équipes et partenaires municipaux interviennent sur 4 grandes situations critiques sur le
                 terrain.
               </p>
@@ -792,13 +792,13 @@ export const LandingPage: React.FC = () => {
                 Ne relève pas de cette plateforme :
               </span>
               <ul className="flex flex-wrap gap-2 text-sm text-amber-900">
-                <li className="px-3 py-1.5 bg-white border border-amber-200 rounded-full">
+                <li className="px-3 py-1.5 bg-surface border border-amber-200 rounded-full">
                   Coupure privée d&apos;eau courante
                 </li>
-                <li className="px-3 py-1.5 bg-white border border-amber-200 rounded-full">
+                <li className="px-3 py-1.5 bg-surface border border-amber-200 rounded-full">
                   Demandes d&apos;indemnisation d&apos;assurance
                 </li>
-                <li className="px-3 py-1.5 bg-white border border-amber-200 rounded-full">
+                <li className="px-3 py-1.5 bg-surface border border-amber-200 rounded-full">
                   Problèmes de voirie sans lien avec la crue
                 </li>
               </ul>
@@ -853,10 +853,10 @@ export const LandingPage: React.FC = () => {
               {/* 2 : Voirie */}
               <Link
                 to="/signaler?type=ruissellement"
-                className="group rounded-3xl p-6 sm:p-8 bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+                className="group rounded-3xl p-6 sm:p-8 bg-surface border border-line shadow-sm hover:shadow-md transition flex flex-col justify-between"
               >
                 <div className="space-y-4">
-                  <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm aspect-[16/10] bg-slate-100">
+                  <div className="rounded-2xl overflow-hidden border border-line shadow-sm aspect-[16/10] bg-surface2">
                     <img
                       alt="Illustration voirie submergée et balisage de sécurité"
                       loading="lazy"
@@ -864,7 +864,7 @@ export const LandingPage: React.FC = () => {
                       src="https://lh3.googleusercontent.com/aida-public/AB6AXuARPshJDsbAgzyeayQD8KlnhL-swsUg0bK9jOYwEXxibzdV3xLQi9dRSSoNgbXxdASkYSVzALqKwWJgldbrF8LeiJh7VsCCuTwmlDgLZ2Z9HMGIWTQUYp1SfDjuW86pIpmam3u--8l-K3LDd-H9cRtJSsUmJ51Omyb88SHoMEdfOOqLvITmPYausuKp5XsXfKVvchnLTG-HyF4PnQwKcfAL1NvO0hKsPit2pLkECwE"
                     />
                   </div>
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-2xl bg-[var(--water-dim)] text-accent flex items-center justify-center">
                     <svg
                       className="w-6 h-6 stroke-current fill-none stroke-2"
                       viewBox="0 0 24 24"
@@ -882,15 +882,15 @@ export const LandingPage: React.FC = () => {
                       />
                     </svg>
                   </div>
-                  <h3 className="font-display font-bold text-xl text-slate-900">
+                  <h3 className="font-display font-bold text-xl text-ink">
                     Chaussée ou route submergée
                   </h3>
-                  <p className="text-slate-600 text-sm leading-relaxed">
+                  <p className="text-ink2 text-sm leading-relaxed">
                     Voie impraticable, eau stagnant sur la voirie, pont sous surveillance ou circulation
                     automobile devenue risquée.
                   </p>
                 </div>
-                <div className="mt-5 pt-4 border-t border-slate-100 text-xs font-semibold text-blue-700">
+                <div className="mt-5 pt-4 border-t border-line text-xs font-semibold text-accent">
                   Baliser &amp; prévenir les usagers →
                 </div>
               </Link>
@@ -898,10 +898,10 @@ export const LandingPage: React.FC = () => {
               {/* 3 : Habitation */}
               <Link
                 to="/signaler?type=nappe"
-                className="group rounded-3xl p-6 sm:p-8 bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+                className="group rounded-3xl p-6 sm:p-8 bg-surface border border-line shadow-sm hover:shadow-md transition flex flex-col justify-between"
               >
                 <div className="space-y-4">
-                  <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm aspect-[16/10] bg-slate-100">
+                  <div className="rounded-2xl overflow-hidden border border-line shadow-sm aspect-[16/10] bg-surface2">
                     <img
                       alt="Illustration habitation inondée avec motopompe et sacs de protection"
                       loading="lazy"
@@ -909,7 +909,7 @@ export const LandingPage: React.FC = () => {
                       src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQnkveQFSybSoUwEtdGQuG4oGgddX2k3-8l8uWbyfdDTRQ4Gmo9pFhByfSgW-nuNBPLOctJipQ8ANC7vstZK49iT_yDGROQ0_A69-WNrFe0bWhNmT87z6doaUzafjC55tQigvfmY48_Kz_dAJtnRFxk6zspoK1tileUIygxtk-BLwJQw-6ym_sKOOxZyD6QiZtpznwkZa-qJQHtbZudzpkeKCU0va6NQb8pwOtb80"
                     />
                   </div>
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-2xl bg-[var(--water-dim)] text-accent flex items-center justify-center">
                     <svg
                       className="w-6 h-6 stroke-current fill-none stroke-2"
                       viewBox="0 0 24 24"
@@ -922,22 +922,22 @@ export const LandingPage: React.FC = () => {
                       />
                     </svg>
                   </div>
-                  <h3 className="font-display font-bold text-xl text-slate-900">
+                  <h3 className="font-display font-bold text-xl text-ink">
                     Habitation ou local inondé
                   </h3>
-                  <p className="text-slate-600 text-sm leading-relaxed">
+                  <p className="text-ink2 text-sm leading-relaxed">
                     Cave, rez-de-chaussée ou commerce envahi par les eaux suite à un ruissellement ou une
                     remontée de nappe phréatique.
                   </p>
                 </div>
-                <div className="mt-5 pt-4 border-t border-slate-100 text-xs font-semibold text-indigo-700">
+                <div className="mt-5 pt-4 border-t border-line text-xs font-semibold text-accent">
                   Assistance municipale au pompage →
                 </div>
               </Link>
 
               {/* 4 : Ouvrages */}
-              <div className="group md:col-span-3 rounded-3xl p-6 sm:p-8 bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition flex flex-col md:flex-row items-stretch md:items-center justify-between gap-5 md:gap-6">
-                <div className="w-full md:w-56 h-40 md:h-36 rounded-2xl overflow-hidden border border-slate-200 shadow-sm shrink-0 bg-slate-100">
+              <div className="group md:col-span-3 rounded-3xl p-6 sm:p-8 bg-surface border border-line shadow-sm hover:shadow-md transition flex flex-col md:flex-row items-stretch md:items-center justify-between gap-5 md:gap-6">
+                <div className="w-full md:w-56 h-40 md:h-36 rounded-2xl overflow-hidden border border-line shadow-sm shrink-0 bg-surface2">
                   <img
                     alt="Illustration surveillance des digues et capteurs de niveau d'eau"
                     loading="lazy"
@@ -946,7 +946,7 @@ export const LandingPage: React.FC = () => {
                   />
                 </div>
                 <div className="flex items-start gap-4 sm:gap-5 flex-1">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[var(--water-dim)] text-accent flex items-center justify-center shrink-0">
                     <svg
                       className="w-6 h-6 sm:w-7 sm:h-7 stroke-current fill-none stroke-2"
                       viewBox="0 0 24 24"
@@ -960,17 +960,17 @@ export const LandingPage: React.FC = () => {
                     </svg>
                   </div>
                   <div className="space-y-1">
-                    <h3 className="font-display font-bold text-xl text-slate-900">
+                    <h3 className="font-display font-bold text-xl text-ink">
                       Réseau d&apos;assainissement, digue ou cours d&apos;eau en crue
                     </h3>
-                    <p className="text-slate-600 text-sm leading-relaxed max-w-3xl">
+                    <p className="text-ink2 text-sm leading-relaxed max-w-3xl">
                       Bouche d&apos;égout refoulant de l&apos;eau usée, fissure visible sur un ouvrage de
                       rétention ou cours d&apos;eau quittant son lit naturel.
                     </p>
                   </div>
                 </div>
                 <Link
-                  className="shrink-0 text-center px-6 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl transition"
+                  className="shrink-0 text-center px-6 py-3.5 bg-accent hover:bg-[var(--water-hi)] text-[var(--water-ink)] font-semibold text-sm rounded-xl transition"
                   to="/signaler?type=refoulement"
                 >
                   Signaler un ouvrage
@@ -983,13 +983,13 @@ export const LandingPage: React.FC = () => {
         {/* Étapes */}
         <section className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="etapes">
           <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-16 space-y-3">
-            <span className="inline-block text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-3 py-1 rounded-md">
+            <span className="inline-block text-xs font-bold uppercase tracking-wider text-accent bg-[var(--water-dim)] px-3 py-1 rounded-md">
               Démarche simplifiée
             </span>
-            <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-slate-900 tracking-tight">
+            <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-ink tracking-tight">
               Comment fonctionne le signalement ?
             </h2>
-            <p className="text-slate-600 text-[15px] sm:text-base">
+            <p className="text-ink2 text-[15px] sm:text-base">
               Un processus intuitif conçu pour être manipulé facilement depuis un smartphone, même en situation
               de stress.
             </p>
@@ -998,49 +998,49 @@ export const LandingPage: React.FC = () => {
           <ol className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-8 relative">
             {/* Trait de liaison desktop */}
             <div
-              className="hidden md:block absolute top-14 left-[16%] right-[16%] h-px border-t-2 border-dashed border-blue-200"
+              className="hidden md:block absolute top-14 left-[16%] right-[16%] h-px border-t-2 border-dashed border-line2"
               aria-hidden="true"
             ></div>
 
-            <li className="relative p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/80 shadow-sm hover:shadow-lg transition flex md:block gap-4">
-              <div className="relative w-12 h-12 shrink-0 rounded-2xl bg-blue-600 text-white font-display font-bold text-xl flex items-center justify-center shadow-lg shadow-blue-500/30 md:mb-6">
+            <li className="relative p-6 sm:p-8 rounded-3xl bg-surface border border-line shadow-sm hover:shadow-lg transition flex md:block gap-4">
+              <div className="relative w-12 h-12 shrink-0 rounded-2xl bg-accent text-[var(--water-ink)] font-display font-bold text-xl flex items-center justify-center shadow-lg shadow-[var(--water-dim)] md:mb-6">
                 1
               </div>
               <div>
-                <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 mb-2">
+                <h3 className="font-display font-bold text-lg sm:text-xl text-ink mb-2">
                   Localisation assistée
                 </h3>
-                <p className="text-slate-600 text-sm leading-relaxed">
+                <p className="text-ink2 text-sm leading-relaxed">
                   Votre géolocalisation GPS est automatiquement détectée. Vous pouvez ajuster le marqueur
                   directement sur la carte pour une précision métrique.
                 </p>
               </div>
             </li>
-            <li className="relative p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/80 shadow-sm hover:shadow-lg transition flex md:block gap-4">
-              <div className="relative w-12 h-12 shrink-0 rounded-2xl bg-blue-600 text-white font-display font-bold text-xl flex items-center justify-center shadow-lg shadow-blue-500/30 md:mb-6">
+            <li className="relative p-6 sm:p-8 rounded-3xl bg-surface border border-line shadow-sm hover:shadow-lg transition flex md:block gap-4">
+              <div className="relative w-12 h-12 shrink-0 rounded-2xl bg-accent text-[var(--water-ink)] font-display font-bold text-xl flex items-center justify-center shadow-lg shadow-[var(--water-dim)] md:mb-6">
                 2
               </div>
               <div>
-                <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 mb-2">
+                <h3 className="font-display font-bold text-lg sm:text-xl text-ink mb-2">
                   Constat &amp; Photos
                 </h3>
-                <p className="text-slate-600 text-sm leading-relaxed">
+                <p className="text-ink2 text-sm leading-relaxed">
                   Évaluez la hauteur d&apos;eau (cheville, genou, carrosserie), téléversez 1 à 3 photos et
                   indiquez si des personnes vulnérables sont à proximité.
                 </p>
               </div>
             </li>
-            <li className="relative p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/80 shadow-sm hover:shadow-lg transition flex md:block gap-4">
-              <div className="relative w-12 h-12 shrink-0 rounded-2xl bg-blue-600 text-white font-display font-bold text-xl flex items-center justify-center shadow-lg shadow-blue-500/30 md:mb-6">
+            <li className="relative p-6 sm:p-8 rounded-3xl bg-surface border border-line shadow-sm hover:shadow-lg transition flex md:block gap-4">
+              <div className="relative w-12 h-12 shrink-0 rounded-2xl bg-accent text-[var(--water-ink)] font-display font-bold text-xl flex items-center justify-center shadow-lg shadow-[var(--water-dim)] md:mb-6">
                 3
               </div>
               <div>
-                <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 mb-2">
+                <h3 className="font-display font-bold text-lg sm:text-xl text-ink mb-2">
                   Prise en charge &amp; Suivi
                 </h3>
-                <p className="text-slate-600 text-sm leading-relaxed">
+                <p className="text-ink2 text-sm leading-relaxed">
                   L&apos;alerte est transmise aux agents municipaux et secours. Vous recevez un code unique{' '}
-                  <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-blue-700 font-mono">
+                  <code className="text-xs bg-surface2 px-1.5 py-0.5 rounded text-accent font-mono">
                     OID-2026-XXXX
                   </code>{' '}
                   pour suivre les opérations.
@@ -1051,7 +1051,7 @@ export const LandingPage: React.FC = () => {
 
           <div className="mt-10 sm:mt-14 text-center">
             <Link
-              className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base rounded-xl shadow-xl shadow-blue-600/30 transition hover:-translate-y-0.5 w-full sm:w-auto"
+              className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-accent hover:bg-[var(--water-hi)] text-[var(--water-ink)] font-bold text-base rounded-xl shadow-xl shadow-[var(--water-dim)] transition hover:-translate-y-0.5 w-full sm:w-auto"
               to="/signaler"
             >
               Commencer un signalement
@@ -1346,9 +1346,12 @@ export const LandingPage: React.FC = () => {
       </footer>
 
       {/* Barre d'action rapide mobile */}
-      <div className="fixed bottom-0 inset-x-0 z-50 px-3 pt-3 dock-safe bg-white/95 backdrop-blur-lg border-t border-slate-200 md:hidden flex items-center gap-3">
+      <div
+        className="fixed bottom-0 inset-x-0 z-50 px-3 pt-3 dock-safe border-t border-line md:hidden flex items-center gap-3 backdrop-blur-lg"
+        style={{ backgroundColor: 'var(--s1)' }}
+      >
         <Link
-          className="flex-1 py-3.5 px-4 bg-blue-600 active:bg-blue-700 text-white font-bold text-sm rounded-xl text-center shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
+          className="flex-1 py-3.5 px-4 bg-accent active:bg-[var(--water-hi)] text-[var(--water-ink)] font-bold text-sm rounded-xl text-center shadow-lg shadow-[var(--water-dim)] flex items-center justify-center gap-2"
           to="/signaler"
         >
           <svg
