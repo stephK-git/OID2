@@ -1535,5 +1535,5 @@ export const EnquetePage: React.FC = () => {
       </div>
     </main>
   </div>
-);
+  );
 };
