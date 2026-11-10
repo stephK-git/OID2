@@ -1,23 +1,28 @@
 import React from 'react';
-import { AlertCircle, PhoneCall } from 'lucide-react';
 
 export const EmergencyBanner: React.FC = () => {
   return (
     <div className="emergency-banner" role="alert">
       <div className="emergency-banner-content">
         <div className="emergency-banner-text">
-          <AlertCircle size={18} className="emergency-icon" />
+          <span className="material-symbols-outlined emergency-icon" style={{ fontSize: '18px' }}>
+            emergency
+          </span>
           <span>
-            <strong>Ceci n'est pas un service d'urgence.</strong> En cas de péril immédiat, contactez les sapeurs-pompiers :
+            <strong>Urgence vitale immédiate :</strong> contactez directement les secours avant tout signalement
           </span>
         </div>
         <div className="emergency-numbers">
-          <a href="tel:180" className="emergency-btn" title="Appeler les sapeurs-pompiers">
-            <PhoneCall size={14} />
-            <span>180</span>
+          <a href="tel:180" className="emergency-btn emergency-btn-gspm" title="Appeler le GSPM (Sapeurs-pompiers)">
+            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+              call
+            </span>
+            <span>GSPM 180</span>
           </a>
-          <a href="tel:112" className="emergency-btn" title="Appeler le numéro d'urgence">
-            <PhoneCall size={14} />
+          <a href="tel:112" className="emergency-btn emergency-btn-112" title="Appeler le numéro d'urgence 112">
+            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+              shield
+            </span>
             <span>112</span>
           </a>
         </div>
@@ -25,4 +30,3 @@ export const EmergencyBanner: React.FC = () => {
     </div>
   );
 };
-

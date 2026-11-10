@@ -1,0 +1,160 @@
+/* ==========================================================================
+   OID — LANDING PAGE SCOPED PREFLIGHT & CUSTOM STYLES
+   ========================================================================== */
+
+.oid-landing-page,
+.oid-landing-page *,
+.oid-landing-page *::before,
+.oid-landing-page *::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: #e2e8f0;
+}
+
+.oid-landing-page {
+  color-scheme: light;
+  -webkit-tap-highlight-color: transparent;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.oid-landing-page h1,
+.oid-landing-page h2,
+.oid-landing-page h3,
+.oid-landing-page h4,
+.oid-landing-page h5,
+.oid-landing-page h6 {
+  font-size: inherit;
+  font-weight: inherit;
+  margin: 0;
+}
+
+.oid-landing-page p,
+.oid-landing-page blockquote,
+.oid-landing-page dl,
+.oid-landing-page dd,
+.oid-landing-page figure,
+.oid-landing-page hr {
+  margin: 0;
+}
+
+.oid-landing-page ol,
+.oid-landing-page ul,
+.oid-landing-page menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.oid-landing-page a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+.oid-landing-page button,
+.oid-landing-page input,
+.oid-landing-page select,
+.oid-landing-page textarea {
+  font-family: inherit;
+  font-size: 100%;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+.oid-landing-page button,
+.oid-landing-page [type='button'],
+.oid-landing-page [type='submit'] {
+  -webkit-appearance: button;
+  appearance: button;
+  background-color: transparent;
+  background-image: none;
+  cursor: pointer;
+}
+
+.oid-landing-page img,
+.oid-landing-page svg {
+  display: block;
+  vertical-align: middle;
+}
+
+.oid-landing-page img {
+  max-width: 100%;
+  height: auto;
+}
+
+.oid-landing-page .font-display {
+  font-family: 'Space Grotesk', 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.oid-landing-page .font-sans {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.oid-landing-page .font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@keyframes pulseSlow {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.4;
+  }
+}
+
+.oid-landing-page .animate-pulse-slow {
+  animation: pulseSlow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes waveSlide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.oid-landing-page .animate-wave {
+  animation: waveSlide 12s linear infinite;
+}
+
+.oid-landing-page .glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.oid-landing-page .dock-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.oid-landing-page section[id],
+.oid-landing-page div[id='suivi'] {
+  scroll-margin-top: 6rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oid-landing-page *,
+  .oid-landing-page *::before,
+  .oid-landing-page *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+

@@ -1,19 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { apiFetch } from '../api/client';
-import {
-  ClipboardList,
-  AlertTriangle,
-  Save,
-  Send,
-  CheckCircle,
-  MapPin,
-  RefreshCw,
-  FolderOpen,
-  Navigation,
-  ExternalLink,
-  Camera,
-  Trash2
-} from 'lucide-react';
+
+interface PhotoMetaItem {
+  url: string;
+  filename: string;
+  taille_octets: number | null;
+  taille_formatee: string;
+  format: string;
+  exif_present: boolean;
+  exif_gps: boolean;
+  sha256?: string | null;
+  sha256_short?: string | null;
+  horodatage_utc?: string | null;
+}
 
 interface DossierItem {
   id: number;
@@ -21,10 +20,18 @@ interface DossierItem {
   type: string;
   statut: string;
   score_priorite: number;
+  niveau_fiabilite?: string;
   danger_immediat: boolean;
-  coords: { lat: number; lon: number } | null;
+  coords: { lat: number; lon: number; utm_e?: number; utm_n?: number } | null;
+  commune?: string | null;
+  code_adm?: string | null;
+  description_citoyenne?: string | null;
+  hauteur_eau_cm?: number | null;
+  photos_citoyennes?: string[];
+  photos_citoyennes_meta?: PhotoMetaItem[];
   evaluation_statut: string;
   cree_le: string | null;
+  maj_le?: string | null;
 }
 
 interface EvaluationData {
@@ -40,8 +47,40 @@ interface EvaluationData {
   besoins: string;
   recommandations: string;
   statut?: string;
+  soumise_le?: string | null;
   photos?: string[];
+  photos_meta?: PhotoMetaItem[];
 }
+
+interface NewPhotoItem {
+  dataUrl: string;
+  name: string;
+  time: string;
+  sizeFormatted: string;
+  sha256Short: string;
+}
+
+interface OfflineQueuePacket {
+  incidentId: number;
+  payload: {
+    menages_touches: number;
+    personnes_affectees: number;
+    blesses: number;
+    deplaces: number;
+    deces: number;
+    disparus: number;
+    degats: string;
+    routes_coupees: string;
+    risques_sanitaires: string;
+    besoins: string;
+    recommandations: string;
+    photos_data_urls: string[];
+  };
+  queuedAt: string;
+}
+
+const OFFLINE_QUEUE_KEY = 'oid_enq_offline_queue_v1';
+const LOCAL_DRAFT_PREFIX = 'oid_enq_draft_v1_';
 
 const defaultEvaluation: EvaluationData = {
   menages_touches: 0,
@@ -56,32 +95,126 @@ const defaultEvaluation: EvaluationData = {
   besoins: '',
   recommandations: '',
   photos: [],
+  photos_meta: [],
+};
+
+const formatTypeBadge = (raw: string): string => {
+  const t = (raw || '').toLowerCase();
+  if (t.includes('habitation') || t.includes('submersion') || t.includes('inondation')) {
+    return 'SUBMERSION RAPIDE';
+  }
+  if (t.includes('eboulement') || t.includes('glissement') || t.includes('talus')) {
+    return 'ÉBOULEMENT TALUS';
+  }
+  if (t.includes('route') || t.includes('voirie') || t.includes('axe')) {
+    return 'AXE ROUTIER SUBMERGÉ';
+  }
+  if (t.includes('caniveau') || t.includes('drain') || t.includes('ouvrage')) {
+    return 'SATURATION DRAINAGE';
+  }
+  return (raw || 'RUISSELLEMENT URBAIN').replace(/_/g, ' ').toUpperCase();
+};
+
+const formatTypeSubtitle = (raw: string): string => {
+  if (!raw) return 'Sinistre hydrologique';
+  return raw.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+};
+
+const formatRelativeTime = (iso: string | null | undefined): string => {
+  if (!iso) return 'Il y a quelques min';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.max(1, Math.round(diffMs / 60000));
+  if (diffMin < 60) return `Il y a ${diffMin} min`;
+  const diffH = Math.floor(diffMin / 60);
+  const remMin = diffMin % 60;
+  if (diffH < 24) return remMin > 0 ? `Il y a ${diffH}h ${remMin}` : `Il y a ${diffH}h`;
+  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+};
+
+const formatBytesClient = (bytes: number): string => {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${bytes} B`;
+};
+
+const computeClientSha256Short = async (buffer: ArrayBuffer): Promise<string> => {
+  try {
+    if (window.crypto && window.crypto.subtle) {
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', buffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+      return hex.slice(0, 8).toUpperCase();
+    }
+  } catch {
+    // Fallback
+  }
+  return 'LOCAL-OK';
+};
+
+const readOfflineQueue = (): OfflineQueuePacket[] => {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeOfflineQueue = (packets: OfflineQueuePacket[]) => {
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(packets));
+  } catch {
+    // Ignore storage quota errors
+  }
 };
 
 export const EnquetePage: React.FC = () => {
   const [dossiers, setDossiers] = useState<DossierItem[]>([]);
   const [selectedDossier, setSelectedDossier] = useState<DossierItem | null>(null);
   const [evalForm, setEvalForm] = useState<EvaluationData>(defaultEvaluation);
-  const [newPhotos, setNewPhotos] = useState<string[]>([]);
+  const [newPhotos, setNewPhotos] = useState<NewPhotoItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [draftSavedPulse, setDraftSavedPulse] = useState(false);
+  const [lastSavedLabel, setLastSavedLabel] = useState<string>('Prêt pour saisie contradictoire');
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [offlineQueue, setOfflineQueue] = useState<OfflineQueuePacket[]>(() => readOfflineQueue());
+  const [syncingOffline, setSyncingOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
-  const loadDossiers = async () => {
-    setLoading(true);
-    setError(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const evalScrollRef = useRef<HTMLDivElement>(null);
+  const dossierListRef = useRef<HTMLDivElement>(null);
+
+  const saveLocalDraftBackup = useCallback((incidentId: number, data: EvaluationData) => {
     try {
-      const data = await apiFetch<DossierItem[]>('/enquete/mes-dossiers');
-      setDossiers(data);
-    } catch (err: any) {
-      setError(err.message || 'Erreur de chargement des dossiers.');
-    } finally {
-      setLoading(false);
+      localStorage.setItem(
+        `${LOCAL_DRAFT_PREFIX}${incidentId}`,
+        JSON.stringify({
+          ...data,
+          savedAt: new Date().toISOString(),
+        })
+      );
+    } catch {
+      // Ignore storage quota errors
     }
-  };
+  }, []);
 
-  const loadEvaluation = async (incidentId: number) => {
+  const clearLocalDraftBackup = useCallback((incidentId: number) => {
+    try {
+      localStorage.removeItem(`${LOCAL_DRAFT_PREFIX}${incidentId}`);
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const loadEvaluation = useCallback(async (incidentId: number) => {
     setSaving(true);
     setNewPhotos([]);
     try {
@@ -100,34 +233,205 @@ export const EnquetePage: React.FC = () => {
           besoins: res.besoins || '',
           recommandations: res.recommandations || '',
           statut: res.statut,
+          soumise_le: res.soumise_le || null,
           photos: res.photos || [],
+          photos_meta: res.photos_meta || [],
         });
+        if (res.soumise_le) {
+          setLastSavedLabel(
+            `Transmise le ${new Date(res.soumise_le).toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}`
+          );
+        } else {
+          setLastSavedLabel('Brouillon chargé depuis le serveur O.I.D');
+        }
       } else {
+        // Vérifier s'il existe un brouillon local non synchronisé pour cet incident
+        const localRaw = localStorage.getItem(`${LOCAL_DRAFT_PREFIX}${incidentId}`);
+        if (localRaw) {
+          try {
+            const parsed = JSON.parse(localRaw);
+            setEvalForm({
+              ...defaultEvaluation,
+              menages_touches: parsed.menages_touches || 0,
+              personnes_affectees: parsed.personnes_affectees || 0,
+              blesses: parsed.blesses || 0,
+              deplaces: parsed.deplaces || 0,
+              deces: parsed.deces || 0,
+              disparus: parsed.disparus || 0,
+              degats: parsed.degats || '',
+              routes_coupees: parsed.routes_coupees || '',
+              risques_sanitaires: parsed.risques_sanitaires || '',
+              besoins: parsed.besoins || '',
+              recommandations: parsed.recommandations || '',
+            });
+            setLastSavedLabel('Restauré depuis le cache hors-ligne local');
+            return;
+          } catch {
+            // Ignore malformed local draft
+          }
+        }
         setEvalForm(defaultEvaluation);
+        setLastSavedLabel('Aucune évaluation enregistrée pour ce dossier');
       }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
-  };
-
-  useEffect(() => {
-    loadDossiers();
   }, []);
 
-  const handleSelectDossier = (dossier: DossierItem) => {
-    setSelectedDossier(dossier);
-    setSuccessMsg(null);
-    setError(null);
-    loadEvaluation(dossier.id);
-  };
+  const loadDossiers = useCallback(
+    async (preserveSelection = true) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await apiFetch<DossierItem[]>('/enquete/mes-dossiers');
+        setDossiers(data);
+        if (data.length > 0) {
+          setSelectedDossier((prev) => {
+            if (preserveSelection && prev) {
+              const found = data.find((d) => d.id === prev.id);
+              if (found) return found;
+            }
+            const first = data[0];
+            loadEvaluation(first.id);
+            return first;
+          });
+        } else {
+          setSelectedDossier(null);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Erreur de chargement des dossiers.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loadEvaluation]
+  );
+
+  useEffect(() => {
+    loadDossiers(false);
+  }, [loadDossiers]);
+
+  // Synchronisation automatique de la file hors-ligne dès reconnexion
+  const flushOfflineQueue = useCallback(async () => {
+    const queue = readOfflineQueue();
+    if (queue.length === 0) return;
+    setSyncingOffline(true);
+    const remaining: OfflineQueuePacket[] = [];
+    let syncedCount = 0;
+
+    for (const pkt of queue) {
+      try {
+        await apiFetch(`/enquete/${pkt.incidentId}/evaluation`, {
+          method: 'PUT',
+          body: JSON.stringify(pkt.payload),
+        });
+        clearLocalDraftBackup(pkt.incidentId);
+        syncedCount += 1;
+      } catch {
+        remaining.push(pkt);
+      }
+    }
+
+    writeOfflineQueue(remaining);
+    setOfflineQueue(remaining);
+    setSyncingOffline(false);
+
+    if (syncedCount > 0) {
+      setSuccessMsg(`${syncedCount} paquet(s) hors-ligne synchronisé(s) avec le serveur O.I.D.`);
+      setLastSavedLabel(
+        `Synchro auto réussie à ${new Date().toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })}`
+      );
+      loadDossiers(true);
+      if (selectedDossier) {
+        loadEvaluation(selectedDossier.id);
+      }
+    }
+  }, [clearLocalDraftBackup, loadDossiers, loadEvaluation, selectedDossier]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      flushOfflineQueue();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [flushOfflineQueue]);
+
+  const handleSelectDossier = useCallback(
+    (dossier: DossierItem, scrollCardIntoView = false) => {
+      setSelectedDossier(dossier);
+      setSuccessMsg(null);
+      setError(null);
+      if (evalScrollRef.current) {
+        evalScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      if (scrollCardIntoView && dossierListRef.current) {
+        const cardEl = dossierListRef.current.querySelector(
+          `[data-did="${dossier.id}"]`
+        ) as HTMLElement | null;
+        cardEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      loadEvaluation(dossier.id);
+    },
+    [loadEvaluation]
+  );
+
+  // Navigation clavier ↑ / ↓ entre les dossiers affectés
+  useEffect(() => {
+    if (dossiers.length === 0) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      const currentIdx = dossiers.findIndex((d) => d.id === selectedDossier?.id);
+      const nextIdx =
+        e.key === 'ArrowDown'
+          ? Math.min(dossiers.length - 1, currentIdx + 1)
+          : Math.max(0, currentIdx <= 0 ? 0 : currentIdx - 1);
+      const nextItem = dossiers[nextIdx];
+      if (nextItem && nextItem.id !== selectedDossier?.id) {
+        handleSelectDossier(nextItem, true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [dossiers, selectedDossier, handleSelectDossier]);
 
   const handleFormChange = (field: keyof EvaluationData, value: any) => {
-    setEvalForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setEvalForm((prev) => {
+      const next = {
+        ...prev,
+        [field]: value,
+      };
+      if (selectedDossier) {
+        saveLocalDraftBackup(selectedDossier.id, next);
+      }
+      return next;
+    });
+    setLastSavedLabel(
+      `Sauvegarde locale auto à ${new Date().toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })}`
+    );
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,53 +444,160 @@ export const EnquetePage: React.FC = () => {
         return;
       }
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         if (typeof reader.result === 'string') {
-          setNewPhotos((prev) => [...prev, reader.result as string]);
+          const dataUrl = reader.result;
+          const buf = await file.arrayBuffer();
+          const sha256Short = await computeClientSha256Short(buf);
+          const nowUtc =
+            new Date().toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            }) + ' UTC';
+          setNewPhotos((prev) => [
+            ...prev,
+            {
+              dataUrl,
+              name: file.name,
+              time: nowUtc,
+              sizeFormatted: formatBytesClient(file.size),
+              sha256Short,
+            },
+          ]);
         }
       };
       reader.readAsDataURL(file);
     });
+    e.target.value = '';
   };
 
   const handleRemoveNewPhoto = (index: number) => {
     setNewPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleDeleteSavedPhoto = async (photoUrl: string) => {
+    if (!selectedDossier) return;
+    if (!window.confirm('Supprimer cette photographie du brouillon d’évaluation ?')) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await apiFetch<any>(
+        `/enquete/${selectedDossier.id}/photos?url=${encodeURIComponent(photoUrl)}`,
+        { method: 'DELETE' }
+      );
+      setEvalForm((prev) => ({
+        ...prev,
+        photos: res.photos || [],
+        photos_meta: res.photos_meta || [],
+      }));
+      setSuccessMsg('Photographie retirée du brouillon.');
+    } catch (err: any) {
+      setError(err.message || 'Impossible de supprimer cette photo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sumCritique =
+    (Number(evalForm.blesses) || 0) +
+    (Number(evalForm.deces) || 0) +
+    (Number(evalForm.disparus) || 0);
+
+  const isCoherent =
+    evalForm.blesses <= evalForm.personnes_affectees &&
+    evalForm.deces <= evalForm.personnes_affectees &&
+    evalForm.disparus <= evalForm.personnes_affectees &&
+    sumCritique <= evalForm.personnes_affectees;
+
   const validateCoherence = (): boolean => {
-    if (
-      evalForm.blesses > evalForm.personnes_affectees ||
-      evalForm.deces > evalForm.personnes_affectees ||
-      evalForm.disparus > evalForm.personnes_affectees
-    ) {
-      setError('Incohérence : Le nombre de blessés, décès ou disparus ne peut pas dépasser le nombre total de personnes affectées.');
+    if (!isCoherent) {
+      setError(
+        `Incohérence : La somme Blessés + Décès + Disparus (${sumCritique}) ne peut pas dépasser le nombre total de personnes affectées (${evalForm.personnes_affectees}).`
+      );
       return false;
     }
     return true;
+  };
+
+  const enqueueOfflineDraft = (incidentId: number, payload: OfflineQueuePacket['payload']) => {
+    const current = readOfflineQueue().filter((p) => p.incidentId !== incidentId);
+    const updated: OfflineQueuePacket[] = [
+      ...current,
+      { incidentId, payload, queuedAt: new Date().toISOString() },
+    ];
+    writeOfflineQueue(updated);
+    setOfflineQueue(updated);
   };
 
   const handleSaveDraft = async () => {
     if (!selectedDossier) return;
     if (!validateCoherence()) return;
 
+    const payload = {
+      menages_touches: evalForm.menages_touches,
+      personnes_affectees: evalForm.personnes_affectees,
+      blesses: evalForm.blesses,
+      deplaces: evalForm.deplaces,
+      deces: evalForm.deces,
+      disparus: evalForm.disparus,
+      degats: evalForm.degats,
+      routes_coupees: evalForm.routes_coupees,
+      risques_sanitaires: evalForm.risques_sanitaires,
+      besoins: evalForm.besoins,
+      recommandations: evalForm.recommandations,
+      photos_data_urls: newPhotos.map((p) => p.dataUrl),
+    };
+
+    if (!navigator.onLine) {
+      enqueueOfflineDraft(selectedDossier.id, payload);
+      saveLocalDraftBackup(selectedDossier.id, evalForm);
+      setDraftSavedPulse(true);
+      window.setTimeout(() => setDraftSavedPulse(false), 1800);
+      setLastSavedLabel('Mis en file hors-ligne (synchronisation auto dès reconnexion)');
+      setSuccessMsg(
+        'Mode hors-ligne : Brouillon enregistré dans la Queue Locale et prêt pour synchronisation automatique.'
+      );
+      return;
+    }
+
     setSaving(true);
     setError(null);
+    setSuccessMsg(null);
     try {
       const res = await apiFetch<any>(`/enquete/${selectedDossier.id}/evaluation`, {
         method: 'PUT',
-        body: JSON.stringify({
-          ...evalForm,
-          photos_data_urls: newPhotos,
-        }),
+        body: JSON.stringify(payload),
       });
       setNewPhotos([]);
-      if (res.photos) {
-        setEvalForm((prev) => ({ ...prev, photos: res.photos }));
-      }
+      clearLocalDraftBackup(selectedDossier.id);
+      setEvalForm((prev) => ({
+        ...prev,
+        statut: res.statut || 'brouillon',
+        photos: res.photos || prev.photos,
+        photos_meta: res.photos_meta || prev.photos_meta,
+      }));
+      setDraftSavedPulse(true);
+      window.setTimeout(() => setDraftSavedPulse(false), 1800);
+      setLastSavedLabel(
+        `Dernière sauvegarde à ${new Date().toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })}`
+      );
       setSuccessMsg('Brouillon et photos enregistrés avec succès.');
-      loadDossiers();
+      loadDossiers(true);
     } catch (err: any) {
-      setError(err.message);
+      if (err instanceof TypeError || String(err.message).toLowerCase().includes('network')) {
+        enqueueOfflineDraft(selectedDossier.id, payload);
+        saveLocalDraftBackup(selectedDossier.id, evalForm);
+        setSuccessMsg(
+          'Connexion interrompue : votre brouillon a été placé dans la Queue Locale et sera synchronisé dès reconnexion.'
+        );
+      } else {
+        setError(err.message);
+      }
     } finally {
       setSaving(false);
     }
@@ -195,24 +606,53 @@ export const EnquetePage: React.FC = () => {
   const handleSubmitEvaluation = async () => {
     if (!selectedDossier) return;
     if (!validateCoherence()) return;
-    if (!window.confirm('Voulez-vous soumettre définitivement cette évaluation ? Le statut passera à "Évalué".')) return;
+    if (
+      !window.confirm(
+        "Confirmer la transmission définitive de l'évaluation terrain au Centre Opérationnel O.I.D ?\nStatut incident cible : ÉVALUÉ"
+      )
+    ) {
+      return;
+    }
 
     setSaving(true);
     setError(null);
+    setSuccessMsg(null);
     try {
       const res = await apiFetch<any>(`/enquete/${selectedDossier.id}/soumettre`, {
         method: 'POST',
         body: JSON.stringify({
-          ...evalForm,
-          photos_data_urls: newPhotos,
+          menages_touches: evalForm.menages_touches,
+          personnes_affectees: evalForm.personnes_affectees,
+          blesses: evalForm.blesses,
+          deplaces: evalForm.deplaces,
+          deces: evalForm.deces,
+          disparus: evalForm.disparus,
+          degats: evalForm.degats,
+          routes_coupees: evalForm.routes_coupees,
+          risques_sanitaires: evalForm.risques_sanitaires,
+          besoins: evalForm.besoins,
+          recommandations: evalForm.recommandations,
+          photos_data_urls: newPhotos.map((p) => p.dataUrl),
         }),
       });
       setNewPhotos([]);
-      if (res.photos) {
-        setEvalForm((prev) => ({ ...prev, photos: res.photos }));
-      }
-      setSuccessMsg('Évaluation et photographies transmises avec succès ! L\'incident est désormais marqué comme évalué.');
-      loadDossiers();
+      clearLocalDraftBackup(selectedDossier.id);
+      setEvalForm((prev) => ({
+        ...prev,
+        statut: res.statut || 'soumise',
+        photos: res.photos || prev.photos,
+        photos_meta: res.photos_meta || prev.photos_meta,
+      }));
+      setLastSavedLabel(
+        `Transmis au PC Central à ${new Date().toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })}`
+      );
+      setSuccessMsg(
+        "Évaluation et photographies transmises avec succès ! L'incident est désormais marqué comme évalué."
+      );
+      loadDossiers(true);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -220,332 +660,842 @@ export const EnquetePage: React.FC = () => {
     }
   };
 
+  const isReadOnly =
+    selectedDossier != null &&
+    selectedDossier.statut !== 'affecte' &&
+    evalForm.statut === 'soumise';
+
+  const pendingPacketsCount = offlineQueue.length + (newPhotos.length > 0 ? 1 : 0);
+
   return (
-    <div className="container page-content">
-      <div className="page-header flex-between">
-        <div>
-          <h1>Missions de Terrain</h1>
-          <p>Consultez vos dossiers d'investigation affectés et saisissez vos évaluations de dégâts.</p>
-        </div>
-        <button onClick={loadDossiers} className="btn btn-outline" disabled={loading}>
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          <span>Actualiser</span>
-        </button>
-      </div>
-
-      {error && (
-        <div className="alert alert-error">
-          <AlertTriangle size={18} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="alert alert-success">
-          <CheckCircle size={18} />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      <div className="enquete-layout">
-        {/* Liste des dossiers affectés */}
-        <div className="dossiers-sidebar">
-          <h3>Dossiers Affectés ({dossiers.length})</h3>
-
-          {dossiers.length === 0 && !loading && (
-            <div className="card empty-state">
-              <FolderOpen size={36} color="#94a3b8" />
-              <p>Aucun dossier ne vous est actuellement affecté.</p>
-            </div>
-          )}
-
-          {dossiers.map((d) => (
-            <div
-              key={d.id}
-              onClick={() => handleSelectDossier(d)}
-              className={`dossier-card ${selectedDossier?.id === d.id ? 'active' : ''} ${
-                d.danger_immediat ? 'card-danger' : ''
-              }`}
+    <div className="oid-enq-page">
+      {/* Lightbox Plein Écran */}
+      {lightboxUrl && (
+        <div className="verif-lightbox" onClick={() => setLightboxUrl(null)}>
+          <div className="verif-lightbox-inner" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="verif-lightbox-close"
+              onClick={() => setLightboxUrl(null)}
+              aria-label="Fermer l'aperçu"
             >
-              <div className="dossier-card-top">
-                <span className="ref-tag">Incident #{d.id}</span>
-                <span className={`status-badge status-${d.statut}`}>{d.statut}</span>
-              </div>
-              <h4>{d.type.toUpperCase()}</h4>
-              <div className="dossier-meta">
-                <span>Score: {d.score_priorite}</span>
-                <span className="eval-status">Éval: {d.evaluation_statut}</span>
-              </div>
+              <span className="material-symbols-outlined">close</span>
+              <span>Fermer l'aperçu</span>
+            </button>
+            <img src={lightboxUrl} alt="Preuve photographique terrain" />
+          </div>
+        </div>
+      )}
+
+      <div className="oid-enq-container">
+        {/* ==========================================================================
+            PAGE HEADER
+           ========================================================================== */}
+        <div className="oid-enq-header">
+          <div className="oid-enq-header-left">
+            <div className="oid-enq-title-row">
+              <span className="oid-enq-dot" />
+              <h1 className="oid-enq-title">Missions de Terrain</h1>
             </div>
-          ))}
+            <p className="oid-enq-subtitle">
+              Consultez vos dossiers d'investigation affectés et saisissez vos évaluations de dégâts.
+            </p>
+          </div>
+
+          <div className="oid-enq-header-actions">
+            <span
+              className={`oid-enq-net-pill ${isOnline ? 'online' : 'offline'}`}
+              title="État de la liaison avec le Centre Opérationnel O.I.D"
+            >
+              <span className="oid-enq-net-dot" />
+              <span>{isOnline ? 'LIAISON PC : EN LIGNE' : 'MODE HORS-LIGNE ACTIF'}</span>
+            </span>
+
+            <button
+              id="btn-refresh"
+              type="button"
+              onClick={() => loadDossiers(true)}
+              disabled={loading}
+              className="oid-enq-refresh-btn"
+            >
+              <span className={`material-symbols-outlined ${loading ? 'spin' : ''}`}>sync</span>
+              <span>Actualiser</span>
+            </button>
+          </div>
         </div>
 
-        {/* Formulaire d'évaluation */}
-        <div className="evaluation-panel">
-          {selectedDossier ? (
-            <div className="card eval-card">
-              <div className="eval-card-header flex-between">
-                <div>
-                  <h2>Évaluation de Terrain — Dossier #{selectedDossier.id}</h2>
-                  <p className="sub-hint">
-                    Réf : {selectedDossier.reference_publique} — {selectedDossier.type}
-                  </p>
-                </div>
-                <div className={`status-badge status-${selectedDossier.statut}`}>
-                  {selectedDossier.statut}
-                </div>
+        {error && (
+          <div className="oid-error-banner" role="alert">
+            <span className="material-symbols-outlined">warning</span>
+            <span>{error}</span>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="oid-enq-success-banner" role="status">
+            <span className="material-symbols-outlined">check_circle</span>
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* ==========================================================================
+            ENQUETE LAYOUT : 2 COLUMNS À DÉFILEMENT INDÉPENDANT
+           ========================================================================== */}
+        <div className="oid-enq-grid">
+          {/* LEFT COLUMN: SIDEBAR DOSSIERS AFFECTÉS (4 cols on desktop) */}
+          <div className="oid-enq-left-col">
+            <div className="oid-enq-sidebar-head">
+              <div className="oid-enq-sidebar-title">
+                <span className="material-symbols-outlined text-primary">folder_special</span>
+                <span>Dossiers Affectés</span>
+                <span className="oid-enq-count-pill">{dossiers.length}</span>
               </div>
+              <span className="oid-enq-sidebar-eyebrow">Priorité O.I.D.</span>
+            </div>
 
-              {selectedDossier.coords && (
-                <div className="coords-banner flex-between">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <MapPin size={16} />
-                    <span>Coordonnées : <strong>{selectedDossier.coords.lat}, {selectedDossier.coords.lon}</strong></span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${selectedDossier.coords.lat},${selectedDossier.coords.lon}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-sm btn-primary"
-                      title="Lancer le guidage GPS vers ce sinistre (Google Maps)"
-                    >
-                      <Navigation size={14} />
-                      <span>Itinéraire GPS</span>
-                    </a>
-                    <a
-                      href={`https://www.openstreetmap.org/?mlat=${selectedDossier.coords.lat}&mlon=${selectedDossier.coords.lon}#map=16/${selectedDossier.coords.lat}/${selectedDossier.coords.lon}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-sm btn-outline"
-                      title="Ouvrir sur OpenStreetMap"
-                    >
-                      <ExternalLink size={14} />
-                      <span>OSM</span>
-                    </a>
-                  </div>
-                </div>
-              )}
+            {dossiers.length === 0 && !loading && (
+              <div className="oid-enq-empty-card">
+                <span className="material-symbols-outlined oid-enq-empty-icon">folder_open</span>
+                <p>Aucun dossier ne vous est actuellement affecté.</p>
+                <span>Les incidents qualifiés et affectés par le Coordinateur apparaîtront ici.</span>
+              </div>
+            )}
 
-              <form onSubmit={(e) => e.preventDefault()} className="evaluation-form">
-                {/* Chiffres d'impact */}
-                <h3 className="section-title">1. Chiffrage de l'impact humain</h3>
-                <div className="impact-inputs-grid">
-                  <div className="form-group">
-                    <label>Ménages touchés :</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={evalForm.menages_touches}
-                      onChange={(e) => handleFormChange('menages_touches', Number(e.target.value))}
-                      className="form-control"
+            <div ref={dossierListRef} className="oid-enq-dossier-list">
+              {dossiers.map((d) => {
+                const isSelected = selectedDossier?.id === d.id;
+                const isHighRisk = d.danger_immediat || d.score_priorite >= 80;
+                const communeLabel = d.commune || "District d'Abidjan";
+                const evalStatut = d.evaluation_statut || 'aucune';
+
+                return (
+                  <div
+                    key={d.id}
+                    data-did={d.id}
+                    onClick={() => handleSelectDossier(d)}
+                    className={`oid-enq-dcard ${isSelected ? 'selected' : ''}`}
+                  >
+                    <div
+                      className={`oid-enq-dcard-strip ${
+                        isHighRisk ? 'strip-danger' : 'strip-secondary'
+                      }`}
                     />
-                  </div>
+                    {isSelected && <div className="oid-enq-dcard-corner-dot" />}
 
-                  <div className="form-group">
-                    <label>Personnes affectées (total) :</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={evalForm.personnes_affectees}
-                      onChange={(e) => handleFormChange('personnes_affectees', Number(e.target.value))}
-                      className="form-control"
-                      required
-                    />
-                  </div>
+                    <div className="oid-enq-dcard-top">
+                      <div className="oid-enq-dcard-badges">
+                        <span
+                          className={`oid-enq-type-badge ${
+                            isHighRisk ? 'badge-danger' : 'badge-secondary'
+                          }`}
+                        >
+                          {formatTypeBadge(d.type)}
+                        </span>
+                        <span
+                          className={`oid-enq-status-badge ${
+                            isSelected ? 'status-active' : ''
+                          }`}
+                        >
+                          {d.statut.toUpperCase()}
+                        </span>
+                      </div>
 
-                  <div className="form-group">
-                    <label>Blessés :</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={evalForm.blesses}
-                      onChange={(e) => handleFormChange('blesses', Number(e.target.value))}
-                      className="form-control"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Déplacés :</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={evalForm.deplaces}
-                      onChange={(e) => handleFormChange('deplaces', Number(e.target.value))}
-                      className="form-control"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Décès :</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={evalForm.deces}
-                      onChange={(e) => handleFormChange('deces', Number(e.target.value))}
-                      className="form-control"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Disparus :</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={evalForm.disparus}
-                      onChange={(e) => handleFormChange('disparus', Number(e.target.value))}
-                      className="form-control"
-                    />
-                  </div>
-                </div>
-
-                {/* Constats qualitatifs */}
-                <h3 className="section-title">2. Constatations qualitatives</h3>
-
-                <div className="form-group">
-                  <label>Dégâts matériels constatés :</label>
-                  <textarea
-                    rows={2}
-                    value={evalForm.degats}
-                    onChange={(e) => handleFormChange('degats', e.target.value)}
-                    placeholder="Murs effondrés, toitures arrachées, biens endommagés..."
-                    className="form-control"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Routes coupées / Accessibilité :</label>
-                  <textarea
-                    rows={2}
-                    value={evalForm.routes_coupees}
-                    onChange={(e) => handleFormChange('routes_coupees', e.target.value)}
-                    placeholder="Voies impraticables, ponts submergés, déviations possibles..."
-                    className="form-control"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Risques sanitaires :</label>
-                  <textarea
-                    rows={2}
-                    value={evalForm.risques_sanitaires}
-                    onChange={(e) => handleFormChange('risques_sanitaires', e.target.value)}
-                    placeholder="Eaux stagnantes, latrines débordées, risque d'épidémie..."
-                    className="form-control"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Besoins urgents identifiés :</label>
-                  <textarea
-                    rows={2}
-                    value={evalForm.besoins}
-                    onChange={(e) => handleFormChange('besoins', e.target.value)}
-                    placeholder="Pompage, motopompes, vivres, tentes, bâches, chlore..."
-                    className="form-control"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Recommandations opérationnelles :</label>
-                  <textarea
-                    rows={2}
-                    value={evalForm.recommandations}
-                    onChange={(e) => handleFormChange('recommandations', e.target.value)}
-                    placeholder="Priorité d'intervention, renforts à dépêcher..."
-                    className="form-control"
-                  />
-                </div>
-
-                {/* Photographies de terrain (Exigence F-24) */}
-                <h3 className="section-title">3. Photographies et preuves de terrain</h3>
-
-                <div className="form-group">
-                  {/* Photos déjà enregistrées */}
-                  {evalForm.photos && evalForm.photos.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <span className="sub-label">Photos enregistrées au dossier :</span>
-                      <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
-                        {evalForm.photos.map((pUrl, idx) => (
-                          <a key={idx} href={pUrl} target="_blank" rel="noopener noreferrer">
-                            <img
-                              src={pUrl}
-                              alt={`Photo terrain ${idx + 1}`}
-                              style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '8px', border: '2px solid #0284c7' }}
-                            />
-                          </a>
-                        ))}
+                      <div className="oid-enq-prio-box">
+                        <span className={isHighRisk ? 'text-danger' : 'text-secondary'}>
+                          P.{Math.round(d.score_priorite)}
+                        </span>
                       </div>
                     </div>
-                  )}
 
-                  {/* Bouton pour ajouter des photos */}
-                  <div className="photo-upload-container">
-                    <label className="photo-upload-btn">
-                      <Camera size={18} />
-                      <span>Prendre ou ajouter des photos terrain</span>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={handlePhotoUpload}
-                        style={{ display: 'none' }}
-                      />
-                    </label>
+                    <div className="oid-enq-dcard-idrow">
+                      <span className={`oid-enq-dcard-id ${isSelected ? 'text-primary' : ''}`}>
+                        Incident #{d.id}
+                      </span>
+                      <span className="oid-enq-dcard-ref">
+                        OID-ABJ-{d.reference_publique.slice(0, 10).toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="oid-enq-dcard-loc">
+                      <span
+                        className={`material-symbols-outlined ${
+                          isSelected ? 'text-primary' : 'text-muted'
+                        }`}
+                      >
+                        location_on
+                      </span>
+                      <span className="oid-enq-loc-name">{communeLabel}</span>
+                      {d.hauteur_eau_cm != null && d.hauteur_eau_cm > 0 && (
+                        <span className="oid-enq-loc-sub">({d.hauteur_eau_cm} cm)</span>
+                      )}
+                    </div>
+
+                    <div className="oid-enq-dcard-foot">
+                      <div className="oid-enq-eval-state">
+                        {evalStatut !== 'aucune' && (
+                          <span
+                            className={`oid-enq-eval-dot ${
+                              evalStatut === 'soumise' ? 'bg-tertiary' : 'bg-secondary pulse'
+                            }`}
+                          />
+                        )}
+                        <span
+                          className={
+                            evalStatut === 'soumise'
+                              ? 'text-tertiary'
+                              : evalStatut !== 'aucune'
+                              ? 'text-secondary'
+                              : 'text-muted'
+                          }
+                        >
+                          Éval: {evalStatut === 'brouillon' ? 'en_cours' : evalStatut}
+                        </span>
+                      </div>
+                      <span className="oid-enq-time-ago">{formatRelativeTime(d.cree_le)}</span>
+                    </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  {/* Prévisualisation des nouvelles photos */}
-                  {newPhotos.length > 0 && (
-                    <div style={{ marginTop: '0.85rem' }}>
-                      <span className="sub-label">Nouvelle(s) photo(s) prête(s) à être transmise(s) ({newPhotos.length}) :</span>
-                      <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
-                        {newPhotos.map((preview, idx) => (
-                          <div key={idx} className="photo-preview">
-                            <img src={preview} alt={`Nouvelle photo ${idx + 1}`} />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveNewPhoto(idx)}
-                              className="btn-remove-photo"
-                              title="Retirer cette photo"
-                            >
-                              <Trash2 size={12} />
-                            </button>
+            {/* SYNCHRO FOOTER MINI-WIDGET */}
+            <div className="oid-enq-sync-widget">
+              <div className="oid-enq-sync-top">
+                <span className="oid-enq-sync-lbl">Queue SQLite / Cache Local</span>
+                <span className="oid-enq-sync-val">
+                  {pendingPacketsCount} paquet{pendingPacketsCount > 1 ? 's' : ''} en attente
+                </span>
+              </div>
+              <div className="oid-enq-sync-bar">
+                <div
+                  className="oid-enq-sync-fill"
+                  style={{
+                    width: offlineQueue.length > 0 ? '65%' : '100%',
+                    backgroundColor: offlineQueue.length > 0 ? '#89ceff' : '#5be9ad',
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                <span className="oid-enq-sync-sub">
+                  {offlineQueue.length > 0
+                    ? `${offlineQueue.length} brouillon(s) hors-ligne prêt(s) à synchroniser.`
+                    : 'Base locale prête. Saisie hors-ligne synchronisée automatiquement dès reconnexion.'}
+                </span>
+                {offlineQueue.length > 0 && isOnline && (
+                  <button
+                    type="button"
+                    disabled={syncingOffline}
+                    onClick={flushOfflineQueue}
+                    className="oid-enq-refresh-btn"
+                    style={{ padding: '0.25rem 0.55rem', fontSize: '0.65rem' }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                      cloud_upload
+                    </span>
+                    <span>{syncingOffline ? 'Synchro...' : 'Synchro'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: PANNEAU D'ÉVALUATION D'IMPACT EN DIRECT (8 cols on desktop) */}
+          <div className="oid-enq-right-col">
+            {selectedDossier ? (
+              (() => {
+                const selCommune = selectedDossier.commune || "District d'Abidjan";
+                const savedPhotos = evalForm.photos || [];
+                const citizenPhotos = selectedDossier.photos_citoyennes || [];
+                const citizenPhotosMeta = selectedDossier.photos_citoyennes_meta || [];
+
+                return (
+                  <div className="oid-enq-eval-card-shell">
+                    {/* 1. EN-TÊTE FICHE D'ÉVALUATION (ÉPINGLÉ EN HAUT) */}
+                    <div className="oid-enq-eval-head">
+                      <div className="oid-enq-eval-head-left">
+                        <div className="oid-enq-eval-title-row">
+                          <span className="material-symbols-outlined text-cyan">
+                            assignment_turned_in
+                          </span>
+                          <h2>Évaluation de Terrain — Dossier #{selectedDossier.id}</h2>
+                        </div>
+                        <span className="oid-enq-eval-ref">
+                          Réf : OID-ABJ-{selectedDossier.reference_publique.slice(0, 10).toUpperCase()} ·{' '}
+                          {formatTypeSubtitle(selectedDossier.type)} ({selCommune})
+                        </span>
+                      </div>
+
+                      <div className="oid-enq-eval-head-badges">
+                        <span className="oid-enq-head-pill primary">
+                          {selectedDossier.statut.toUpperCase()}
+                        </span>
+                        {selectedDossier.danger_immediat ? (
+                          <span className="oid-enq-head-pill danger">ALERTE ROUGE</span>
+                        ) : (
+                          <span className="oid-enq-head-pill secondary">
+                            PRIORITÉ P.{Math.round(selectedDossier.score_priorite)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* CORPS DÉFILANT INDÉPENDANT */}
+                    <div ref={evalScrollRef} className="oid-enq-eval-scroll-body">
+                      {/* 2. COORDS BANNER & GUIDAGE GPS (UTM 30N PostGIS exact) */}
+                      {selectedDossier.coords && (
+                        <div className="oid-enq-coords-banner">
+                          <div className="oid-enq-coords-left">
+                            <div className="oid-enq-coords-icon">
+                              <span className="material-symbols-outlined text-secondary">explore</span>
+                            </div>
+                            <div className="oid-enq-coords-text">
+                              <span className="oid-enq-coords-eyebrow">
+                                Position Tactique Signalée (EPSG:4326 / EPSG:32630)
+                              </span>
+                              <span className="oid-enq-coords-val">
+                                WGS84 : {selectedDossier.coords.lat.toFixed(4)}° N,{' '}
+                                {selectedDossier.coords.lon.toFixed(4)}° W
+                                {selectedDossier.coords.utm_e != null &&
+                                selectedDossier.coords.utm_n != null
+                                  ? ` · UTM 30N : E ${selectedDossier.coords.utm_e.toLocaleString(
+                                      'fr-FR'
+                                    )} m, N ${selectedDossier.coords.utm_n.toLocaleString('fr-FR')} m`
+                                  : ''}
+                              </span>
+                            </div>
                           </div>
-                        ))}
+
+                          <div className="oid-enq-coords-actions">
+                            <a
+                              href={`https://maps.google.com/?q=${selectedDossier.coords.lat},${selectedDossier.coords.lon}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="oid-enq-gps-btn"
+                            >
+                              <span className="material-symbols-outlined text-primary">navigation</span>
+                              <span>Itinéraire GPS</span>
+                            </a>
+                            <a
+                              href={`https://www.openstreetmap.org/#map=17/${selectedDossier.coords.lat}/${selectedDossier.coords.lon}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="oid-enq-gps-btn"
+                            >
+                              <span className="material-symbols-outlined text-secondary">
+                                open_in_new
+                              </span>
+                              <span>OpenStreetMap</span>
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Rappel de la description citoyenne initiale si présente */}
+                      {selectedDossier.description_citoyenne && (
+                        <div className="oid-enq-citizen-note">
+                          <span className="material-symbols-outlined text-sky">record_voice_over</span>
+                          <div>
+                            <span className="oid-enq-citizen-eyebrow">
+                              Déclaration citoyenne initiale ({selCommune}) :
+                            </span>
+                            <p>« {selectedDossier.description_citoyenne} »</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 3. FORMULAIRE ENQUÊTE - SECTION 1 : IMPACT HUMAIN */}
+                      <div className="oid-enq-section-card">
+                        <div className="oid-enq-section-head">
+                          <div className="oid-enq-section-title">
+                            <span className="oid-enq-step-num">1</span>
+                            <h3>Chiffrage de l'impact humain</h3>
+                          </div>
+                          <span className="oid-enq-section-sub">Relevé contradictoire terrain</span>
+                        </div>
+
+                        {/* 6 COMPTEURS NUMÉRIQUES */}
+                        <div className="oid-enq-counters-grid">
+                          {/* 1. Ménages touchés */}
+                          <div className="oid-enq-counter-box">
+                            <label className="oid-enq-counter-lbl">Ménages touchés</label>
+                            <div className="oid-enq-counter-input-row">
+                              <input
+                                type="number"
+                                min="0"
+                                disabled={isReadOnly}
+                                value={evalForm.menages_touches}
+                                onChange={(e) =>
+                                  handleFormChange(
+                                    'menages_touches',
+                                    Math.max(0, Number(e.target.value))
+                                  )
+                                }
+                                className="oid-enq-counter-input"
+                              />
+                              <span className="material-symbols-outlined text-muted">roofing</span>
+                            </div>
+                            <span className="oid-enq-counter-hint">Concessions recensées</span>
+                          </div>
+
+                          {/* 2. Personnes affectées (total) */}
+                          <div className="oid-enq-counter-box highlight-primary">
+                            <div className="oid-enq-counter-lbl-row">
+                              <label className="oid-enq-counter-lbl text-primary">
+                                Personnes affectées *
+                              </label>
+                              <span className="oid-enq-ping-dot" />
+                            </div>
+                            <div className="oid-enq-counter-input-row">
+                              <input
+                                type="number"
+                                min="0"
+                                required
+                                disabled={isReadOnly}
+                                value={evalForm.personnes_affectees}
+                                onChange={(e) =>
+                                  handleFormChange(
+                                    'personnes_affectees',
+                                    Math.max(0, Number(e.target.value))
+                                  )
+                                }
+                                className="oid-enq-counter-input text-primary"
+                              />
+                              <span className="material-symbols-outlined text-primary">groups</span>
+                            </div>
+                            <span className="oid-enq-counter-hint text-primary">
+                              Indicateur pivot prioritaire
+                            </span>
+                          </div>
+
+                          {/* 3. Blessés */}
+                          <div className="oid-enq-counter-box">
+                            <div className="oid-enq-counter-lbl-row">
+                              <label className="oid-enq-counter-lbl text-secondary">Blessés</label>
+                              <span className="oid-enq-mini-pill">PRIO SOINS</span>
+                            </div>
+                            <div className="oid-enq-counter-input-row">
+                              <input
+                                type="number"
+                                min="0"
+                                disabled={isReadOnly}
+                                value={evalForm.blesses}
+                                onChange={(e) =>
+                                  handleFormChange('blesses', Math.max(0, Number(e.target.value)))
+                                }
+                                className="oid-enq-counter-input text-secondary"
+                              />
+                              <span className="material-symbols-outlined text-secondary">
+                                medical_services
+                              </span>
+                            </div>
+                            <span className="oid-enq-counter-hint">Transférés Antenne SAMU</span>
+                          </div>
+
+                          {/* 4. Déplacés / Relogés */}
+                          <div className="oid-enq-counter-box">
+                            <label className="oid-enq-counter-lbl">Déplacés / Relogés</label>
+                            <div className="oid-enq-counter-input-row">
+                              <input
+                                type="number"
+                                min="0"
+                                disabled={isReadOnly}
+                                value={evalForm.deplaces}
+                                onChange={(e) =>
+                                  handleFormChange('deplaces', Math.max(0, Number(e.target.value)))
+                                }
+                                className="oid-enq-counter-input"
+                              />
+                              <span className="material-symbols-outlined text-muted">
+                                night_shelter
+                              </span>
+                            </div>
+                            <span className="oid-enq-counter-hint">En attente mise à l'abri</span>
+                          </div>
+
+                          {/* 5. Décès constatés */}
+                          <div className="oid-enq-counter-box">
+                            <div className="oid-enq-counter-lbl-row">
+                              <label className="oid-enq-counter-lbl text-tertiary">
+                                Décès constatés
+                              </label>
+                              <span className="oid-enq-dot-tertiary" />
+                            </div>
+                            <div className="oid-enq-counter-input-row">
+                              <input
+                                type="number"
+                                min="0"
+                                disabled={isReadOnly}
+                                value={evalForm.deces}
+                                onChange={(e) =>
+                                  handleFormChange('deces', Math.max(0, Number(e.target.value)))
+                                }
+                                className="oid-enq-counter-input text-tertiary"
+                              />
+                              <span className="material-symbols-outlined text-tertiary">
+                                verified
+                              </span>
+                            </div>
+                            <span className="oid-enq-counter-hint text-tertiary">
+                              {evalForm.deces > 0
+                                ? `${evalForm.deces} décès recensé(s)`
+                                : 'Aucun corps signalé'}
+                            </span>
+                          </div>
+
+                          {/* 6. Personnes disparues */}
+                          <div className="oid-enq-counter-box">
+                            <label className="oid-enq-counter-lbl">Personnes disparues</label>
+                            <div className="oid-enq-counter-input-row">
+                              <input
+                                type="number"
+                                min="0"
+                                disabled={isReadOnly}
+                                value={evalForm.disparus}
+                                onChange={(e) =>
+                                  handleFormChange('disparus', Math.max(0, Number(e.target.value)))
+                                }
+                                className="oid-enq-counter-input"
+                              />
+                              <span className="material-symbols-outlined text-muted">
+                                person_search
+                              </span>
+                            </div>
+                            <span className="oid-enq-counter-hint">
+                              Recherche active GSPM : {evalForm.disparus}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* NOTE DE COHÉRENCE AUTOMATIQUE CUMULÉE */}
+                        <div className={`oid-enq-coherence-bar ${isCoherent ? 'valid' : 'invalid'}`}>
+                          <span className="material-symbols-outlined">
+                            {isCoherent ? 'check_circle' : 'warning'}
+                          </span>
+                          <span>
+                            {isCoherent
+                              ? `Contrôle de cohérence validé : Blessés + Décès + Disparus (${sumCritique}) ≤ Personnes affectées (${evalForm.personnes_affectees})`
+                              : `Alerte de cohérence : Blessés + Décès + Disparus (${sumCritique}) dépasse Personnes affectées (${evalForm.personnes_affectees})`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 4. FORMULAIRE ENQUÊTE - SECTION 2 : CONSTATATIONS QUALITATIVES */}
+                      <div className="oid-enq-section-card">
+                        <div className="oid-enq-section-head">
+                          <div className="oid-enq-section-title">
+                            <span className="oid-enq-step-num">2</span>
+                            <h3>Constatations qualitatives sur le terrain</h3>
+                          </div>
+                          <span className="oid-enq-section-sub">Observations directes officier</span>
+                        </div>
+
+                        <div className="oid-enq-textareas-stack">
+                          <div className="oid-enq-field">
+                            <label className="oid-enq-field-lbl">
+                              <span className="material-symbols-outlined text-primary">house</span>
+                              <span>Dégâts matériels constatés</span>
+                            </label>
+                            <textarea
+                              rows={2}
+                              disabled={isReadOnly}
+                              value={evalForm.degats}
+                              onChange={(e) => handleFormChange('degats', e.target.value)}
+                              placeholder="Concessions inondées, murs effondrés, véhicules bloqués, ouvrages CIE/SODECI touchés..."
+                              className="oid-enq-textarea"
+                            />
+                          </div>
+
+                          <div className="oid-enq-field">
+                            <label className="oid-enq-field-lbl">
+                              <span className="material-symbols-outlined text-danger">no_crash</span>
+                              <span>Routes coupées / Accessibilité</span>
+                            </label>
+                            <textarea
+                              rows={2}
+                              disabled={isReadOnly}
+                              value={evalForm.routes_coupees}
+                              onChange={(e) => handleFormChange('routes_coupees', e.target.value)}
+                              placeholder="Carrefours impraticables aux véhicules légers, radiers submergés, accès GSPM..."
+                              className="oid-enq-textarea"
+                            />
+                          </div>
+
+                          <div className="oid-enq-field">
+                            <label className="oid-enq-field-lbl">
+                              <span className="material-symbols-outlined text-secondary">
+                                sanitizer
+                              </span>
+                              <span>Risques sanitaires</span>
+                            </label>
+                            <textarea
+                              rows={2}
+                              disabled={isReadOnly}
+                              value={evalForm.risques_sanitaires}
+                              onChange={(e) => handleFormChange('risques_sanitaires', e.target.value)}
+                              placeholder="Refoulement de fosses septiques, contamination hydrique, eaux stagnantes..."
+                              className="oid-enq-textarea"
+                            />
+                          </div>
+
+                          <div className="oid-enq-field">
+                            <label className="oid-enq-field-lbl">
+                              <span className="material-symbols-outlined text-tertiary">
+                                water_pump
+                              </span>
+                              <span>Besoins urgents identifiés</span>
+                            </label>
+                            <textarea
+                              rows={2}
+                              disabled={isReadOnly}
+                              value={evalForm.besoins}
+                              onChange={(e) => handleFormChange('besoins', e.target.value)}
+                              placeholder="Motopompes gros débit, packs d'eau potable, bâches de protection, kits d'hygiène..."
+                              className="oid-enq-textarea"
+                            />
+                          </div>
+
+                          <div className="oid-enq-field">
+                            <label className="oid-enq-field-lbl">
+                              <span className="material-symbols-outlined text-primary">shield</span>
+                              <span>Recommandations opérationnelles</span>
+                            </label>
+                            <textarea
+                              rows={2}
+                              disabled={isReadOnly}
+                              value={evalForm.recommandations}
+                              onChange={(e) => handleFormChange('recommandations', e.target.value)}
+                              placeholder="Périmètre de sécurité, priorité d'évacuation, coupure préventive de secteur..."
+                              className="oid-enq-textarea"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 5. FORMULAIRE ENQUÊTE - SECTION 3 : PHOTOGRAPHIES ET PREUVES DE TERRAIN */}
+                      <div className="oid-enq-section-card">
+                        <div className="oid-enq-section-head">
+                          <div className="oid-enq-section-title">
+                            <span className="oid-enq-step-num">3</span>
+                            <h3>Photographies et preuves de terrain (Exigence F-24)</h3>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isReadOnly}
+                            onClick={() => fileInputRef.current?.click()}
+                            className="oid-enq-add-photo-btn"
+                          >
+                            <span className="material-symbols-outlined">photo_camera</span>
+                            <span>Prendre ou ajouter des photos terrain</span>
+                          </button>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={handlePhotoUpload}
+                            style={{ display: 'none' }}
+                          />
+                        </div>
+
+                        {savedPhotos.length === 0 &&
+                        newPhotos.length === 0 &&
+                        citizenPhotos.length === 0 ? (
+                          <div className="oid-enq-no-photos">
+                            <span className="material-symbols-outlined">add_a_photo</span>
+                            <p>Aucune photographie de terrain jointe pour le moment.</p>
+                            <span>
+                              Cliquez sur « Prendre ou ajouter des photos terrain » pour certifier vos
+                              constatations visuelles.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="oid-enq-photos-grid">
+                            {/* Photos d'évaluation déjà enregistrées au brouillon */}
+                            {savedPhotos.map((pUrl, idx) => {
+                              const meta = evalForm.photos_meta?.[idx];
+                              const shaLabel = meta?.sha256_short
+                                ? `SHA-256 ${meta.sha256_short} ✓`
+                                : 'SHA-256 ✓';
+                              const geoTagCode = `GEO-TAG: ${
+                                selectedDossier.code_adm || 'ABJ'
+                              }-0${idx + 1}`;
+
+                              return (
+                                <div
+                                  key={`saved-${idx}`}
+                                  className="oid-enq-photo-card"
+                                  onClick={() => setLightboxUrl(pUrl)}
+                                >
+                                  <div className="oid-enq-photo-img-wrap">
+                                    <img src={pUrl} alt={`Preuve terrain #${idx + 1}`} />
+                                    <div className="oid-enq-photo-geotag">{geoTagCode}</div>
+                                    <div className="oid-enq-photo-sha">{shaLabel}</div>
+                                    {!isReadOnly && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteSavedPhoto(pUrl);
+                                        }}
+                                        className="oid-enq-photo-remove"
+                                        style={{ top: '2.2rem' }}
+                                        title="Supprimer cette photo du brouillon"
+                                      >
+                                        <span className="material-symbols-outlined">delete</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="oid-enq-photo-caption">
+                                    <strong>
+                                      {meta?.filename || `Constat terrain #${idx + 1}`}
+                                    </strong>
+                                    <span>
+                                      {meta?.horodatage_utc || 'Horodaté UTC'} ·{' '}
+                                      {meta?.taille_formatee ? `${meta.taille_formatee} · ` : ''}
+                                      {meta?.exif_gps ? 'EXIF GPS Validé' : 'WGS84 Validé'}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* Nouvelles photos en attente de sauvegarde (avec SHA-256 calculé côté client) */}
+                            {newPhotos.map((np, idx) => (
+                              <div key={`new-${idx}`} className="oid-enq-photo-card is-pending">
+                                <div
+                                  className="oid-enq-photo-img-wrap"
+                                  onClick={() => setLightboxUrl(np.dataUrl)}
+                                >
+                                  <img src={np.dataUrl} alt={np.name} />
+                                  <div className="oid-enq-photo-geotag">
+                                    NOUVELLE PREUVE #{idx + 1}
+                                  </div>
+                                  <div className="oid-enq-photo-sha">
+                                    SHA-256 {np.sha256Short} ✓
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveNewPhoto(idx);
+                                    }}
+                                    className="oid-enq-photo-remove"
+                                    style={{ top: '2.2rem' }}
+                                    title="Retirer cette photo"
+                                  >
+                                    <span className="material-symbols-outlined">delete</span>
+                                  </button>
+                                </div>
+                                <div className="oid-enq-photo-caption">
+                                  <strong>{np.name}</strong>
+                                  <span>
+                                    {np.time} · {np.sizeFormatted} · Prête à synchroniser
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+
+                            {/* Photos initiales du signalement citoyen */}
+                            {citizenPhotos.map((cUrl, idx) => {
+                              const cMeta = citizenPhotosMeta[idx];
+                              const cSha = cMeta?.sha256_short
+                                ? `SHA-256 ${cMeta.sha256_short} ✓`
+                                : 'SHA-256 ✓';
+                              return (
+                                <div
+                                  key={`cit-${idx}`}
+                                  className="oid-enq-photo-card"
+                                  onClick={() => setLightboxUrl(cUrl)}
+                                >
+                                  <div className="oid-enq-photo-img-wrap">
+                                    <img src={cUrl} alt={`Photo citoyenne #${idx + 1}`} />
+                                    <div className="oid-enq-photo-geotag">
+                                      SOURCE: ALERTE CITOYENNE
+                                    </div>
+                                    <div className="oid-enq-photo-sha">{cSha}</div>
+                                  </div>
+                                  <div className="oid-enq-photo-caption">
+                                    <strong>
+                                      {cMeta?.filename || `Preuve déclarant #${idx + 1}`}
+                                    </strong>
+                                    <span>
+                                      {cMeta?.horodatage_utc || 'Dossier initial'} ·{' '}
+                                      {cMeta?.taille_formatee || `Dossier #${selectedDossier.id}`}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
 
-                <div className="eval-actions-bar">
-                  <button
-                    type="button"
-                    onClick={handleSaveDraft}
-                    disabled={saving}
-                    className="btn btn-secondary"
-                  >
-                    <Save size={18} />
-                    <span>Sauvegarder Brouillon</span>
-                  </button>
+                    {/* 6. EVAL-ACTIONS-BAR (ÉPINGLÉE EN BAS DU PANNEAU DROIT) */}
+                    <div className="oid-enq-actions-bar">
+                      <div className="oid-enq-actions-left">
+                        <button
+                          id="btn-save-draft"
+                          type="button"
+                          disabled={saving || isReadOnly}
+                          onClick={handleSaveDraft}
+                          className="oid-enq-btn-draft"
+                        >
+                          <span
+                            className={`material-symbols-outlined ${
+                              draftSavedPulse ? 'text-tertiary' : 'text-secondary'
+                            }`}
+                          >
+                            {draftSavedPulse ? 'check' : 'save'}
+                          </span>
+                          <span>
+                            {draftSavedPulse ? 'Brouillon synchronisé !' : 'Sauvegarder Brouillon'}
+                          </span>
+                        </button>
 
-                  <button
-                    type="button"
-                    onClick={handleSubmitEvaluation}
-                    disabled={saving}
-                    className="btn btn-primary"
-                  >
-                    <Send size={18} />
-                    <span>Soumettre l'évaluation</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          ) : (
-            <div className="empty-panel card">
-              <ClipboardList size={40} color="#94a3b8" />
-              <p>Sélectionnez un dossier dans la colonne de gauche pour remplir ou modifier l'évaluation.</p>
-            </div>
-          )}
+                        <div className="oid-enq-save-timestamp">
+                          <span className="oid-enq-save-lbl">Horodatage local</span>
+                          <span className="oid-enq-save-val">{lastSavedLabel}</span>
+                        </div>
+                      </div>
+
+                      <div className="oid-enq-actions-right">
+                        <button
+                          id="btn-submit-eval"
+                          type="button"
+                          disabled={saving || isReadOnly}
+                          onClick={handleSubmitEvaluation}
+                          title="Passera l'incident en statut ÉVALUÉ"
+                          className="oid-enq-btn-submit"
+                        >
+                          <span className="material-symbols-outlined">
+                            {isReadOnly ? 'task_alt' : 'send'}
+                          </span>
+                          <span>
+                            {isReadOnly
+                              ? 'Transmis au PC Central (Statut: ÉVALUÉ)'
+                              : "Soumettre l'évaluation définitive"}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="oid-enq-empty-card large">
+                <span className="material-symbols-outlined oid-enq-empty-icon">
+                  assignment_turned_in
+                </span>
+                <h3>Sélectionnez un dossier dans la colonne de gauche</h3>
+                <span>
+                  Choisissez une mission affectée pour renseigner le chiffrage humain, les constats
+                  qualitatifs et les preuves photographiques de terrain.
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

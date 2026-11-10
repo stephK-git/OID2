@@ -1,9 +1,60 @@
 <!doctype html>
-<html lang="fr">
+<html class="scroll-smooth" lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>O.I.D — Observatoire Inondations & Dommages</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>OID — Observatoire Inondations &amp; Dommages</title>
+    <meta
+      name="description"
+      content="Plateforme citoyenne et territoriale de veille, d'alerte et de suivi des crues et inondations en temps réel."
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      if (typeof tailwind !== 'undefined') {
+        tailwind.config = {
+          darkMode: 'class',
+          corePlugins: {
+            preflight: false,
+          },
+          theme: {
+            extend: {
+              fontFamily: {
+                sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+                display: ['"Space Grotesk"', 'sans-serif'],
+              },
+              colors: {
+                brand: {
+                  50: '#eff6ff',
+                  100: '#dbeafe',
+                  500: '#2563eb',
+                  600: '#1d4ed8',
+                  700: '#1d40b0',
+                  900: '#0f172a',
+                  950: '#060d1f',
+                },
+                alert: {
+                  red: '#ef4444',
+                  orange: '#f97316',
+                  amber: '#eab308',
+                  emerald: '#10b981',
+                },
+              },
+            },
+          },
+        };
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

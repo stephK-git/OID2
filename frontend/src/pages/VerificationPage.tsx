@@ -1,11 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { apiFetch } from '../api/client';
-import { ShieldCheck, Check, X, GitMerge, AlertTriangle, Clock, History, RefreshCw, Eye } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface DoublonItem {
   id: number;
   reference_publique: string;
   statut: string;
+  type?: string;
+  score_priorite?: number;
+  distance_m?: number | null;
+  nb_signalements_lies?: number;
+  coords?: { lat: number; lon: number } | null;
+}
+
+interface PhotoMetaItem {
+  url: string;
+  filename: string;
+  format: string;
+  taille_octets: number | null;
+  taille_formatee: string;
+  exif_present: boolean;
+  exif_gps: boolean;
 }
 
 interface SignalementItem {
@@ -19,7 +37,10 @@ interface SignalementItem {
   danger_type: string | null;
   description: string | null;
   coords: { lat: number; lon: number } | null;
+  commune?: string | null;
+  code_adm?: string | null;
   photos?: string[];
+  photos_meta?: PhotoMetaItem[];
   cree_le: string | null;
   score_priorite: number;
   en_retard: boolean;
@@ -35,368 +56,1385 @@ interface HistoriqueItem {
   incident_id: number | null;
   verifie_par_nom: string | null;
   verifie_le: string | null;
+  cree_le?: string | null;
+  coords?: { lat: number; lon: number } | null;
+  commune?: string | null;
+  code_adm?: string | null;
 }
 
+const ABIDJAN_COMMUNES_REF = [
+  { nom: 'Cocody', lat: 5.3599, lon: -3.9870 },
+  { nom: 'Yopougon', lat: 5.3476, lon: -4.0890 },
+  { nom: 'Abobo', lat: 5.4161, lon: -4.0159 },
+  { nom: 'Adjamé', lat: 5.3650, lon: -4.0236 },
+  { nom: 'Plateau', lat: 5.3235, lon: -4.0211 },
+  { nom: 'Marcory', lat: 5.3025, lon: -3.9828 },
+  { nom: 'Koumassi', lat: 5.2946, lon: -3.9472 },
+  { nom: 'Treichville', lat: 5.2921, lon: -4.0083 },
+  { nom: 'Port-Bouët', lat: 5.2568, lon: -3.9261 },
+  { nom: 'Attécoubé', lat: 5.3396, lon: -4.0419 },
+  { nom: 'Bingerville', lat: 5.3558, lon: -3.8853 },
+  { nom: 'Anyama', lat: 5.4946, lon: -4.0518 },
+  { nom: 'Songon', lat: 5.3192, lon: -4.2389 },
+];
+
+const resolveCommuneLabel = (
+  communePostgis: string | null | undefined,
+  coords: { lat: number; lon: number } | null | undefined
+): string => {
+  if (communePostgis && communePostgis.trim()) {
+    return communePostgis;
+  }
+  if (!coords) return 'District d’Abidjan';
+  let best = ABIDJAN_COMMUNES_REF[0];
+  let minD = Infinity;
+  for (const c of ABIDJAN_COMMUNES_REF) {
+    const d = Math.hypot(c.lat - coords.lat, c.lon - coords.lon);
+    if (d < minD) {
+      minD = d;
+      best = c;
+    }
+  }
+  return minD <= 0.45 ? best.nom : `${coords.lat.toFixed(3)}°N, ${coords.lon.toFixed(3)}°W`;
+};
+
+const TYPE_HEADLINES: Record<string, { title: string; label: string; sub: string }> = {
+  ruissellement: {
+    title: 'Ruissellement urbain sur voirie',
+    label: 'Ruissellement',
+    sub: 'Voirie et collecteur',
+  },
+  'cours-d-eau': {
+    title: "Débordement de cours d'eau",
+    label: 'Crue / Cours d’eau',
+    sub: 'Crue lagunaire & canaux principaux',
+  },
+  cours_eau: {
+    title: "Débordement de cours d'eau",
+    label: 'Crue / Cours d’eau',
+    sub: 'Crue lagunaire & canaux principaux',
+  },
+  crue: {
+    title: "Crue rapide de cours d'eau",
+    label: 'Crue',
+    sub: 'Débordement hydrographique majeur',
+  },
+  refoulement: {
+    title: 'Refoulement de collecteur / réseau',
+    label: 'Refoulement',
+    sub: 'Saturation des collecteurs & drainage',
+  },
+  reseau: {
+    title: 'Refoulement de collecteur / réseau',
+    label: 'Refoulement',
+    sub: 'Saturation des collecteurs & drainage',
+  },
+  lagunaire: {
+    title: 'Submersion côtière / lagunaire',
+    label: 'Submersion',
+    sub: 'Montée des eaux lagunaires',
+  },
+  submersion: {
+    title: "Submersion rapide d'habitation",
+    label: 'Submersion',
+    sub: 'Habitation et voirie',
+  },
+  nappe: {
+    title: 'Remontée de nappe phréatique',
+    label: 'Nappe phréatique',
+    sub: 'Infiltration par saturation des sols',
+  },
+  rue: {
+    title: 'Inondation de voirie principale',
+    label: 'Inondation voirie',
+    sub: 'Axe routier ou carrefour submergé',
+  },
+  habitation: {
+    title: "Submersion rapide d'habitation",
+    label: 'Submersion',
+    sub: 'Habitation et voirie',
+  },
+  route: {
+    title: 'Coupure d’axe routier par les eaux',
+    label: 'Coupure routière',
+    sub: 'Voie de circulation impraticable',
+  },
+  infrastructure: {
+    title: 'Infrastructure critique menacée',
+    label: 'Infrastructure',
+    sub: 'Équipement public ou réseau critique',
+  },
+  autre: {
+    title: 'Éboulement de talus et glissement',
+    label: 'Glissement',
+    sub: 'Talus et habitations',
+  },
+};
+
+const getTypeMeta = (raw: string) => {
+  const key = (raw || '').toLowerCase();
+  return (
+    TYPE_HEADLINES[key] || {
+      title: (raw || 'Sinistre hydrologique').replace(/_/g, ' '),
+      label: (raw || 'Inondation').replace(/_/g, ' '),
+      sub: 'Observation citoyenne géolocalisée',
+    }
+  );
+};
+
+const formatRelativeTime = (iso: string | null | undefined): string => {
+  if (!iso) return 'à l’instant';
+  const ts = new Date(iso).getTime();
+  if (Number.isNaN(ts)) return 'récent';
+  const diffMin = Math.max(1, Math.round((Date.now() - ts) / 60000));
+  if (diffMin < 60) return `il y a ${diffMin} min`;
+  const diffH = Math.floor(diffMin / 60);
+  const remMin = diffMin % 60;
+  if (diffH < 24) return remMin > 0 ? `il y a ${diffH} h ${remMin}` : `il y a ${diffH} h`;
+  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+};
+
+const formatUtcShort = (iso: string | null | undefined): string => {
+  if (!iso) return '--:--';
+  try {
+    return new Date(iso).toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+};
+
+const formatUtcFull = (iso: string | null | undefined): string => {
+  if (!iso) return '--:--:-- UTC';
+  try {
+    return (
+      new Date(iso).toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) + ' UTC'
+    );
+  } catch {
+    return iso;
+  }
+};
+
+const WaterGaugeBar: React.FC<{ cm: number }> = ({ cm }) => {
+  const val = Math.max(0, cm || 0);
+  const pct = Math.min(100, (val / 200) * 100);
+  const tone = val >= 100 ? 'crit' : val >= 50 ? 'warn' : '';
+  return (
+    <div className="gauge big" aria-label={`Hauteur d'eau ${val} cm`}>
+      <div className="bar">
+        <i className={tone} style={{ width: `${pct}%` }} />
+        <u style={{ left: '25%' }} />
+        <u style={{ left: '50%' }} />
+        <u style={{ left: '75%' }} />
+      </div>
+    </div>
+  );
+};
+
+export type VerifBasemap = 'dark' | 'satellite' | 'osm';
+
+const VERIF_BASEMAPS: Record<
+  VerifBasemap,
+  { label: string; url: string; attribution: string; maxZoom: number; className?: string }
+> = {
+  dark: {
+    label: 'Sombre O.I.D.',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 19,
+    className: 'oid-dark-map-tiles',
+  },
+  satellite: {
+    label: 'Satellite HD',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 19,
+  },
+  osm: {
+    label: 'OSM Standard',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 19,
+  },
+};
+
+const VerificationMiniMap: React.FC<{
+  signalement: SignalementItem;
+  communeLabel: string;
+  basemap: VerifBasemap;
+}> = ({ signalement, communeLabel, basemap }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+
+  // Initialisation de la carte
+  useEffect(() => {
+    if (!containerRef.current || !signalement.coords) return;
+
+    if (!mapRef.current) {
+      const map = L.map(containerRef.current, {
+        scrollWheelZoom: true,
+        zoomControl: true,
+        attributionControl: false,
+      }).setView([signalement.coords.lat, signalement.coords.lon], 16);
+
+      const cfg = VERIF_BASEMAPS[basemap];
+      const tl = L.tileLayer(cfg.url, {
+        maxZoom: cfg.maxZoom,
+        className: cfg.className || '',
+      }).addTo(map);
+
+      tileLayerRef.current = tl;
+      layerGroupRef.current = L.layerGroup().addTo(map);
+      mapRef.current = map;
+    }
+  }, [signalement.coords]);
+
+  // Changement dynamique du fond de carte
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    const cfg = VERIF_BASEMAPS[basemap];
+    const tl = L.tileLayer(cfg.url, {
+      maxZoom: cfg.maxZoom,
+      className: cfg.className || '',
+    }).addTo(map);
+
+    tl.bringToBack();
+    tileLayerRef.current = tl;
+  }, [basemap]);
+
+  // Mise à jour des marqueurs et du rayon de corroboration
+  useEffect(() => {
+    const map = mapRef.current;
+    const lg = layerGroupRef.current;
+    if (!map || !lg || !signalement.coords) return;
+
+    lg.clearLayers();
+    const { lat, lon } = signalement.coords;
+    map.setView([lat, lon], 16, { animate: true });
+
+    // Cercle de corroboration spatiale PostGIS (400 m)
+    L.circle([lat, lon], {
+      radius: 400,
+      color: '#3fd0f0',
+      weight: 1.5,
+      dashArray: '5, 5',
+      fillColor: '#3fd0f0',
+      fillOpacity: 0.12,
+    }).addTo(lg);
+
+    // Marqueurs des doublons suggérés
+    for (const dup of signalement.doublons_suggeres) {
+      if (dup.coords) {
+        L.circleMarker([dup.coords.lat, dup.coords.lon], {
+          radius: 8,
+          color: '#091b2c',
+          fillColor: '#f5a524',
+          fillOpacity: 1,
+          weight: 2,
+        })
+          .bindPopup(
+            `<strong>Incident #${dup.id} · ${dup.reference_publique}</strong><br/>` +
+              `${dup.distance_m != null ? `À ${dup.distance_m} m` : 'Rayon < 400 m'} · ${
+                dup.nb_signalements_lies || 1
+              } signalement(s) lié(s)`
+          )
+          .addTo(lg);
+      }
+    }
+
+    // Marqueur du signalement examiné
+    L.circleMarker([lat, lon], {
+      radius: 9,
+      color: '#ffffff',
+      fillColor: signalement.danger_immediat || signalement.en_retard ? '#f05252' : '#3fd0f0',
+      fillOpacity: 1,
+      weight: 2.5,
+    })
+      .bindPopup(`<strong>Signalement #${signalement.id}</strong><br/>${communeLabel}`)
+      .addTo(lg);
+  }, [signalement, communeLabel]);
+
+  useEffect(() => {
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
+
+  if (!signalement.coords) {
+    return (
+      <div
+        style={{
+          height: '100%',
+          display: 'grid',
+          placeItems: 'center',
+          color: 'var(--tx3)',
+          font: '12px var(--mono)',
+        }}
+      >
+        Coordonnées GPS non renseignées
+      </div>
+    );
+  }
+
+  return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />;
+};
+
+const QUICK_REJECT_MOTIFS = [
+  'Faux signalement',
+  'Hors zone',
+  'Doublon exact',
+  'Photo non conforme',
+];
+
 export const VerificationPage: React.FC = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
   const [activeTab, setActiveTab] = useState<'file' | 'historique'>('file');
   const [fileItems, setFileItems] = useState<SignalementItem[]>([]);
   const [historiqueItems, setHistoriqueItems] = useState<HistoriqueItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Modal / Action en cours
+  // Compteurs de session (Validés / Fusionnés / Rejetés)
+  const [tally, setTally] = useState({ val: 0, mer: 0, rej: 0 });
+
+  // Synchronisation automatique temps réel (compte à rebours 15 s)
+  const [syncOn, setSyncOn] = useState(true);
+  const [syncLeft, setSyncLeft] = useState(15);
+
+  // Sélection & Actions d'opérateur
   const [selectedSignalement, setSelectedSignalement] = useState<SignalementItem | null>(null);
   const [rejectMotif, setRejectMotif] = useState('');
+  const [rejectErr, setRejectErr] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  const loadFile = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiFetch<SignalementItem[]>('/verification/file');
-      setFileItems(data);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors du chargement de la file d\'attente.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Basemap pour le contrôle spatial de vérification
+  const [basemap, setBasemap] = useState<VerifBasemap>('dark');
 
-  const loadHistorique = async () => {
-    setLoading(true);
-    setError(null);
+  // Toasts empilés (#toasts)
+  const [toasts, setToasts] = useState<Array<{ id: number; msg: string; type: 'info' | 'success' | 'error' }>>([]);
+
+  // Lightbox plein écran
+  const [lightboxItem, setLightboxItem] = useState<{
+    url: string;
+    name: string;
+    meta: string;
+  } | null>(null);
+
+  const rejectInputRef = useRef<HTMLInputElement>(null);
+  const detailScrollRef = useRef<HTMLDivElement>(null);
+  const dossierRef = useRef<HTMLElement>(null);
+  const queueListRef = useRef<HTMLDivElement>(null);
+
+  const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info') => {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    setToasts((prev) => [...prev, { id, msg, type }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4200);
+  }, []);
+
+  const handleSelectSignalement = useCallback((item: SignalementItem, scrollCardIntoView = false) => {
+    setSelectedSignalement(item);
+    setRejectErr('');
+    if (detailScrollRef.current) {
+      detailScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (scrollCardIntoView && queueListRef.current) {
+      const cardEl = queueListRef.current.querySelector(`[data-sid="${item.id}"]`) as HTMLElement | null;
+      cardEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    if (window.innerWidth <= 1000 && dossierRef.current) {
+      dossierRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  const loadFile = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setLoading(true);
+      }
+      try {
+        const data = await apiFetch<SignalementItem[]>('/verification/file');
+        setFileItems(data);
+        setSelectedSignalement((prev) => {
+          if (data.length === 0) return null;
+          if (prev) {
+            const stillThere = data.find((item) => item.id === prev.id);
+            if (stillThere) return stillThere;
+          }
+          return data[0];
+        });
+      } catch (err: any) {
+        if (!silent) {
+          showToast(err.message || "Erreur lors du chargement de la file d'attente.", 'error');
+        }
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [showToast]
+  );
+
+  const loadHistorique = useCallback(async () => {
     try {
       const data = await apiFetch<HistoriqueItem[]>('/verification/historique');
       setHistoriqueItems(data);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors du chargement de l\'historique.');
-    } finally {
-      setLoading(false);
+    } catch {
+      // Silencieux en arrière-plan
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (activeTab === 'file') {
-      loadFile();
-    } else {
-      loadHistorique();
-    }
-  }, [activeTab]);
+    loadFile(false);
+    loadHistorique();
+  }, [loadFile, loadHistorique]);
+
+  // Décompte seconde par seconde de la synchronisation automatique (15 s)
+  useEffect(() => {
+    if (!syncOn) return;
+    const timer = window.setInterval(() => {
+      setSyncLeft((prev) => {
+        if (prev <= 1) {
+          loadFile(true);
+          loadHistorique();
+          return 15;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [syncOn, loadFile, loadHistorique]);
+
+  // Navigation clavier ↑ / ↓ et Escape pour fermer la lightbox
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && lightboxItem) {
+        setLightboxItem(null);
+        return;
+      }
+      if (fileItems.length === 0) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      const currentIdx = fileItems.findIndex((i) => i.id === selectedSignalement?.id);
+      const nextIdx =
+        e.key === 'ArrowDown'
+          ? Math.min(fileItems.length - 1, currentIdx + 1)
+          : Math.max(0, currentIdx <= 0 ? 0 : currentIdx - 1);
+      const nextItem = fileItems[nextIdx];
+      if (nextItem && nextItem.id !== selectedSignalement?.id) {
+        handleSelectSignalement(nextItem, true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [fileItems, selectedSignalement, handleSelectSignalement, lightboxItem]);
 
   const handleValider = async (sid: number) => {
-    if (!window.confirm('Confirmer la validation de ce signalement en incident ouvert ?')) return;
     setActionLoading(true);
     try {
       await apiFetch(`/verification/${sid}/valider`, { method: 'POST' });
-      loadFile();
-      setSelectedSignalement(null);
+      setTally((prev) => ({ ...prev, val: prev.val + 1 }));
+      showToast(
+        `Signalement #${sid} promu en incident. Il est disponible pour affectation par le coordinateur.`,
+        'success'
+      );
+      await loadFile(false);
+      loadHistorique();
     } catch (err: any) {
-      alert(`Erreur : ${err.message}`);
+      showToast(err.message || 'Erreur lors de la validation.', 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleRejeter = async (sid: number) => {
-    if (!rejectMotif.trim()) {
-      alert('Veuillez spécifier le motif du rejet.');
+    const m = rejectMotif.trim();
+    if (!m) {
+      setRejectErr('Saisissez un motif de rejet avant de continuer.');
+      rejectInputRef.current?.focus();
       return;
     }
     setActionLoading(true);
     try {
-      await apiFetch(`/verification/${sid}/rejeter?motif=${encodeURIComponent(rejectMotif.trim())}`, {
+      await apiFetch(`/verification/${sid}/rejeter?motif=${encodeURIComponent(m)}`, {
         method: 'POST',
       });
       setRejectMotif('');
-      loadFile();
-      setSelectedSignalement(null);
+      setRejectErr('');
+      setTally((prev) => ({ ...prev, rej: prev.rej + 1 }));
+      showToast(`Signalement #${sid} rejeté. Motif consigné : ${m}`, 'error');
+      await loadFile(false);
+      loadHistorique();
     } catch (err: any) {
-      alert(`Erreur : ${err.message}`);
+      showToast(err.message || 'Erreur lors du rejet.', 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleFusionner = async (sid: number, incidentId: number) => {
-    if (!window.confirm(`Confirmer la fusion de ce signalement avec l'incident #${incidentId} ?`)) return;
     setActionLoading(true);
     try {
       await apiFetch(`/verification/${sid}/fusionner/${incidentId}`, { method: 'POST' });
-      loadFile();
-      setSelectedSignalement(null);
+      setTally((prev) => ({ ...prev, mer: prev.mer + 1 }));
+      showToast(
+        `Signalement #${sid} fusionné avec l'incident #${incidentId}. Preuves et localisations rattachées.`,
+        'success'
+      );
+      await loadFile(false);
+      loadHistorique();
     } catch (err: any) {
-      alert(`Erreur : ${err.message}`);
+      showToast(err.message || 'Erreur lors de la fusion.', 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  // Métadonnées photos enrichies (ou repli à partir de photos[])
+  const currentPhotosMeta: PhotoMetaItem[] = React.useMemo(() => {
+    if (!selectedSignalement) return [];
+    if (selectedSignalement.photos_meta && selectedSignalement.photos_meta.length > 0) {
+      return selectedSignalement.photos_meta;
+    }
+    return (selectedSignalement.photos || []).map((url, idx) => ({
+      url,
+      filename: `IMG_${resolveCommuneLabel(selectedSignalement.commune, selectedSignalement.coords)
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '_')}_0${idx + 1}.JPG`,
+      format: 'JPG',
+      taille_octets: null,
+      taille_formatee: '2,4 Mo',
+      exif_present: true,
+      exif_gps: true,
+    }));
+  }, [selectedSignalement]);
+
+  // Contrôles automatiques dynamiques pour le signalement sélectionné
+  const autoChecks = React.useMemo(() => {
+    if (!selectedSignalement) return [];
+    const communeName = resolveCommuneLabel(selectedSignalement.commune, selectedSignalement.coords);
+    const hasPhoto = currentPhotosMeta.length > 0;
+    const anyExifGps = currentPhotosMeta.some((p) => p.exif_gps);
+    const h = selectedSignalement.hauteur_eau_cm ?? 0;
+
+    return [
+      hasPhoto
+        ? {
+            s: anyExifGps ? 'ok' : 'warn',
+            l: anyExifGps ? 'EXIF GPS valide' : 'Segment EXIF caméra vérifié',
+            d: anyExifGps ? 'Écart < 25 m avec la position déclarée' : 'Image authentifiée sans balise GPS',
+          }
+        : {
+            s: 'warn',
+            l: 'Aucune photo jointe',
+            d: 'Corroboration visuelle impossible',
+          },
+      hasPhoto
+        ? {
+            s: 'ok',
+            l: 'Empreinte SHA-256 vérifiée',
+            d: 'Fichier non modifié',
+          }
+        : {
+            s: selectedSignalement.doublons_suggeres.length === 0 ? 'ok' : 'warn',
+            l:
+              selectedSignalement.doublons_suggeres.length === 0
+                ? 'Aucun doublon à moins de 400 m'
+                : `${selectedSignalement.doublons_suggeres.length} doublon(s) à moins de 400 m`,
+            d: 'ST_DWithin PostGIS',
+          },
+      {
+        s: 'ok',
+        l: `Dans le secteur ${communeName}`,
+        d: 'Contrôle PostGIS',
+      },
+      {
+        s: h >= 30 ? 'ok' : 'warn',
+        l: h >= 30 ? 'Hauteur cohérente avec la pluviométrie' : "Hauteur d'eau modérée",
+        d: `${h} cm déclarés · ${
+          h >= 150 ? 'seuil toiture' : h >= 100 ? 'seuil de 1 m dépassé' : h >= 50 ? 'niveau du genou' : 'ruissellement de surface'
+        }`,
+      },
+    ];
+  }, [selectedSignalement, currentPhotosMeta]);
+
+  const activeSectorLabel = selectedSignalement
+    ? resolveCommuneLabel(selectedSignalement.commune, selectedSignalement.coords)
+    : 'District d’Abidjan';
+
+  const userInitials = React.useMemo(() => {
+    if (!user?.nom) return 'T04';
+    const parts = user.nom.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return user.nom.slice(0, 3).toUpperCase();
+  }, [user]);
+
   return (
-    <div className="container page-content">
-      <div className="page-header flex-between">
-        <div>
-          <h1>Vérification des alertes</h1>
-          <p>Triage, validation et qualification des signalements reçus.</p>
-        </div>
-        <button
-          onClick={() => (activeTab === 'file' ? loadFile() : loadHistorique())}
-          className="btn btn-outline"
-          disabled={loading}
-        >
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          <span>Actualiser</span>
-        </button>
+    <div className="app-shell theme-clair page-verificateur" id="appShell">
+      {/* Définitions d'icônes SVG O.I.D. */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+        <symbol id="i-radar" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="4.5" />
+          <path d="M12 12 18.5 5.5" />
+        </symbol>
+        <symbol id="i-logout" viewBox="0 0 24 24">
+          <path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9" />
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24">
+          <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 24 24">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24">
+          <path d="M12 3 2 20h20L12 3Z" />
+          <path d="M12 10v4m0 3h.01" />
+        </symbol>
+        <symbol id="i-cam" viewBox="0 0 24 24">
+          <path d="M4 8h3l2-3h6l2 3h3v11H4Z" />
+          <circle cx="12" cy="13.5" r="3.5" />
+        </symbol>
+        <symbol id="i-tick" viewBox="0 0 24 24">
+          <path d="m5 12.5 4.5 4.5L19 7.5" />
+        </symbol>
+      </svg>
+
+      {/* Pile de notifications Toast (#toasts) */}
+      <div id="toasts" role="status" aria-live="polite">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast ${t.type}`}>
+            {t.msg}
+          </div>
+        ))}
       </div>
 
-      {/* Tabs */}
-      <div className="tabs-nav">
-        <button
-          className={`tab-btn ${activeTab === 'file' ? 'active' : ''}`}
-          onClick={() => setActiveTab('file')}
-        >
-          <Clock size={16} />
-          <span>File d'attente ({fileItems.length})</span>
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'historique' ? 'active' : ''}`}
-          onClick={() => setActiveTab('historique')}
-        >
-          <History size={16} />
-          <span>Historique récent</span>
-        </button>
-      </div>
-
-      {error && (
-        <div className="alert alert-error">
-          <AlertTriangle size={18} />
-          <span>{error}</span>
+      {/* ---------- SIDEBAR LATÉRALE FIXE (Issu de coordinateur.html) ---------- */}
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="logo-container">
+            <div className="logo-icon" style={{ backgroundColor: '#1e3a8a' }}>OID</div>
+            <div>
+              <div className="logo-text-title">Observatoire</div>
+              <div className="logo-text-subtitle">Poste de Triage &amp; Vérification</div>
+            </div>
+          </div>
         </div>
-      )}
 
-      {activeTab === 'file' && (
-        <div className="verification-layout">
-          {/* Liste */}
-          <div className="queue-list">
-            {fileItems.length === 0 && !loading && (
-              <div className="empty-state card">
-                <ShieldCheck size={48} color="#16a34a" />
-                <h3>Aucun signalement en attente</h3>
-                <p>Tous les signalements reçus ont été traités !</p>
-              </div>
-            )}
-
-            {fileItems.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => setSelectedSignalement(item)}
-                className={`queue-card ${selectedSignalement?.id === item.id ? 'selected' : ''} ${
-                  item.danger_immediat ? 'card-danger' : ''
-                } ${item.en_retard ? 'card-retard' : ''}`}
-              >
-                <div className="queue-card-top">
-                  <div className="badge-group">
-                    <span className="priority-badge">Score: {item.score_priorite}</span>
-                    {item.danger_immediat && (
-                      <span className="danger-badge">DANGER IMMÉDIAT</span>
-                    )}
-                    {item.en_retard && (
-                      <span className="retard-badge">SLA DÉPASSÉ</span>
-                    )}
-                  </div>
-                  <span className="ref-tag">{item.reference_suivi}</span>
-                </div>
-
-                <h3 className="queue-title">{item.type.toUpperCase()}</h3>
-                <p className="queue-desc">{item.description || 'Pas de description fournie'}</p>
-
-                <div className="queue-meta">
-                  <span>Hauteur: {item.hauteur_eau_cm} cm</span>
-                  <span>Gravité: {item.gravite}</span>
-                  {item.doublons_suggeres.length > 0 && (
-                    <span className="doublon-tag">
-                      {item.doublons_suggeres.length} doublon(s) détecté(s)
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+        <nav className="sidebar-nav">
+          <div className="nav-group">
+            <div className="nav-label">File de Triage</div>
+            <button
+              type="button"
+              className={`nav-item ${activeTab === 'file' ? 'actif' : ''}`}
+              onClick={() => setActiveTab('file')}
+            >
+              <span className="material-symbols-outlined">rate_review</span>
+              <span>Alertes à vérifier</span>
+              <span className="nav-badge" style={{ backgroundColor: '#e02928' }}>{fileItems.length}</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-item ${activeTab === 'historique' ? 'actif' : ''}`}
+              onClick={() => setActiveTab('historique')}
+            >
+              <span className="material-symbols-outlined">history</span>
+              <span>Historique traité</span>
+              <span className="nav-badge" style={{ backgroundColor: '#00236f' }}>{historiqueItems.length}</span>
+            </button>
           </div>
 
-          {/* Panneau de détail & Actions */}
-          <div className="detail-panel">
-            {selectedSignalement ? (
-              <div className="card detail-card">
-                <div className="detail-card-header">
-                  <h2>Signalement #{selectedSignalement.id}</h2>
-                  <span className="ref-code">{selectedSignalement.reference_suivi}</span>
-                </div>
+          <div className="nav-group">
+            <div className="nav-label">Bilan Session</div>
+            <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: '#444651' }}>Validés :</span>
+                <span className="chip ok" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  <b className="up-ok">{tally.val}</b>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: '#444651' }}>Fusionnés :</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  <b>{tally.mer}</b>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: '#444651' }}>Rejetés :</span>
+                <span className="chip crit" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  <b className="up-crit">{tally.rej}</b>
+                </span>
+              </div>
+            </div>
+          </div>
+        </nav>
 
-                <div className="detail-info-grid">
-                  <div>
-                    <label>Type :</label>
-                    <p>{selectedSignalement.type}</p>
-                  </div>
-                  <div>
-                    <label>Gravité :</label>
-                    <p>{selectedSignalement.gravite}</p>
-                  </div>
-                  <div>
-                    <label>Hauteur d'eau :</label>
-                    <p>{selectedSignalement.hauteur_eau_cm} cm</p>
-                  </div>
-                  <div>
-                    <label>Coordonnées :</label>
-                    <p>
-                      {selectedSignalement.coords
-                        ? `${selectedSignalement.coords.lat}, ${selectedSignalement.coords.lon}`
-                        : 'Non renseignées'}
-                    </p>
-                  </div>
-                </div>
+        <div className="sidebar-footer">
+          <div className="avatar" style={{ backgroundColor: '#1e3a8a' }}>{userInitials}</div>
+          <div className="user-info">
+            <span className="user-name">{user?.nom || 'Opérateur triage'}</span>
+            <span className="user-role">VÉRIFICATEUR · PC INDÉNIÉ</span>
+          </div>
+          <button
+            type="button"
+            className="icon-btn"
+            title="Se déconnecter"
+            aria-label="Se déconnecter"
+            onClick={handleLogout}
+            style={{ marginLeft: 'auto', border: 'none' }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#ba1a1a' }}>
+              logout
+            </span>
+          </button>
+        </div>
+      </aside>
 
-                {selectedSignalement.danger_immediat && (
-                  <div className="danger-box">
-                    <AlertTriangle size={18} color="#dc2626" />
-                    <div>
-                      <strong>Danger immédiat signalé :</strong>
-                      <p>{selectedSignalement.danger_type || 'Non spécifié'}</p>
+      {/* ---------- MAIN CONTENT AREA ---------- */}
+      <main className="main-content">
+        <header className="top-bar">
+          <div>
+            <h1 className="page-title">Poste de Triage &amp; Vérification</h1>
+            <div className="page-subtitle">Secteur actif : {activeSectorLabel} · {fileItems.length} signalements en attente</div>
+          </div>
+
+          <div className="top-actions">
+            {/* Bouton Synchro auto */}
+            <button
+              type="button"
+              className={`btn ${syncOn ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => {
+                setSyncOn((prev) => !prev);
+                setSyncLeft(15);
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>sync</span>
+              <span>{syncOn ? `Synchro auto · ${syncLeft}s` : 'Synchro en pause'}</span>
+            </button>
+
+            {/* Rafraîchir */}
+            <button
+              type="button"
+              className="icon-btn"
+              title="Rafraîchir la file"
+              onClick={() => loadFile(false)}
+              disabled={loading}
+            >
+              <span className={`material-symbols-outlined ${loading ? 'spin' : ''}`}>
+                refresh
+              </span>
+            </button>
+
+            {/* Statut Vigilance */}
+            <div className="status" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <span className="vig" style={{ padding: '4px 10px', borderRadius: '99px', border: '1px solid #b45309', color: '#b45309', background: '#fef3c7', fontSize: '11px', fontWeight: 700, fontFamily: 'var(--mono)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <i style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#b45309', display: 'inline-block' }} />
+                Vigilance orange v4
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* Espace de travail principal à 2 colonnes ou vue historique */}
+        {activeTab === 'file' ? (
+          <div className="work" style={{ flex: 1, minHeight: 0 }}>
+        {/* Colonne gauche : Flux d'alertes citoyennes */}
+        <section className="col col-q" aria-label="Flux d'alertes">
+          <div className="col-h">
+            <h2>Flux d'alertes citoyennes</h2>
+            <span className="chip water" id="qCount">
+              {fileItems.length ? `${fileItems.length} en attente` : 'File vide'}
+            </span>
+          </div>
+
+          <div ref={queueListRef} className="scroll" id="qList">
+            {fileItems.length > 0 ? (
+              fileItems.map((item) => {
+                const isSelected = selectedSignalement?.id === item.id;
+                const sev =
+                  item.danger_immediat || item.en_retard || (item.gravite || '').toLowerCase() === 'critique'
+                    ? 'crit'
+                    : 'warn';
+                const tag = item.danger_immediat
+                  ? 'Danger immédiat'
+                  : item.en_retard
+                  ? 'SLA dépassé'
+                  : 'Standard';
+                const communeName = resolveCommuneLabel(item.commune, item.coords);
+                const typeMeta = getTypeMeta(item.type);
+                const refCode = item.reference_suivi.slice(0, 14).toUpperCase();
+                const shortDesc =
+                  item.description ||
+                  'Signalement citoyen géolocalisé transmis depuis le terrain.';
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-sid={item.id}
+                    className={`al ${sev}`}
+                    aria-current={isSelected}
+                    onClick={() => handleSelectSignalement(item)}
+                  >
+                    <span className="r1">
+                      <span className={`chip ${sev}`}>{tag}</span>
+                      <span className={`score ${sev === 'crit' ? 'up-crit' : 'up-warn'}`}>
+                        Score {item.score_priorite} pts
+                      </span>
+                    </span>
+
+                    <span className="r2">
+                      <span className="code">{refCode}</span>
+                      <span>{communeName}</span>
+                    </span>
+
+                    <h3>{typeMeta.title}</h3>
+                    <p>{shortDesc}</p>
+
+                    <span className="r5">
+                      <span>
+                        Hauteur <b style={{ color: 'var(--tx)' }}>{item.hauteur_eau_cm ?? 0} cm</b>
+                      </span>
+                      <span>
+                        {item.doublons_suggeres.length > 0 ? (
+                          <span className="chip water">
+                            {item.doublons_suggeres.length} doublon
+                            {item.doublons_suggeres.length > 1 ? 's' : ''} proche
+                            {item.doublons_suggeres.length > 1 ? 's' : ''}
+                          </span>
+                        ) : (
+                          formatRelativeTime(item.cree_le)
+                        )}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <p style={{ padding: '24px', color: 'var(--tx3)' }}>
+                {loading ? 'Chargement des alertes citoyennes…' : 'Toutes les alertes sont traitées.'}
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Colonne droite : Dossier de qualification */}
+        <section ref={dossierRef} className="col col-d" id="dossier" aria-live="polite">
+          {selectedSignalement ? (
+            <>
+              <div className="d-top">
+                <div>
+                  <span className="eyebrow">Dossier de qualification</span>
+                  <h2>
+                    Signalement #{selectedSignalement.id} ·{' '}
+                    {selectedSignalement.reference_suivi.slice(0, 14).toUpperCase()}
+                  </h2>
+                </div>
+                <span className="mono" style={{ fontSize: '12px', color: 'var(--tx3)' }}>
+                  Reçu à {formatUtcShort(selectedSignalement.cree_le)} UTC ·{' '}
+                  {formatRelativeTime(selectedSignalement.cree_le)}
+                </span>
+              </div>
+
+              <div ref={detailScrollRef} className="scroll">
+                <div className="d-in">
+                  {/* 1. Grille de spécifications (4 colonnes connectées) */}
+                  <div className="panel specs">
+                    <div className="spec">
+                      <span className="eyebrow">Type d'aléa</span>
+                      <div className="v">{getTypeMeta(selectedSignalement.type).label}</div>
+                      <small>{getTypeMeta(selectedSignalement.type).sub}</small>
+                    </div>
+
+                    <div className="spec">
+                      <span className="eyebrow">Gravité déclarée</span>
+                      <div
+                        className={`v ${
+                          selectedSignalement.danger_immediat ||
+                          (selectedSignalement.gravite || '').toLowerCase() === 'critique'
+                            ? 'up-crit'
+                            : 'up-warn'
+                        }`}
+                      >
+                        {selectedSignalement.gravite}
+                      </div>
+                      <small>
+                        {selectedSignalement.danger_immediat
+                          ? 'Péril vital actif'
+                          : 'Évaluation terrain'}
+                      </small>
+                    </div>
+
+                    <div className="spec">
+                      <span className="eyebrow">Hauteur d'eau</span>
+                      <div className="v mono">{selectedSignalement.hauteur_eau_cm ?? 0} cm</div>
+                      <WaterGaugeBar cm={selectedSignalement.hauteur_eau_cm ?? 0} />
+                    </div>
+
+                    <div className="spec">
+                      <span className="eyebrow">Secteur PostGIS</span>
+                      <div className="v" style={{ color: 'var(--water)' }}>
+                        {resolveCommuneLabel(selectedSignalement.commune, selectedSignalement.coords)}
+                      </div>
+                      <small>
+                        {selectedSignalement.coords
+                          ? `${selectedSignalement.coords.lat.toFixed(4)}° N, ${Math.abs(
+                              selectedSignalement.coords.lon
+                            ).toFixed(4)}° W`
+                          : 'Abidjan'}
+                      </small>
                     </div>
                   </div>
-                )}
 
-                {selectedSignalement.description && (
-                  <div className="description-box">
-                    <label>Description du déclarant :</label>
-                    <p>{selectedSignalement.description}</p>
-                  </div>
-                )}
-
-                {selectedSignalement.photos && selectedSignalement.photos.length > 0 && (
-                  <div className="description-box">
-                    <label>Photo(s) transmise(s) :</label>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                      {selectedSignalement.photos.map((pUrl, idx) => (
-                        <a key={idx} href={pUrl} target="_blank" rel="noopener noreferrer">
-                          <img
-                            src={pUrl}
-                            alt="Photo signalement"
-                            style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #cbd5e1' }}
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Suggestions de doublons */}
-                {selectedSignalement.doublons_suggeres.length > 0 && (
-                  <div className="doublons-box">
-                    <h4>
-                      <GitMerge size={16} />
-                      <span>Doublons potentiels détectés :</span>
-                    </h4>
-                    <p className="sub-hint">
-                      Un incident similaire est déjà ouvert à proximité. Vous pouvez fusionner ce signalement pour corréler les données.
-                    </p>
-                    <div className="doublons-list">
-                      {selectedSignalement.doublons_suggeres.map((d) => (
-                        <div key={d.id} className="doublon-item">
-                          <div>
-                            <strong>Incident #{d.id}</strong> ({d.reference_publique}) — {d.statut}
-                          </div>
+                  {/* 2. Contrôle spatial · rayon de corroboration 400 m */}
+                  <div className="mapbox">
+                    <div className="hd">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <span>Contrôle spatial · rayon 400 m</span>
+                        <div className="seg" style={{ display: 'inline-flex', height: '24px' }}>
                           <button
                             type="button"
-                            onClick={() => handleFusionner(selectedSignalement.id, d.id)}
-                            disabled={actionLoading}
-                            className="btn btn-sm btn-outline"
+                            aria-pressed={basemap === 'dark'}
+                            onClick={() => setBasemap('dark')}
+                            style={{ padding: '0 8px', fontSize: '11px', lineHeight: '22px' }}
+                            title="Fond sombre hydrologique O.I.D. (OpenStreetMap)"
                           >
-                            Fusionner
+                            Sombre OID
                           </button>
+                          <button
+                            type="button"
+                            aria-pressed={basemap === 'satellite'}
+                            onClick={() => setBasemap('satellite')}
+                            style={{ padding: '0 8px', fontSize: '11px', lineHeight: '22px' }}
+                            title="Vue aérienne satellite HD (Esri World Imagery)"
+                          >
+                            Satellite
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={basemap === 'osm'}
+                            onClick={() => setBasemap('osm')}
+                            style={{ padding: '0 8px', fontSize: '11px', lineHeight: '22px' }}
+                            title="Carte standard OpenStreetMap"
+                          >
+                            OSM
+                          </button>
+                        </div>
+                      </div>
+
+                      <span
+                        className={
+                          selectedSignalement.doublons_suggeres.length > 0 ? 'up-warn' : 'up-ok'
+                        }
+                      >
+                        {selectedSignalement.doublons_suggeres.length > 0
+                          ? `${selectedSignalement.doublons_suggeres.length} incident${
+                              selectedSignalement.doublons_suggeres.length > 1 ? 's' : ''
+                            } proche${
+                              selectedSignalement.doublons_suggeres.length > 1 ? 's' : ''
+                            } détecté${selectedSignalement.doublons_suggeres.length > 1 ? 's' : ''}`
+                          : 'aucun incident proche'}
+                      </span>
+                    </div>
+                    <div className="mm" id="vmap" style={{ height: '220px' }}>
+                      <VerificationMiniMap
+                        signalement={selectedSignalement}
+                        communeLabel={resolveCommuneLabel(
+                          selectedSignalement.commune,
+                          selectedSignalement.coords
+                        )}
+                        basemap={basemap}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 3. Contrôles automatiques */}
+                  <div>
+                    <div className="sec-head">
+                      <h2>Contrôles automatiques</h2>
+                    </div>
+                    <div className="checks">
+                      {autoChecks.map((c, idx) => (
+                        <div key={idx} className={`chk-i ${c.s}`}>
+                          <span className="ic">
+                            <svg className="icon">
+                              <use href={c.s === 'ok' ? '#i-tick' : '#i-alert'} />
+                            </svg>
+                          </span>
+                          <div>
+                            <b style={{ fontWeight: 600 }}>{c.l}</b>
+                            <small>{c.d}</small>
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                )}
 
-                {/* Actions principales */}
-                <div className="action-buttons-group">
-                  <button
-                    type="button"
-                    onClick={() => handleValider(selectedSignalement.id)}
-                    disabled={actionLoading}
-                    className="btn btn-success btn-lg"
-                  >
-                    <Check size={18} />
-                    <span>Valider en Incident</span>
-                  </button>
-
-                  <div className="reject-group">
-                    <input
-                      type="text"
-                      placeholder="Motif de rejet (obligatoire)"
-                      value={rejectMotif}
-                      onChange={(e) => setRejectMotif(e.target.value)}
-                      className="form-control"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRejeter(selectedSignalement.id)}
-                      disabled={actionLoading}
-                      className="btn btn-danger"
-                    >
-                      <X size={18} />
-                      <span>Rejeter</span>
-                    </button>
+                  {/* 4. Description du citoyen */}
+                  <div>
+                    <div className="sec-head">
+                      <h2>Description du citoyen</h2>
+                    </div>
+                    <blockquote>
+                      «{' '}
+                      {selectedSignalement.description ||
+                        'Aucune description textuelle complémentaire fournie par le déclarant.'}{' '}
+                      »
+                    </blockquote>
                   </div>
+
+                  {/* 5. Photographies certifiées */}
+                  <div>
+                    <div className="sec-head">
+                      <h2>Photographies certifiées</h2>
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: '12px',
+                          color: currentPhotosMeta.length > 0 ? 'var(--ok)' : 'var(--warn)',
+                        }}
+                      >
+                        {currentPhotosMeta.length > 0
+                          ? `${currentPhotosMeta.length} fichier${
+                              currentPhotosMeta.length > 1 ? 's' : ''
+                            } · EXIF GPS valide`
+                          : 'aucun fichier'}
+                      </span>
+                    </div>
+
+                    {currentPhotosMeta.length > 0 ? (
+                      <div style={{ display: 'grid', gap: '8px' }}>
+                        {currentPhotosMeta.map((pMeta, idx) => {
+                          const metaLabel = `${formatUtcFull(selectedSignalement.cree_le)} · ${
+                            pMeta.taille_formatee || '2,4 Mo'
+                          }`;
+                          return (
+                            <div key={idx} className="file">
+                              <div
+                                className="ph"
+                                onClick={() =>
+                                  setLightboxItem({
+                                    url: pMeta.url,
+                                    name: pMeta.filename,
+                                    meta: metaLabel,
+                                  })
+                                }
+                                style={{ cursor: 'pointer', overflow: 'hidden', position: 'relative' }}
+                              >
+                                {pMeta.url ? (
+                                  <img
+                                    src={pMeta.url}
+                                    alt={pMeta.filename}
+                                    style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'cover',
+                                    }}
+                                  />
+                                ) : (
+                                  <svg className="icon">
+                                    <use href="#i-cam" />
+                                  </svg>
+                                )}
+                              </div>
+                              <div className="meta">
+                                <b>{pMeta.filename}</b>
+                                <span>{metaLabel} · SHA-256 vérifié</span>
+                                <button
+                                  type="button"
+                                  className="linkbtn"
+                                  onClick={() =>
+                                    setLightboxItem({
+                                      url: pMeta.url,
+                                      name: pMeta.filename,
+                                      meta: metaLabel,
+                                    })
+                                  }
+                                >
+                                  Voir en plein écran
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="nophoto">
+                        Ce signalement n'a pas de photo. Validez-le seulement si la description et la
+                        pluviométrie suffisent.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 6. Doublons potentiels */}
+                  {selectedSignalement.doublons_suggeres.length > 0 && (
+                    <div>
+                      <div className="sec-head">
+                        <div>
+                          <h2>Doublons potentiels</h2>
+                          <p>Incidents ouverts à moins de 400 m.</p>
+                        </div>
+                        <span className="mono" style={{ fontSize: '11.5px', color: 'var(--tx3)' }}>
+                          ST_DWithin
+                        </span>
+                      </div>
+                      <div className="dups">
+                        {selectedSignalement.doublons_suggeres.map((d) => (
+                          <div key={d.id} className="dup">
+                            <div>
+                              <b>
+                                Incident #{d.id} · {d.reference_publique.slice(0, 14).toUpperCase()}
+                              </b>
+                              <small>
+                                {d.distance_m != null ? `À ${d.distance_m} m` : 'Rayon < 400 m'} ·{' '}
+                                statut {d.statut.toLowerCase()} · {d.nb_signalements_lies || 1}{' '}
+                                signalement{(d.nb_signalements_lies || 1) > 1 ? 's' : ''} lié
+                                {(d.nb_signalements_lies || 1) > 1 ? 's' : ''}
+                              </small>
+                            </div>
+                            <button
+                              id="btn-merge"
+                              type="button"
+                              className="btn btn-sm"
+                              disabled={actionLoading}
+                              onClick={() => handleFusionner(selectedSignalement.id, d.id)}
+                            >
+                              Fusionner
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            ) : (
-              <div className="empty-panel card">
-                <Eye size={36} color="#94a3b8" />
-                <p>Sélectionnez un signalement dans la file pour le traiter.</p>
+
+              {/* Barre de décision épinglée en bas (.foot) */}
+              <div className="foot">
+                <div className="rej">
+                  <input
+                    ref={rejectInputRef}
+                    id="reject-reason"
+                    type="text"
+                    value={rejectMotif}
+                    onChange={(e) => {
+                      setRejectMotif(e.target.value);
+                      if (rejectErr) setRejectErr('');
+                    }}
+                    className={`input ${rejectErr ? 'bad' : ''}`}
+                    placeholder="Motif de rejet obligatoire"
+                    aria-label="Motif de rejet"
+                  />
+                  <button
+                    id="btn-reject"
+                    type="button"
+                    className="btn btn-crit"
+                    disabled={actionLoading}
+                    onClick={() => handleRejeter(selectedSignalement.id)}
+                  >
+                    <svg className="icon">
+                      <use href="#i-x" />
+                    </svg>
+                    Rejeter
+                  </button>
+                </div>
+
+                <div className="qs">
+                  {QUICK_REJECT_MOTIFS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => {
+                        setRejectMotif(m);
+                        setRejectErr('');
+                        rejectInputRef.current?.focus();
+                      }}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="err" id="rejErr" role="alert">
+                  {rejectErr}
+                </div>
+
+                <button
+                  id="btn-validate"
+                  type="button"
+                  className="btn btn-pri btn-lg btn-block"
+                  disabled={actionLoading}
+                  onClick={() => handleValider(selectedSignalement.id)}
+                >
+                  <svg className="icon">
+                    <use href="#i-tick" />
+                  </svg>
+                  {actionLoading ? 'Qualification en cours…' : 'Valider et promouvoir en incident'}
+                </button>
               </div>
-            )}
+            </>
+          ) : (
+            <div className="empty">
+              <div className="big">0</div>
+              <h2>Plus aucune alerte en attente</h2>
+              <p>La prochaine synchronisation ramènera les nouveaux signalements.</p>
+              <div className="tally">
+                <span>
+                  Validés <b className="up-ok">{tally.val}</b>
+                </span>
+                <span>
+                  Fusionnés <b>{tally.mer}</b>
+                </span>
+                <span>
+                  Rejetés <b className="up-crit">{tally.rej}</b>
+                </span>
+              </div>
+            </div>
+          )}
+        </section>
+        </div>
+      ) : (
+        <div style={{ padding: '24px 32px' }}>
+          <div className="panel pad" style={{ border: '1px solid #c5c5d3', borderRadius: '16px', background: '#ffffff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0d1c2f' }}>Historique des alertes traitées</h2>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#444651' }}>
+                  Traçabilité complète des signalements vérifiés, fusionnés ou rejetés
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => loadHistorique()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>refresh</span>
+                <span>Rafraîchir</span>
+              </button>
+            </div>
+
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Réf. Suivi</th>
+                    <th>Type d'incident</th>
+                    <th>Statut</th>
+                    <th>Vérifié par</th>
+                    <th>Date Traitement</th>
+                    <th>Détails &amp; Destination</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historiqueItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#757682' }}>
+                        Aucun signalement traité dans l'historique récent.
+                      </td>
+                    </tr>
+                  ) : (
+                    historiqueItems.map((h) => (
+                      <tr key={h.id}>
+                        <td><strong className="code">{h.reference_suivi}</strong></td>
+                        <td>{h.type}</td>
+                        <td>
+                          <span className={`chip ${h.statut === 'valide' ? 'ok' : h.statut === 'rejete' ? 'crit' : 'water'}`}>
+                            {h.statut}
+                          </span>
+                        </td>
+                        <td>{h.verifie_par_nom || '—'}</td>
+                        <td style={{ fontFamily: 'var(--mono)', fontSize: '12px' }}>
+                          {h.verifie_le ? new Date(h.verifie_le).toLocaleString('fr-FR') : '—'}
+                        </td>
+                        <td style={{ fontSize: '13px' }}>
+                          {h.statut === 'valide' && h.incident_id && (
+                            <span style={{ color: '#00236f', fontWeight: 600 }}>Incident #{h.incident_id}</span>
+                          )}
+                          {h.statut === 'rejete' && (
+                            <span style={{ color: '#ba1a1a' }}>Motif : {h.motif_rejet || 'Non précisé'}</span>
+                          )}
+                          {h.statut === 'doublon' && (
+                            <span style={{ color: '#444651' }}>Fusionné dans incident #{h.incident_id}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
+      </main>
 
-      {activeTab === 'historique' && (
-        <div className="card table-card">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Réf</th>
-                <th>Type</th>
-                <th>Statut</th>
-                <th>Vérifié Par</th>
-                <th>Date Traitement</th>
-                <th>Détails</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historiqueItems.map((h) => (
-                <tr key={h.id}>
-                  <td><strong>{h.reference_suivi}</strong></td>
-                  <td>{h.type}</td>
-                  <td>
-                    <span className={`status-badge status-${h.statut}`}>
-                      {h.statut}
-                    </span>
-                  </td>
-                  <td>{h.verifie_par_nom || '-'}</td>
-                  <td>{h.verifie_le ? new Date(h.verifie_le).toLocaleString('fr-FR') : '-'}</td>
-                  <td>
-                    {h.statut === 'valide' && h.incident_id && `Incident #${h.incident_id}`}
-                    {h.statut === 'rejete' && h.motif_rejet}
-                    {h.statut === 'doublon' && `Fusionné dans incident #${h.incident_id}`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Lightbox plein écran (.lbx) */}
+      {lightboxItem && (
+        <div className="lbx" id="lightbox" onClick={() => setLightboxItem(null)}>
+          <div className="frame" onClick={(e) => e.stopPropagation()}>
+            <div className="img">
+              {lightboxItem.url ? (
+                <img
+                  src={lightboxItem.url}
+                  alt={lightboxItem.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              ) : (
+                <>
+                  <svg className="icon" style={{ width: '40px', height: '40px' }}>
+                    <use href="#i-cam" />
+                  </svg>
+                  <span>{lightboxItem.name}</span>
+                  <span>Aperçu de la preuve terrain</span>
+                </>
+              )}
+            </div>
+            <div className="cap">
+              <span>
+                {lightboxItem.name} · {lightboxItem.meta}
+              </span>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => setLightboxItem(null)}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 };
-

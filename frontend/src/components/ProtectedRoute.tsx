@@ -15,12 +15,40 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   }
 
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2>Accès refusé</h2>
-        <p>Votre rôle (<strong>{user.role}</strong>) n'a pas accès à cette section.</p>
-      </div>
-    );
+    // Redirection automatique vers la section correspondant au rôle de l'utilisateur
+    if (user.role === 'coordinateur') {
+      return <Navigate to="/coordination" replace />;
+    }
+    if (user.role === 'verificateur') {
+      return <Navigate to="/verification" replace />;
+    }
+    if (user.role === 'enqueteur') {
+      return <Navigate to="/enquete" replace />;
+    }
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+};
+
+/**
+ * Route réservée aux citoyens : bloque et redirige immédiatement les agents connectés
+ * (coordonnateurs, vérificateurs, enquêteurs) vers leur espace opérationnel dédié.
+ */
+export const CitizenOnlyRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { user, isAuthenticated } = useAuth();
+
+  if (isAuthenticated && user) {
+    if (user.role === 'coordinateur') {
+      return <Navigate to="/coordination" replace />;
+    }
+    if (user.role === 'verificateur') {
+      return <Navigate to="/verification" replace />;
+    }
+    if (user.role === 'enqueteur') {
+      return <Navigate to="/enquete" replace />;
+    }
+    return <Navigate to="/coordination" replace />;
   }
 
   return children;

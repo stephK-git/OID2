@@ -14,9 +14,15 @@ interface LocationPickerMapProps {
   lat: number;
   lon: number;
   onChange: (lat: number, lon: number) => void;
+  communeLabel?: string;
 }
 
-export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({ lat, lon, onChange }) => {
+export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
+  lat,
+  lon,
+  onChange,
+  communeLabel,
+}) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -27,20 +33,34 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({ lat, lon, 
 
     if (!mapInstanceRef.current) {
       const map = L.map(mapContainerRef.current, {
-        scrollWheelZoom: 'center',
+        scrollWheelZoom: false,
+        touchZoom: true,
+        zoomControl: true,
       }).setView([lat, lon], 14);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
+        attribution: '&copy; OpenStreetMap',
         maxZoom: 19,
+        className: 'oid-dark-map-tiles',
       }).addTo(map);
 
-      // Création du marqueur déplaçable
+      // Icône radar tactile cyan conforme au template
+      const pulseIcon = L.divIcon({
+        className: 'oid-radar-marker',
+        html: `
+          <div class="oid-radar-pin-wrap">
+            <span class="oid-radar-ping"></span>
+            <span class="material-symbols-outlined oid-radar-pin-icon">location_pin</span>
+          </div>
+        `,
+        iconSize: [44, 44],
+        iconAnchor: [22, 38],
+      });
+
       const marker = L.marker([lat, lon], {
         draggable: true,
+        icon: pulseIcon,
       }).addTo(map);
-
-      marker.bindPopup('<strong>Point de signalement</strong><br/>Déplacez-moi pour affiner la position').openPopup();
 
       marker.on('dragend', () => {
         const position = marker.getLatLng();
@@ -48,18 +68,34 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({ lat, lon, 
         onChange(Number(position.lat.toFixed(6)), Number(position.lng.toFixed(6)));
       });
 
-      // Clic sur la carte pour déplacer le repère
       map.on('click', (e: L.LeafletMouseEvent) => {
         const newLat = Number(e.latlng.lat.toFixed(6));
         const newLon = Number(e.latlng.lng.toFixed(6));
         marker.setLatLng([newLat, newLon]);
-        marker.openPopup();
         isInternalUpdate.current = true;
         onChange(newLat, newLon);
       });
 
       mapInstanceRef.current = map;
       markerRef.current = marker;
+
+      // Invalidation automatique de la taille sur redimensionnement ou rotation d'écran mobile
+      const handleResize = () => {
+        map.invalidateSize();
+      };
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('orientationchange', handleResize);
+
+      // Délai pour assurer un affichage parfait des tuiles après rendu initial
+      setTimeout(() => map.invalidateSize(), 200);
+
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        window.removeEventListener('orientationchange', handleResize);
+        map.remove();
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+      };
     }
   }, []);
 
@@ -79,16 +115,27 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({ lat, lon, 
     }
   }, [lat, lon]);
 
+  const ns = lat >= 0 ? 'N' : 'S';
+  const ew = lon >= 0 ? 'E' : 'W';
+
   return (
-    <div className="location-picker-container">
-      <div className="picker-map-hint">
-        <span>📍 <strong>Pointage sur carte :</strong> Cliquez n'importe où sur la carte ou déplacez le repère pour positionner l'inondation.</span>
-      </div>
+    <div className="oid-map-frame">
       <div
         ref={mapContainerRef}
-        style={{ height: '320px', width: '100%', borderRadius: '10px', zIndex: 1 }}
+        className="oid-map-canvas"
+        style={{ width: '100%', borderRadius: '12px', zIndex: 1 }}
       />
+
+      {/* Coordonnées Télémétriques Flottantes (Glassmorphism sombre) */}
+      <div className="oid-telemetry-bar">
+        <div className="oid-telemetry-coords">
+          <span className="material-symbols-outlined oid-telemetry-icon">satellite_alt</span>
+          <span>
+            WGS84 : {Math.abs(lat).toFixed(4)}° {ns}, {Math.abs(lon).toFixed(4)}° {ew}
+          </span>
+        </div>
+        <span className="oid-telemetry-zone">{communeLabel || 'Toucher la carte pour ajuster'}</span>
+      </div>
     </div>
   );
 };
-
