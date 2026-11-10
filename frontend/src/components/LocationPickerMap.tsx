@@ -21,7 +21,6 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   lat,
   lon,
   onChange,
-  communeLabel,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -115,9 +114,6 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
     }
   }, [lat, lon]);
 
-  const ns = lat >= 0 ? 'N' : 'S';
-  const ew = lon >= 0 ? 'E' : 'W';
-
   return (
     <div className="oid-map-frame">
       <div
@@ -125,17 +121,6 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         className="oid-map-canvas"
         style={{ width: '100%', borderRadius: '12px', zIndex: 1 }}
       />
-
-      {/* Coordonnées Télémétriques Flottantes (Glassmorphism sombre) */}
-      <div className="oid-telemetry-bar">
-        <div className="oid-telemetry-coords">
-          <span className="material-symbols-outlined oid-telemetry-icon">satellite_alt</span>
-          <span>
-            WGS84 : {Math.abs(lat).toFixed(4)}° {ns}, {Math.abs(lon).toFixed(4)}° {ew}
-          </span>
-        </div>
-        <span className="oid-telemetry-zone">{communeLabel || 'Toucher la carte pour ajuster'}</span>
-      </div>
     </div>
   );
 };

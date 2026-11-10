@@ -179,7 +179,6 @@ export const PublicReportPage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoMeta, setPhotoMeta] = useState<string>('PHOTO CHARGÉE');
-  const [showManualCoords, setShowManualCoords] = useState(false);
 
   const [geoInfo, setGeoInfo] = useState<ReverseGeoState>({
     loading: false,
@@ -539,10 +538,6 @@ export const PublicReportPage: React.FC = () => {
       <div className="oid-report-container">
         {/* 1. En-tête de la page */}
         <section className="oid-hero-header">
-          <div className="oid-live-chip">
-            <span className="oid-live-pulse"></span>
-            <span>CELLULE D'ALERTE CITOYENNE • DISTRICT D'ABIDJAN</span>
-          </div>
           <h1 className="oid-main-title">Signaler une inondation</h1>
           <p className="oid-main-subtitle">
             Alertez instantanément les secours du District d'Abidjan en quelques clics.
@@ -659,53 +654,6 @@ export const PublicReportPage: React.FC = () => {
                 </button>
               )}
             </div>
-
-            {/* Option d'ajustement manuel des coordonnées GPS */}
-            <div className="oid-coords-toggle-row">
-              <button
-                type="button"
-                onClick={() => setShowManualCoords(!showManualCoords)}
-                className="oid-coords-toggle-btn"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                  tune
-                </span>
-                <span>
-                  {showManualCoords ? 'Masquer la saisie manuelle GPS' : 'Saisir les coordonnées GPS manuellement'}
-                </span>
-              </button>
-            </div>
-
-            {showManualCoords && (
-              <div className="oid-manual-coords-grid">
-                <div className="oid-coord-field">
-                  <label htmlFor="manual-lat">Latitude (WGS84)</label>
-                  <input
-                    id="manual-lat"
-                    type="number"
-                    step="any"
-                    inputMode="decimal"
-                    value={lat}
-                    onChange={(e) => setLat(Number(e.target.value))}
-                    className="oid-dark-input"
-                    required
-                  />
-                </div>
-                <div className="oid-coord-field">
-                  <label htmlFor="manual-lon">Longitude (WGS84)</label>
-                  <input
-                    id="manual-lon"
-                    type="number"
-                    step="any"
-                    inputMode="decimal"
-                    value={lon}
-                    onChange={(e) => setLon(Number(e.target.value))}
-                    className="oid-dark-input"
-                    required
-                  />
-                </div>
-              </div>
-            )}
           </section>
 
           {/* BLOC 2 : NATURE DU SINISTRE */}
@@ -801,28 +749,6 @@ export const PublicReportPage: React.FC = () => {
                   </button>
                 );
               })}
-            </div>
-
-            {/* Curseur Tactile Gradué */}
-            <div className="oid-slider-wrap">
-              <input
-                id="slider-height"
-                type="range"
-                min={0}
-                max={300}
-                step={5}
-                value={hauteurEauCm}
-                onChange={(e) => setHauteurEauCm(Number(e.target.value))}
-                className="oid-range-slider"
-                aria-label="Curseur de hauteur d'eau en centimètres"
-              />
-              <div className="oid-slider-ticks">
-                <span>0 cm</span>
-                <span>50 cm</span>
-                <span>100 cm</span>
-                <span>150 cm</span>
-                <span>200+ cm</span>
-              </div>
             </div>
           </section>
 
@@ -989,14 +915,6 @@ export const PublicReportPage: React.FC = () => {
               </span>
               <span>{submitting ? 'Transmission en cours...' : 'Transmettre le signalement'}</span>
             </button>
-
-            <div className="oid-security-note">
-              <span className="material-symbols-outlined oid-security-icon">lock_clock</span>
-              <p>
-                Transmission directe sécurisée au centre de régulation{' '}
-                <strong>O.I.D • GSPM 180</strong>
-              </p>
-            </div>
           </section>
         </form>
       </div>
