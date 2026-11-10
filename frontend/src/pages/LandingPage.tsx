@@ -161,31 +161,29 @@ export const LandingPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               {/* Colonne gauche */}
               <div className="lg:col-span-7 space-y-6">
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-400/20 text-blue-200 text-xs font-semibold backdrop-blur-sm">
-                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-900/40 border border-blue-500/20 text-slate-300 text-xs font-semibold backdrop-blur-sm">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0"></span>
                   Plateforme certifiée de surveillance citoyenne
                 </div>
-                <h1 className="font-display font-extrabold text-[2rem] leading-[1.1] sm:text-5xl lg:text-6xl tracking-tight text-white">
-                  Alertez, suivez et protégez face aux{' '}
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-300 to-indigo-300">
-                    montées des eaux
-                  </span>
-                  .
+                <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-[56px] leading-[1.12] tracking-tight text-white">
+                  Alertez, suivez et<br />
+                  protégez face aux<br />
+                  <span className="text-[#58a6ff]">montées des eaux</span>.
                 </h1>
-                <p className="text-base sm:text-xl text-slate-300 max-w-2xl leading-relaxed">
+                <p className="text-base sm:text-lg text-slate-300 max-w-2xl leading-relaxed">
                   Signalez un danger sur la voirie ou votre habitation en moins de 2 minutes. Vos signalements
                   alimentent les secours et alertent votre communauté en temps réel.
                 </p>
 
-                {/* Une seule action principale, une action secondaire discrète */}
-                <div className="pt-2 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+                {/* Boutons d'action */}
+                <div className="pt-2 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                   <Link
-                    className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-white text-slate-900 hover:bg-slate-100 font-bold text-base rounded-xl shadow-xl shadow-blue-900/30 transition hover:-translate-y-0.5 active:translate-y-0 group w-full sm:w-auto"
+                    className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-white text-slate-900 hover:bg-slate-100 font-bold text-sm sm:text-base rounded-xl shadow-lg transition hover:-translate-y-0.5 active:translate-y-0 group w-full sm:w-auto"
                     to="/signaler"
                   >
-                    Signaler une inondation
+                    <span>Signaler une inondation</span>
                     <svg
-                      className="w-5 h-5 text-slate-700 group-hover:translate-x-1 transition-transform"
+                      className="w-4 h-4 text-slate-900 group-hover:translate-x-1 transition-transform"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -200,15 +198,28 @@ export const LandingPage: React.FC = () => {
                     </svg>
                   </Link>
                   <a
-                    className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-blue-200 hover:text-white underline underline-offset-4 decoration-blue-400/50 hover:decoration-white py-2 transition"
+                    className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-[#182844] hover:bg-[#1e3459] border border-[#243d66] text-white font-semibold text-sm sm:text-base rounded-xl shadow-lg transition hover:-translate-y-0.5 active:translate-y-0 w-full sm:w-auto"
                     href="#situation"
                   >
-                    Voir la carte interactive
-                    <span aria-hidden="true">→</span>
+                    <svg
+                      className="w-4 h-4 text-[#4da3ff] shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                      />
+                    </svg>
+                    <span>Voir la carte interactive</span>
                   </a>
                 </div>
 
-                <ul className="pt-2 grid grid-cols-1 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap gap-y-2 gap-x-6 text-[13px] sm:text-sm text-slate-300 font-medium">
+                <ul className="pt-2 flex flex-wrap items-center gap-y-2 gap-x-5 sm:gap-x-6 text-xs sm:text-sm text-slate-300 font-medium">
                   <li className="inline-flex items-center gap-2">
                     <svg
                       className="w-4 h-4 text-emerald-400 shrink-0"
@@ -222,7 +233,7 @@ export const LandingPage: React.FC = () => {
                         d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
                       />
                     </svg>
-                    Sans création de compte
+                    <span>Sans création de compte</span>
                   </li>
                   <li className="inline-flex items-center gap-2">
                     <svg
@@ -237,7 +248,7 @@ export const LandingPage: React.FC = () => {
                         d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
                       />
                     </svg>
-                    Signalement en ~2 minutes
+                    <span>Signalement en ~2 minutes</span>
                   </li>
                   <li className="inline-flex items-center gap-2">
                     <svg
@@ -252,7 +263,7 @@ export const LandingPage: React.FC = () => {
                         d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
                       />
                     </svg>
-                    Anonymat garanti
+                    <span>Anonymat garanti</span>
                   </li>
                 </ul>
               </div>
