@@ -157,10 +157,6 @@ export const LandingPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               {/* Colonne gauche */}
               <div className="lg:col-span-7 space-y-6">
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-950/60 border border-blue-500/30 text-slate-200 text-xs font-semibold backdrop-blur-md shadow-sm">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0"></span>
-                  Plateforme certifiée de surveillance citoyenne
-                </div>
                 <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl xl:text-[64px] leading-[1.08] tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
                   Alertez, suivez et<br />
                   protégez face aux<br />

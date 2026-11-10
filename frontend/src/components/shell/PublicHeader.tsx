@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { BrandMark } from './BrandMark';
-import { VigilancePill } from './VigilancePill';
 import { ThemeToggle } from './ThemeToggle';
 import { MapPin, Search, LogOut, LogIn, Menu, X, ArrowLeft } from 'lucide-react';
 
@@ -189,12 +188,8 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
             <div style={{ flex: 1 }} />
           )}
 
-          {/* Espace droit : VigilancePill + ThemeToggle + Bouton d'action */}
+          {/* Espace droit : ThemeToggle + Bouton d'action */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div className="hidden lg:flex items-center">
-              <VigilancePill />
-            </div>
-
             <ThemeToggle />
 
             {isAuth ? (
