@@ -203,6 +203,23 @@ export const EnquetePage: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
+  // Onglet actif : 'dossiers' (missions affectées) ou 'historique' (dossiers traités)
+  const [activeTab, setActiveTab] = useState<'dossiers' | 'historique'>('dossiers');
+
+  // Tri & Filtres pour "Dossiers affectés"
+  const [sortAffectes, setSortAffectes] = useState<
+    'priorite_desc' | 'priorite_asc' | 'commune_asc' | 'commune_desc' | 'date_desc' | 'date_asc'
+  >('priorite_desc');
+  const [communeFilterAffectes, setCommuneFilterAffectes] = useState<string>('');
+
+  // Tri & Filtres pour "Historique"
+  const [sortHistorique, setSortHistorique] = useState<
+    'date_desc' | 'date_asc' | 'priorite_desc' | 'priorite_asc' | 'commune_asc' | 'commune_desc'
+  >('date_desc');
+  const [communeFilterHistorique, setCommuneFilterHistorique] = useState<string>('');
+  const [searchHistorique, setSearchHistorique] = useState<string>('');
+  const [inspectingDossier, setInspectingDossier] = useState<DossierItem | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const evalScrollRef = useRef<HTMLDivElement>(null);
   const dossierListRef = useRef<HTMLDivElement>(null);
@@ -311,9 +328,10 @@ export const EnquetePage: React.FC = () => {
               const found = data.find((d) => d.id === prev.id);
               if (found) return found;
             }
-            const first = data[0];
-            loadEvaluation(first.id);
-            return first;
+            const active = data.find((d) => d.evaluation_statut !== 'soumise' && d.statut !== 'cloture');
+            const target = active || data[0];
+            loadEvaluation(target.id);
+            return target;
           });
         } else {
           setSelectedDossier(null);
@@ -326,6 +344,110 @@ export const EnquetePage: React.FC = () => {
     },
     [loadEvaluation]
   );
+
+  // Dossiers affectés (en cours d'évaluation)
+  const dossiersAffectes = useMemo(() => {
+    return dossiers.filter(
+      (d) => d.evaluation_statut !== 'soumise' && d.statut !== 'cloture'
+    );
+  }, [dossiers]);
+
+  // Dossiers historique (déjà évalués ou clôturés)
+  const dossiersHistorique = useMemo(() => {
+    return dossiers.filter(
+      (d) => d.evaluation_statut === 'soumise' || d.statut === 'evalue' || d.statut === 'cloture'
+    );
+  }, [dossiers]);
+
+  // Communes uniques pour filtrage
+  const communesAffectes = useMemo(() => {
+    const set = new Set<string>();
+    dossiersAffectes.forEach((d) => {
+      if (d.commune) set.add(d.commune);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [dossiersAffectes]);
+
+  const communesHistorique = useMemo(() => {
+    const set = new Set<string>();
+    dossiersHistorique.forEach((d) => {
+      if (d.commune) set.add(d.commune);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [dossiersHistorique]);
+
+  // Tri et filtre des dossiers affectés
+  const filteredAndSortedAffectes = useMemo(() => {
+    let list = dossiersAffectes;
+    if (communeFilterAffectes && communeFilterAffectes !== 'all') {
+      list = list.filter((d) => (d.commune || "District d'Abidjan") === communeFilterAffectes);
+    }
+    return [...list].sort((a, b) => {
+      switch (sortAffectes) {
+        case 'priorite_desc':
+          return (b.score_priorite ?? 0) - (a.score_priorite ?? 0);
+        case 'priorite_asc':
+          return (a.score_priorite ?? 0) - (b.score_priorite ?? 0);
+        case 'commune_asc': {
+          const ca = (a.commune || "District d'Abidjan").toLowerCase();
+          const cb = (b.commune || "District d'Abidjan").toLowerCase();
+          return ca.localeCompare(cb, 'fr');
+        }
+        case 'commune_desc': {
+          const ca = (a.commune || "District d'Abidjan").toLowerCase();
+          const cb = (b.commune || "District d'Abidjan").toLowerCase();
+          return cb.localeCompare(ca, 'fr');
+        }
+        case 'date_asc':
+          return (a.cree_le ? new Date(a.cree_le).getTime() : 0) - (b.cree_le ? new Date(b.cree_le).getTime() : 0);
+        case 'date_desc':
+        default:
+          return (b.cree_le ? new Date(b.cree_le).getTime() : 0) - (a.cree_le ? new Date(a.cree_le).getTime() : 0);
+      }
+    });
+  }, [dossiersAffectes, sortAffectes, communeFilterAffectes]);
+
+  // Tri et filtre de l'historique
+  const filteredAndSortedHistorique = useMemo(() => {
+    let list = dossiersHistorique;
+    if (communeFilterHistorique && communeFilterHistorique !== 'all') {
+      list = list.filter((d) => (d.commune || "District d'Abidjan") === communeFilterHistorique);
+    }
+    if (searchHistorique.trim()) {
+      const q = searchHistorique.trim().toLowerCase();
+      list = list.filter(
+        (d) =>
+          d.id.toString().includes(q) ||
+          d.reference_publique.toLowerCase().includes(q) ||
+          (d.commune && d.commune.toLowerCase().includes(q)) ||
+          (d.type && d.type.toLowerCase().includes(q)) ||
+          (d.description_citoyenne && d.description_citoyenne.toLowerCase().includes(q))
+      );
+    }
+    return [...list].sort((a, b) => {
+      switch (sortHistorique) {
+        case 'date_asc':
+          return (a.cree_le ? new Date(a.cree_le).getTime() : 0) - (b.cree_le ? new Date(b.cree_le).getTime() : 0);
+        case 'priorite_desc':
+          return (b.score_priorite ?? 0) - (a.score_priorite ?? 0);
+        case 'priorite_asc':
+          return (a.score_priorite ?? 0) - (b.score_priorite ?? 0);
+        case 'commune_asc': {
+          const ca = (a.commune || "District d'Abidjan").toLowerCase();
+          const cb = (b.commune || "District d'Abidjan").toLowerCase();
+          return ca.localeCompare(cb, 'fr');
+        }
+        case 'commune_desc': {
+          const ca = (a.commune || "District d'Abidjan").toLowerCase();
+          const cb = (b.commune || "District d'Abidjan").toLowerCase();
+          return cb.localeCompare(ca, 'fr');
+        }
+        case 'date_desc':
+        default:
+          return (b.cree_le ? new Date(b.cree_le).getTime() : 0) - (a.cree_le ? new Date(a.cree_le).getTime() : 0);
+      }
+    });
+  }, [dossiersHistorique, sortHistorique, communeFilterHistorique, searchHistorique]);
 
   useEffect(() => {
     loadDossiers(false);
@@ -666,277 +788,14 @@ export const EnquetePage: React.FC = () => {
   };
 
   const isReadOnly =
-    selectedDossier != null &&
-    selectedDossier.statut !== 'affecte' &&
-    evalForm.statut === 'soumise';
+    inspectingDossier != null ||
+    (selectedDossier != null &&
+      (selectedDossier.statut !== 'affecte' || evalForm.statut === 'soumise'));
 
-  return (
-    <div className="app-shell page-enqueteur" id="appShell">
-      {/* Lightbox Plein Écran */}
-      {lightboxUrl && (
-        <div className="verif-lightbox" onClick={() => setLightboxUrl(null)}>
-          <div className="verif-lightbox-inner" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="verif-lightbox-close"
-              onClick={() => setLightboxUrl(null)}
-              aria-label="Fermer l'aperçu"
-            >
-              <span className="material-symbols-outlined">close</span>
-              <span>Fermer l'aperçu</span>
-            </button>
-            <img src={lightboxUrl} alt="Preuve photographique terrain" />
-          </div>
-        </div>
-      )}
-
-      {/* ---------- SIDEBAR LATÉRALE FIXE (Issu du standard coordinateur/vérificateur) ---------- */}
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <BrandMark subtitle="Investigations &amp; Évaluations" />
-        </div>
-
-        <nav className="sidebar-nav">
-          <div className="nav-group">
-            <div className="nav-label">Missions Terrain</div>
-            <button
-              type="button"
-              className="nav-item actif"
-            >
-              <span className="material-symbols-outlined">folder_special</span>
-              <span>Dossiers affectés</span>
-              <span className="nav-badge" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>
-                {dossiers.length}
-              </span>
-            </button>
-          </div>
-
-          <div className="nav-group">
-            <div className="nav-label">Bilan Enquête</div>
-            <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <span style={{ color: 'var(--tx2)' }}>Total affectés :</span>
-                <span className="chip" style={{ fontSize: '11px', padding: '2px 8px' }}>
-                  <b>{dossiers.length}</b>
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <span style={{ color: 'var(--tx2)' }}>En cours :</span>
-                <span className="chip ok" style={{ fontSize: '11px', padding: '2px 8px' }}>
-                  <b className="up-ok">
-                    {dossiers.filter((d) => d.evaluation_statut === 'brouillon' || d.evaluation_statut === 'aucune').length}
-                  </b>
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <span style={{ color: 'var(--tx2)' }}>Évalués :</span>
-                <span className="chip" style={{ fontSize: '11px', padding: '2px 8px', backgroundColor: 'var(--tertiary-dim)', color: 'var(--tertiary)' }}>
-                  <b>{dossiers.filter((d) => d.evaluation_statut === 'soumise').length}</b>
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <span style={{ color: 'var(--tx2)' }}>Critiques :</span>
-                <span className="chip crit" style={{ fontSize: '11px', padding: '2px 8px' }}>
-                  <b className="up-crit">
-                    {dossiers.filter((d) => d.danger_immediat || d.score_priorite >= 80).length}
-                  </b>
-                </span>
-              </div>
-            </div>
-          </div>
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="avatar" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>
-            {userInitials}
-          </div>
-          <div className="user-info">
-            <span className="user-name">{user?.nom || 'Enquêteur terrain'}</span>
-            <span className="user-role">ENQUÊTEUR · MISSION TERRAIN</span>
-          </div>
-          <button
-            type="button"
-            className="icon-btn"
-            title="Se déconnecter"
-            aria-label="Se déconnecter"
-            onClick={handleLogout}
-            style={{ marginLeft: 'auto', border: 'none' }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--crit)' }}>
-              logout
-            </span>
-          </button>
-        </div>
-      </aside>
-
-      {/* ---------- MAIN CONTENT AREA ---------- */}
-      <main className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        <header className="top-bar">
-          <div>
-            <h1 className="page-title">Investigations &amp; Évaluations Terrain</h1>
-            <div className="page-subtitle">
-              Consultez vos dossiers d'investigation affectés et saisissez vos évaluations de dégâts.
-            </div>
-          </div>
-
-          <div className="top-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button
-              id="btn-refresh"
-              type="button"
-              onClick={() => loadDossiers(true)}
-              disabled={loading}
-              className="btn btn-secondary btn-sm"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              <span className={`material-symbols-outlined ${loading ? 'spin' : ''}`} style={{ fontSize: '18px' }}>
-                sync
-              </span>
-              <span>Actualiser</span>
-            </button>
-            <VigilancePill />
-            <ThemeToggle />
-          </div>
-        </header>
-
-        <div className="oid-enq-container" style={{ width: '100%', maxWidth: '100%', padding: '16px 24px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
-          {error && (
-            <div className="oid-error-banner" role="alert">
-              <span className="material-symbols-outlined">warning</span>
-              <span>{error}</span>
-            </div>
-          )}
-
-          {successMsg && (
-            <div className="oid-enq-success-banner" role="status">
-              <span className="material-symbols-outlined">check_circle</span>
-              <span>{successMsg}</span>
-            </div>
-          )}
-
-          {/* ==========================================================================
-              ENQUETE LAYOUT : 2 COLUMNS À DÉFILEMENT INDÉPENDANT
-             ========================================================================== */}
-          <div className="oid-enq-grid" style={{ height: 'calc(100vh - 140px)' }}>
-          {/* LEFT COLUMN: SIDEBAR DOSSIERS AFFECTÉS (4 cols on desktop) */}
-          <div className="oid-enq-left-col">
-            <div className="oid-enq-sidebar-head">
-              <div className="oid-enq-sidebar-title">
-                <span className="material-symbols-outlined text-primary">folder_special</span>
-                <span>Dossiers Affectés</span>
-                <span className="oid-enq-count-pill">{dossiers.length}</span>
-              </div>
-              <span className="oid-enq-sidebar-eyebrow">Priorité O.I.D.</span>
-            </div>
-
-            {dossiers.length === 0 && !loading && (
-              <div className="oid-enq-empty-card">
-                <span className="material-symbols-outlined oid-enq-empty-icon">folder_open</span>
-                <p>Aucun dossier ne vous est actuellement affecté.</p>
-                <span>Les incidents qualifiés et affectés par le Coordinateur apparaîtront ici.</span>
-              </div>
-            )}
-
-            <div ref={dossierListRef} className="oid-enq-dossier-list">
-              {dossiers.map((d) => {
-                const isSelected = selectedDossier?.id === d.id;
-                const isHighRisk = d.danger_immediat || d.score_priorite >= 80;
-                const communeLabel = d.commune || "District d'Abidjan";
-                const evalStatut = d.evaluation_statut || 'aucune';
-
-                return (
-                  <div
-                    key={d.id}
-                    data-did={d.id}
-                    onClick={() => handleSelectDossier(d)}
-                    className={`oid-enq-dcard ${isSelected ? 'selected' : ''}`}
-                  >
-                    <div
-                      className={`oid-enq-dcard-strip ${
-                        isHighRisk ? 'strip-danger' : 'strip-secondary'
-                      }`}
-                    />
-                    {isSelected && <div className="oid-enq-dcard-corner-dot" />}
-
-                    <div className="oid-enq-dcard-top">
-                      <div className="oid-enq-dcard-badges">
-                        <span
-                          className={`oid-enq-type-badge ${
-                            isHighRisk ? 'badge-danger' : 'badge-secondary'
-                          }`}
-                        >
-                          {formatTypeBadge(d.type)}
-                        </span>
-                        <span
-                          className={`oid-enq-status-badge ${
-                            isSelected ? 'status-active' : ''
-                          }`}
-                        >
-                          {d.statut.toUpperCase()}
-                        </span>
-                      </div>
-
-                      <div className="oid-enq-prio-box">
-                        <span className={isHighRisk ? 'text-danger' : 'text-secondary'}>
-                          P.{Math.round(d.score_priorite)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="oid-enq-dcard-idrow">
-                      <span className={`oid-enq-dcard-id ${isSelected ? 'text-primary' : ''}`}>
-                        Incident #{d.id}
-                      </span>
-                      <span className="oid-enq-dcard-ref">
-                        OID-ABJ-{d.reference_publique.slice(0, 10).toUpperCase()}
-                      </span>
-                    </div>
-
-                    <div className="oid-enq-dcard-loc">
-                      <span
-                        className={`material-symbols-outlined ${
-                          isSelected ? 'text-primary' : 'text-muted'
-                        }`}
-                      >
-                        location_on
-                      </span>
-                      <span className="oid-enq-loc-name">{communeLabel}</span>
-                      {d.hauteur_eau_cm != null && d.hauteur_eau_cm > 0 && (
-                        <span className="oid-enq-loc-sub">({d.hauteur_eau_cm} cm)</span>
-                      )}
-                    </div>
-
-                    <div className="oid-enq-dcard-foot">
-                      <div className="oid-enq-eval-state">
-                        {evalStatut !== 'aucune' && (
-                          <span
-                            className={`oid-enq-eval-dot ${
-                              evalStatut === 'soumise' ? 'bg-tertiary' : 'bg-secondary pulse'
-                            }`}
-                          />
-                        )}
-                        <span
-                          className={
-                            evalStatut === 'soumise'
-                              ? 'text-tertiary'
-                              : evalStatut !== 'aucune'
-                              ? 'text-secondary'
-                              : 'text-muted'
-                          }
-                        >
-                          Éval: {evalStatut === 'brouillon' ? 'en_cours' : evalStatut}
-                        </span>
-                      </div>
-                      <span className="oid-enq-time-ago">{formatRelativeTime(d.cree_le)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN: PANNEAU D'ÉVALUATION D'IMPACT EN DIRECT (8 cols on desktop) */}
-          <div className="oid-enq-right-col">
-            {selectedDossier ? (
+  const renderEvaluationCard = () => {
+    return (
+      <>
+        {selectedDossier ? (
               (() => {
                 const selCommune = selectedDossier.commune || "District d'Abidjan";
                 const savedPhotos = evalForm.photos || [];
@@ -1530,10 +1389,725 @@ export const EnquetePage: React.FC = () => {
                 </span>
               </div>
             )}
+      </>
+    );
+  };
+
+  return (
+    <div className="app-shell page-enqueteur" id="appShell">
+      {/* Lightbox Plein Écran */}
+      {lightboxUrl && (
+        <div className="verif-lightbox" onClick={() => setLightboxUrl(null)}>
+          <div className="verif-lightbox-inner" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="verif-lightbox-close"
+              onClick={() => setLightboxUrl(null)}
+              aria-label="Fermer l'aperçu"
+            >
+              <span className="material-symbols-outlined">close</span>
+              <span>Fermer l'aperçu</span>
+            </button>
+            <img src={lightboxUrl} alt="Preuve photographique terrain" />
           </div>
         </div>
-      </div>
-    </main>
-  </div>
+      )}
+
+      {/* ---------- SIDEBAR LATÉRALE FIXE (Issu du standard coordinateur/vérificateur) ---------- */}
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <BrandMark subtitle="Investigations &amp; Évaluations" />
+        </div>
+
+        <nav className="sidebar-nav">
+          <div className="nav-group">
+            <div className="nav-label">Missions Terrain</div>
+            <button
+              type="button"
+              className={`nav-item ${activeTab === 'dossiers' ? 'actif' : ''}`}
+              onClick={() => {
+                setActiveTab('dossiers');
+                setInspectingDossier(null);
+                if (filteredAndSortedAffectes.length > 0 && (!selectedDossier || !filteredAndSortedAffectes.some(d => d.id === selectedDossier.id))) {
+                  handleSelectDossier(filteredAndSortedAffectes[0]);
+                }
+              }}
+            >
+              <span className="material-symbols-outlined">folder_special</span>
+              <span>Dossiers affectés</span>
+              <span className="nav-badge" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>
+                {dossiersAffectes.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`nav-item ${activeTab === 'historique' ? 'actif' : ''}`}
+              onClick={() => {
+                setActiveTab('historique');
+              }}
+            >
+              <span className="material-symbols-outlined">history</span>
+              <span>Historique</span>
+              <span className="nav-badge" style={{ backgroundColor: 'var(--tertiary-dim)', color: 'var(--tertiary)' }}>
+                {dossiersHistorique.length}
+              </span>
+            </button>
+          </div>
+
+          <div className="nav-group">
+            <div className="nav-label">Bilan Enquête</div>
+            <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: 'var(--tx2)' }}>Total dossiers :</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  <b>{dossiers.length}</b>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: 'var(--tx2)' }}>En cours :</span>
+                <span className="chip ok" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  <b className="up-ok">
+                    {dossiersAffectes.length}
+                  </b>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: 'var(--tx2)' }}>Historique :</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '2px 8px', backgroundColor: 'var(--tertiary-dim)', color: 'var(--tertiary)' }}>
+                  <b>{dossiersHistorique.length}</b>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: 'var(--tx2)' }}>Critiques :</span>
+                <span className="chip crit" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  <b className="up-crit">
+                    {dossiers.filter((d) => d.danger_immediat || d.score_priorite >= 80).length}
+                  </b>
+                </span>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="avatar" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>
+            {userInitials}
+          </div>
+          <div className="user-info">
+            <span className="user-name">{user?.nom || 'Enquêteur terrain'}</span>
+            <span className="user-role">ENQUÊTEUR · MISSION TERRAIN</span>
+          </div>
+          <button
+            type="button"
+            className="icon-btn"
+            title="Se déconnecter"
+            aria-label="Se déconnecter"
+            onClick={handleLogout}
+            style={{ marginLeft: 'auto', border: 'none' }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--crit)' }}>
+              logout
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ---------- MAIN CONTENT AREA ---------- */}
+      <main className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        <header className="top-bar">
+          <div>
+            <h1 className="page-title">
+              {activeTab === 'dossiers'
+                ? 'Investigations & Évaluations Terrain'
+                : 'Historique des Dossiers & Évaluations'}
+            </h1>
+            <div className="page-subtitle">
+              {activeTab === 'dossiers'
+                ? 'Consultez vos dossiers d’investigation affectés et saisissez vos évaluations de dégâts.'
+                : 'Consultez les enquêtes et évaluations transmises ou clôturées.'}
+            </div>
+          </div>
+
+          <div className="top-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              id="btn-refresh"
+              type="button"
+              onClick={() => loadDossiers(true)}
+              disabled={loading}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span className={`material-symbols-outlined ${loading ? 'spin' : ''}`} style={{ fontSize: '18px' }}>
+                sync
+              </span>
+              <span>Actualiser</span>
+            </button>
+            <VigilancePill />
+            <ThemeToggle />
+          </div>
+        </header>
+
+        <div className="oid-enq-container" style={{ width: '100%', maxWidth: '100%', padding: '16px 24px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          {error && (
+            <div className="oid-error-banner" role="alert">
+              <span className="material-symbols-outlined">warning</span>
+              <span>{error}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="oid-enq-success-banner" role="status">
+              <span className="material-symbols-outlined">check_circle</span>
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* ==========================================================================
+              ENQUETE LAYOUT : 2 COLUMNS À DÉFILEMENT INDÉPENDANT
+             ========================================================================== */}
+          {activeTab === 'dossiers' && (
+            <div className="oid-enq-grid" style={{ height: 'calc(100vh - 140px)' }}>
+              {/* LEFT COLUMN: SIDEBAR DOSSIERS AFFECTÉS (4 cols on desktop) */}
+              <div className="oid-enq-left-col">
+                <div className="oid-enq-sidebar-head">
+                  <div className="oid-enq-sidebar-title">
+                    <span className="material-symbols-outlined text-primary">folder_special</span>
+                    <span>Dossiers Affectés</span>
+                    <span className="oid-enq-count-pill">{filteredAndSortedAffectes.length}</span>
+                  </div>
+                  <span className="oid-enq-sidebar-eyebrow">Missions actives</span>
+                </div>
+
+                {/* Filtre & Tri des dossiers affectés */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    borderBottom: '1px solid var(--border)',
+                    background: 'var(--card)',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          color: 'var(--tx3)',
+                          marginBottom: '3px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        Trier par
+                      </label>
+                      <select
+                        value={sortAffectes}
+                        onChange={(e) => setSortAffectes(e.target.value as any)}
+                        className="inp"
+                        style={{
+                          width: '100%',
+                          fontSize: '11px',
+                          padding: '4px 6px',
+                          height: '30px',
+                        }}
+                      >
+                        <option value="priorite_desc">⚡ Priorité (P. max)</option>
+                        <option value="priorite_asc">⚡ Priorité (P. min)</option>
+                        <option value="commune_asc">📍 Commune (A → Z)</option>
+                        <option value="commune_desc">📍 Commune (Z → A)</option>
+                        <option value="date_desc">🕒 Date (Récents)</option>
+                        <option value="date_asc">🕒 Date (Anciens)</option>
+                      </select>
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          color: 'var(--tx3)',
+                          marginBottom: '3px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        Commune
+                      </label>
+                      <select
+                        value={communeFilterAffectes}
+                        onChange={(e) => setCommuneFilterAffectes(e.target.value)}
+                        className="inp"
+                        style={{
+                          width: '100%',
+                          fontSize: '11px',
+                          padding: '4px 6px',
+                          height: '30px',
+                        }}
+                      >
+                        <option value="all">Toutes ({dossiersAffectes.length})</option>
+                        {communesAffectes.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {dossiersAffectes.length === 0 && !loading && (
+                  <div className="oid-enq-empty-card">
+                    <span className="material-symbols-outlined oid-enq-empty-icon">folder_open</span>
+                    <p>Aucun dossier actif ne vous est actuellement affecté.</p>
+                    <span>Tous vos dossiers ont été évalués ou clôturés. Consultez l'onglet Historique.</span>
+                  </div>
+                )}
+
+                {dossiersAffectes.length > 0 && filteredAndSortedAffectes.length === 0 && (
+                  <div className="oid-enq-empty-card">
+                    <span className="material-symbols-outlined oid-enq-empty-icon">filter_alt_off</span>
+                    <p>Aucun dossier ne correspond à la commune sélectionnée.</p>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setCommuneFilterAffectes('all')}
+                      style={{ marginTop: '8px' }}
+                    >
+                      Réinitialiser le filtre
+                    </button>
+                  </div>
+                )}
+
+                <div ref={dossierListRef} className="oid-enq-dossier-list">
+                  {filteredAndSortedAffectes.map((d) => {
+                    const isSelected = selectedDossier?.id === d.id;
+                    const isHighRisk = d.danger_immediat || d.score_priorite >= 80;
+                    const communeLabel = d.commune || "District d'Abidjan";
+                    const evalStatut = d.evaluation_statut || 'aucune';
+
+                    return (
+                      <div
+                        key={d.id}
+                        data-did={d.id}
+                        onClick={() => handleSelectDossier(d)}
+                        className={`oid-enq-dcard ${isSelected ? 'selected' : ''}`}
+                      >
+                        <div
+                          className={`oid-enq-dcard-strip ${
+                            isHighRisk ? 'strip-danger' : 'strip-secondary'
+                          }`}
+                        />
+                        {isSelected && <div className="oid-enq-dcard-corner-dot" />}
+
+                        <div className="oid-enq-dcard-top">
+                          <div className="oid-enq-dcard-badges">
+                            <span
+                              className={`oid-enq-type-badge ${
+                                isHighRisk ? 'badge-danger' : 'badge-secondary'
+                              }`}
+                            >
+                              {formatTypeBadge(d.type)}
+                            </span>
+                            <span
+                              className={`oid-enq-status-badge ${
+                                isSelected ? 'status-active' : ''
+                              }`}
+                            >
+                              {d.statut.toUpperCase()}
+                            </span>
+                          </div>
+
+                          <div className="oid-enq-prio-box">
+                            <span className={isHighRisk ? 'text-danger' : 'text-secondary'}>
+                              P.{Math.round(d.score_priorite)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="oid-enq-dcard-idrow">
+                          <span className={`oid-enq-dcard-id ${isSelected ? 'text-primary' : ''}`}>
+                            Incident #{d.id}
+                          </span>
+                          <span className="oid-enq-dcard-ref">
+                            OID-ABJ-{d.reference_publique.slice(0, 10).toUpperCase()}
+                          </span>
+                        </div>
+
+                        <div className="oid-enq-dcard-loc">
+                          <span
+                            className={`material-symbols-outlined ${
+                              isSelected ? 'text-primary' : 'text-muted'
+                            }`}
+                          >
+                            location_on
+                          </span>
+                          <span className="oid-enq-loc-name">{communeLabel}</span>
+                          {d.hauteur_eau_cm != null && d.hauteur_eau_cm > 0 && (
+                            <span className="oid-enq-loc-sub">({d.hauteur_eau_cm} cm)</span>
+                          )}
+                        </div>
+
+                        <div className="oid-enq-dcard-foot">
+                          <div className="oid-enq-eval-state">
+                            {evalStatut !== 'aucune' && (
+                              <span
+                                className={`oid-enq-eval-dot ${
+                                  evalStatut === 'soumise' ? 'bg-tertiary' : 'bg-secondary pulse'
+                                }`}
+                              />
+                            )}
+                            <span
+                              className={
+                                evalStatut === 'soumise'
+                                  ? 'text-tertiary'
+                                  : evalStatut !== 'aucune'
+                                  ? 'text-secondary'
+                                  : 'text-muted'
+                              }
+                            >
+                              Éval: {evalStatut === 'brouillon' ? 'en_cours' : evalStatut}
+                            </span>
+                          </div>
+                          <span className="oid-enq-time-ago">{formatRelativeTime(d.cree_le)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* RIGHT COLUMN: EVALUATION FORM */}
+              <div className="oid-enq-right-col">
+                {renderEvaluationCard()}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'historique' && (
+            inspectingDossier ? (
+              <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)', gap: '12px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 16px',
+                    background: 'var(--card)',
+                    borderRadius: '10px',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setInspectingDossier(null);
+                    }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      arrow_back
+                    </span>
+                    <span>← Retour à la liste de l'historique</span>
+                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span
+                      className="chip"
+                      style={{
+                        backgroundColor: 'var(--tertiary-dim)',
+                        color: 'var(--tertiary)',
+                        fontSize: '11px',
+                        padding: '3px 8px',
+                      }}
+                    >
+                      ARCHIVE CONSULTABLE · LECTURE SEULE
+                    </span>
+                    <span style={{ fontSize: '13px', color: 'var(--tx2)' }}>
+                      Dossier #{inspectingDossier.id} · {inspectingDossier.commune || "District d'Abidjan"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="oid-enq-right-col" style={{ flex: 1, minHeight: 0 }}>
+                  {renderEvaluationCard()}
+                </div>
+              </div>
+            ) : (
+              <div
+                className="panel pad"
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: '16px',
+                  background: 'var(--card)',
+                  padding: '20px 24px',
+                }}
+              >
+                {/* En-tête de l'historique */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    marginBottom: '20px',
+                  }}
+                >
+                  <div>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--tx)' }}>
+                      Historique des dossiers et évaluations
+                    </h2>
+                    <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--tx2)' }}>
+                      Dossiers clôturés ou dont l'évaluation de terrain a été transmise au Centre Opérationnel O.I.D.
+                    </p>
+                  </div>
+                  <div className="chip" style={{ fontSize: '12px', padding: '4px 10px', backgroundColor: 'var(--tertiary-dim)', color: 'var(--tertiary)' }}>
+                    <b>{filteredAndSortedHistorique.length} dossier(s) archivé(s)</b>
+                  </div>
+                </div>
+
+                {/* Barre d'outils : Recherche, Tri, Filtre commune */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                    alignItems: 'center',
+                    marginBottom: '16px',
+                    padding: '12px',
+                    background: 'var(--surface-2, var(--card))',
+                    borderRadius: '10px',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <div style={{ position: 'relative', flex: '1 1 240px', minWidth: '200px' }}>
+                    <span
+                      className="material-symbols-outlined"
+                      style={{
+                        position: 'absolute',
+                        left: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '18px',
+                        color: 'var(--tx3)',
+                      }}
+                    >
+                      search
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Rechercher par référence, commune, mot-clé..."
+                      value={searchHistorique}
+                      onChange={(e) => setSearchHistorique(e.target.value)}
+                      className="inp"
+                      style={{ paddingLeft: '34px', width: '100%', height: '36px', fontSize: '13px' }}
+                    />
+                    {searchHistorique && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchHistorique('')}
+                        style={{
+                          position: 'absolute',
+                          right: '10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--tx3)',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label style={{ fontSize: '12px', color: 'var(--tx2)', whiteSpace: 'nowrap', fontWeight: 500 }}>
+                      Trier par :
+                    </label>
+                    <select
+                      value={sortHistorique}
+                      onChange={(e) => setSortHistorique(e.target.value as any)}
+                      className="inp"
+                      style={{ height: '36px', fontSize: '13px', minWidth: '170px' }}
+                    >
+                      <option value="date_desc">🕒 Date (Plus récents)</option>
+                      <option value="date_asc">🕒 Date (Plus anciens)</option>
+                      <option value="priorite_desc">⚡ Priorité (Décroissante)</option>
+                      <option value="priorite_asc">⚡ Priorité (Croissante)</option>
+                      <option value="commune_asc">📍 Commune (A → Z)</option>
+                      <option value="commune_desc">📍 Commune (Z → A)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label style={{ fontSize: '12px', color: 'var(--tx2)', whiteSpace: 'nowrap', fontWeight: 500 }}>
+                      Commune :
+                    </label>
+                    <select
+                      value={communeFilterHistorique}
+                      onChange={(e) => setCommuneFilterHistorique(e.target.value)}
+                      className="inp"
+                      style={{ height: '36px', fontSize: '13px', minWidth: '150px' }}
+                    >
+                      <option value="all">Toutes ({dossiersHistorique.length})</option>
+                      {communesHistorique.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Tableau de l'historique */}
+                <div className="tbl-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Réf. Publique / ID</th>
+                        <th>Date création</th>
+                        <th>Type d'incident</th>
+                        <th>Commune &amp; Détails</th>
+                        <th>Priorité</th>
+                        <th>Statut Évaluation</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dossiersHistorique.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--tx3)' }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: '32px', display: 'block', marginBottom: '8px', opacity: 0.5 }}>
+                              history_edu
+                            </span>
+                            Aucun dossier n'est archivé dans l'historique pour l'instant.
+                          </td>
+                        </tr>
+                      ) : filteredAndSortedHistorique.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--tx3)' }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: '32px', display: 'block', marginBottom: '8px', opacity: 0.5 }}>
+                              search_off
+                            </span>
+                            Aucun dossier ne correspond à vos filtres de recherche.
+                            <div style={{ marginTop: '10px' }}>
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => {
+                                  setSearchHistorique('');
+                                  setCommuneFilterHistorique('all');
+                                }}
+                              >
+                                Réinitialiser les filtres
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredAndSortedHistorique.map((h) => {
+                          const isHighRisk = h.danger_immediat || h.score_priorite >= 80;
+                          return (
+                            <tr key={h.id}>
+                              <td>
+                                <strong className="code" style={{ fontSize: '12px' }}>
+                                  OID-ABJ-{h.reference_publique.slice(0, 8).toUpperCase()}
+                                </strong>
+                                <div className="sub" style={{ fontSize: '11px', color: 'var(--tx3)' }}>
+                                  Incident #{h.id}
+                                </div>
+                              </td>
+                              <td style={{ fontFamily: 'var(--mono)', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                                {h.cree_le
+                                  ? new Date(h.cree_le).toLocaleString('fr-FR', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })
+                                  : '—'}
+                              </td>
+                              <td>
+                                <span className={`oid-enq-type-badge ${isHighRisk ? 'badge-danger' : 'badge-secondary'}`} style={{ display: 'inline-flex' }}>
+                                  {formatTypeBadge(h.type)}
+                                </span>
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 600, fontSize: '13px' }}>
+                                  {h.commune || "District d'Abidjan"}
+                                </div>
+                                {h.hauteur_eau_cm != null && h.hauteur_eau_cm > 0 && (
+                                  <div className="sub" style={{ fontSize: '11.5px', color: 'var(--water)' }}>
+                                    Hauteur : {h.hauteur_eau_cm} cm
+                                  </div>
+                                )}
+                              </td>
+                              <td>
+                                <span
+                                  className={`chip ${isHighRisk ? 'crit' : 'secondary'}`}
+                                  style={{ fontSize: '11px', padding: '2px 8px' }}
+                                >
+                                  P.{Math.round(h.score_priorite)}
+                                </span>
+                              </td>
+                              <td>
+                                {h.evaluation_statut === 'soumise' ? (
+                                  <span
+                                    className="chip"
+                                    style={{
+                                      fontSize: '11.5px',
+                                      backgroundColor: 'var(--tertiary-dim)',
+                                      color: 'var(--tertiary)',
+                                    }}
+                                  >
+                                    Évaluation soumise
+                                  </span>
+                                ) : h.statut === 'cloture' ? (
+                                  <span className="chip" style={{ fontSize: '11.5px' }}>
+                                    Clôturé
+                                  </span>
+                                ) : (
+                                  <span className="chip ok" style={{ fontSize: '11.5px' }}>
+                                    {h.statut}
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => {
+                                    handleSelectDossier(h);
+                                    setInspectingDossier(h);
+                                  }}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                                    visibility
+                                  </span>
+                                  <span>Consulter</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      </main>
+    </div>
   );
 };
