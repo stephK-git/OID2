@@ -165,7 +165,7 @@ export const LandingPage: React.FC = () => {
                   <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0"></span>
                   Plateforme certifiée de surveillance citoyenne
                 </div>
-                <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-[56px] leading-[1.12] tracking-tight text-white">
+                <h1 className="font-display font-extrabold text-[2.5rem] sm:text-6xl lg:text-[68px] xl:text-[74px] leading-[1.06] tracking-tight text-white">
                   Alertez, suivez et<br />
                   protégez face aux<br />
                   <span className="text-[#58a6ff]">montées des eaux</span>.
