@@ -871,7 +871,7 @@ export const EnquetePage: React.FC = () => {
                   className="oid-enq-sync-fill"
                   style={{
                     width: offlineQueue.length > 0 ? '65%' : '100%',
-                    backgroundColor: offlineQueue.length > 0 ? '#89ceff' : '#5be9ad',
+                    backgroundColor: offlineQueue.length > 0 ? 'var(--water)' : 'var(--ok)',
                   }}
                 />
               </div>

@@ -1160,7 +1160,7 @@ export const CoordinationPage: React.FC = () => {
             >
               <span className="material-symbols-outlined">assignment_late</span>
               <span>Incidents</span>
-              <span className="nav-badge" style={{ backgroundColor: '#00236f' }}>
+              <span className="nav-badge" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>
                 {filteredIncidents.length}
               </span>
             </button>
@@ -1207,7 +1207,7 @@ export const CoordinationPage: React.FC = () => {
             onClick={handleLogout}
             style={{ marginLeft: 'auto', border: 'none' }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#ba1a1a' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--crit)' }}>
               logout
             </span>
           </button>
@@ -1890,7 +1890,7 @@ export const CoordinationPage: React.FC = () => {
                             </div>
 
                             {enq ? (
-                              <span className="verif-dup-pill" style={{ color: '#89ceff', borderColor: 'rgba(137, 206, 255, 0.35)', background: 'rgba(0, 162, 230, 0.14)' }}>
+                              <span className="verif-dup-pill" style={{ color: 'var(--water)', borderColor: 'var(--water-dim)', background: 'var(--water-dim)' }}>
                                 <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
                                   badge
                                 </span>
@@ -2093,7 +2093,7 @@ export const CoordinationPage: React.FC = () => {
                                     <i
                                       className="verif-legend-dot"
                                       style={{
-                                        background: selectedIncident.danger_immediat ? '#ef4444' : '#00e5ff',
+                                        background: selectedIncident.danger_immediat ? 'var(--crit)' : 'var(--water)',
                                       }}
                                     />
                                     Incident #{selectedIncident.id} ({selCommune})
@@ -2145,8 +2145,8 @@ export const CoordinationPage: React.FC = () => {
                                         alignItems: 'center',
                                         marginBottom: '0.35rem',
                                         fontSize: '0.72rem',
-                                        fontFamily: "'JetBrains Mono', monospace",
-                                        color: '#89ceff',
+                                        fontFamily: "var(--mono)",
+                                        color: 'var(--water)',
                                       }}
                                     >
                                       <span>

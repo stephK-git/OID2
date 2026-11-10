@@ -1,0 +1,393 @@
+/* ==========================================================================
+   OID COMPOSANTS UNIFIÉS (Phase 3)
+   Boutons, Badges et Chips harmonisés
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. BOUTONS (.btn)
+   -------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: var(--r-md);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--tx);
+  transition: all 150ms ease;
+  user-select: none;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Variante compacte .btn-sm */
+.btn-sm {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  border-radius: var(--r-sm);
+}
+
+/* Variantes de boutons */
+.btn-primary {
+  background-color: var(--water);
+  color: var(--water-ink);
+  border-color: transparent;
+  box-shadow: 0 2px 8px var(--water-dim);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--water-hi);
+  color: var(--water-ink);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  border-color: var(--line2);
+  color: var(--tx);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--s2);
+  border-color: var(--line);
+  color: var(--tx);
+}
+
+.btn-danger {
+  background-color: transparent;
+  border-color: var(--crit);
+  color: var(--crit);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: var(--crit-dim);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--tx);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background-color: var(--s2);
+}
+
+/* Boutons icônes */
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background-color: var(--s1);
+  color: var(--tx);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background-color: var(--s2);
+  border-color: var(--line2);
+  color: var(--water);
+}
+
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon-btn.icon-btn-sm,
+.icon-btn-sm {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: var(--r-sm);
+}
+
+/* --------------------------------------------------------------------------
+   2. BADGES & CHIPS (.badge)
+   -------------------------------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background-color: var(--s2);
+  color: var(--tx2);
+}
+
+.badge-crit {
+  background-color: var(--crit-dim);
+  color: var(--crit);
+  border-color: var(--crit);
+}
+
+.badge-warn {
+  background-color: var(--warn-dim);
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.badge-ok {
+  background-color: var(--ok-dim);
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.badge-water {
+  background-color: var(--water-dim);
+  color: var(--water);
+  border-color: var(--water);
+}
+
+/* --------------------------------------------------------------------------
+   3. ALIASES & COMPATIBILITÉ LEGACY
+   -------------------------------------------------------------------------- */
+
+.btn-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--r-sm);
+  background-color: var(--water);
+  color: var(--water-ink) !important;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.btn-login:hover {
+  background-color: var(--water-hi);
+  color: var(--water-ink) !important;
+}
+
+.btn-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  background-color: transparent;
+  border: 1px solid var(--line2);
+  color: var(--tx);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.btn-logout:hover {
+  background-color: var(--s2);
+  color: var(--crit);
+  border-color: var(--crit);
+}
+
+.oid-call-gspm {
+  background-color: var(--crit) !important;
+  color: var(--crit-ink, #ffffff) !important;
+  border: none !important;
+  font-weight: 700;
+}
+
+.oid-call-gspm:hover {
+  filter: brightness(1.1);
+}
+
+.oid-call-112 {
+  background-color: var(--s2) !important;
+  border: 1px solid var(--line2) !important;
+  color: var(--tx) !important;
+  font-weight: 700;
+}
+
+.oid-call-112:hover {
+  background-color: var(--s3) !important;
+  border-color: var(--line) !important;
+}
+
+/* Aliases badges Bootstrap/legacy */
+.badge-success {
+  background-color: var(--ok-dim) !important;
+  color: var(--ok) !important;
+  border: 1px solid var(--ok) !important;
+}
+
+.badge-danger {
+  background-color: var(--crit-dim) !important;
+  color: var(--crit) !important;
+  border: 1px solid var(--crit) !important;
+}
+
+.badge-warning {
+  background-color: var(--warn-dim) !important;
+  color: var(--warn) !important;
+  border: 1px solid var(--warn) !important;
+}
+
+.badge-secondary {
+  background-color: var(--s2) !important;
+  color: var(--tx2) !important;
+  border: 1px solid var(--line2) !important;
+}
+
+.btn-outline-danger {
+  background-color: transparent !important;
+  border: 1px solid var(--crit) !important;
+  color: var(--crit) !important;
+}
+
+.btn-outline-danger:hover:not(:disabled) {
+  background-color: var(--crit-dim) !important;
+}
+
+/* Aliases chips */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  background-color: var(--s2);
+  border: 1px solid var(--line2);
+  color: var(--tx2);
+}
+
+.chip.crit {
+  color: var(--crit);
+  border-color: var(--crit);
+  background-color: var(--crit-dim);
+}
+
+.chip.warn {
+  color: var(--warn);
+  border-color: var(--warn);
+  background-color: var(--warn-dim);
+}
+
+.chip.ok {
+  color: var(--ok);
+  border-color: var(--ok);
+  background-color: var(--ok-dim);
+}
+
+.chip.water {
+  color: var(--water);
+  border-color: var(--water);
+  background-color: var(--water-dim);
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  background-color: var(--water-dim);
+  color: var(--water);
+  border: 1px solid var(--water);
+}
+
+/* Boutons de validation et rejet (Vérification & Coordination) */
+.verif-btn-validate,
+.btn-submit-action {
+  height: 44px;
+  border-radius: 9999px;
+  background-color: var(--water) !important;
+  color: var(--water-ink) !important;
+  border: none;
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  box-shadow: 0 2px 8px var(--water-dim);
+}
+
+.verif-btn-validate:hover:not(:disabled),
+.btn-submit-action:hover:not(:disabled) {
+  background-color: var(--water-hi) !important;
+}
+
+.verif-btn-validate:disabled,
+.btn-submit-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.verif-btn-reject {
+  height: 44px;
+  border-radius: 9999px;
+  background-color: transparent !important;
+  color: var(--crit) !important;
+  border: 1px solid var(--crit) !important;
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.verif-btn-reject:hover:not(:disabled) {
+  background-color: var(--crit-dim) !important;
+}
+
+.verif-btn-reject:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

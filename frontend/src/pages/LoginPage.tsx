@@ -297,7 +297,7 @@ export const LoginPage: React.FC = () => {
           <div className="auth-citizen-card">
             <div className="auth-citizen-left">
               <p>
-                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#f87171' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--crit)' }}>
                   emergency
                 </span>
                 Vous êtes un citoyen ou témoin d'une inondation ?

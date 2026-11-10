@@ -438,10 +438,10 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
           const zVal = typeof p.z_score === 'number' ? p.z_score : 0;
           const zColor = zVal >= 1.645 ? '#b2182b' : zVal <= -1.645 ? '#2166ac' : '#475569';
           const popupHtml = `
-            <div style="font-family: sans-serif; font-size: 12.5px; line-height: 1.45; min-width: 235px;">
-              <strong style="font-size: 13.5px; color: #0b1f3a;">Autocorrélation Getis-Ord Gi* — ${p.code_maille}</strong><br/>
-              <span style="color: #475569; font-weight: 600;">Commune : ${p.zone_nom}</span>
-              <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;"/>
+            <div style="font-family: var(--font); font-size: 12.5px; line-height: 1.45; min-width: 235px;">
+              <strong style="font-size: 13.5px; color: var(--tx);">Autocorrélation Getis-Ord Gi* — ${p.code_maille}</strong><br/>
+              <span style="color: var(--tx2); font-weight: 600;">Commune : ${p.zone_nom}</span>
+              <hr style="margin: 5px 0; border: none; border-top: 1px solid var(--line);"/>
               <b>Diagnostic Gi* :</b> <span style="font-weight: 700; color: ${zColor};">${p.interpretation_gi}</span><br/>
               <b>Score standardisé Z(Gi*) :</b> <code>${zVal >= 0 ? '+' : ''}${formatNumberFr(zVal, 2)}</code> (p = ${formatNumberFr(p.p_value ?? 1, 4)})<br/>
               <b>Sinistres dans la maille :</b> ${p.nb_evenements ?? 0} (intensité pondérée : ${formatNumberFr(p.intensite_sinistre ?? 0, 2)})<br/>
@@ -480,10 +480,10 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
       onEachFeature: (feature, layer) => {
         const p = feature.properties;
         const popupHtml = `
-          <div style="font-family: sans-serif; font-size: 12.5px; line-height: 1.45; min-width: 235px;">
-            <strong style="font-size: 13.5px; color: #0b1f3a;">Maille ${p.code_maille}</strong><br/>
-            <span style="color: #475569; font-weight: 600;">Commune : ${p.zone_nom}</span>
-            <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;"/>
+          <div style="font-family: var(--font); font-size: 12.5px; line-height: 1.45; min-width: 235px;">
+            <strong style="font-size: 13.5px; color: var(--tx);">Maille ${p.code_maille}</strong><br/>
+            <span style="color: var(--tx2); font-weight: 600;">Commune : ${p.zone_nom}</span>
+            <hr style="margin: 5px 0; border: none; border-top: 1px solid var(--line);"/>
             <b>Population (WorldPop 100 m) :</b> ${formatNumberFr(p.population_worldpop ?? 0, 0)} hab.<br/>
             <b>Densité :</b> <span style="font-weight: 700; color: #b91c1c;">${formatNumberFr(p.densite_hab_km2 ?? 0, 0)} hab./km²</span><br/>
             <b>Altitude MNT / Dist. hydro :</b> ${formatNumberFr(p.altitude_moy_m ?? 0, 1)} m · ${formatNumberFr(p.dist_hydro_m ?? 0, 0)} m<br/>
@@ -547,10 +547,10 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                <b>Topographie :</b> Alt. moy. ${formatNumberFr(vuln.altitude_moy_m ?? 0, 1)} m · Dist. hydro ${formatNumberFr(vuln.dist_hydro_moy_m ?? 0, 0)} m<br/>`
             : '';
         const popupHtml = `
-          <div style="font-family: sans-serif; font-size: 12.5px; line-height: 1.45; min-width: 245px;">
-            <strong style="font-size: 14px; color: #0b1f3a;">Commune : ${p.nom}</strong>
-            <span style="color: #64748b; font-size: 11px;"> (${p.code_adm})</span>
-            <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;"/>
+          <div style="font-family: var(--font); font-size: 12.5px; line-height: 1.45; min-width: 245px;">
+            <strong style="font-size: 14px; color: var(--tx);">Commune : ${p.nom}</strong>
+            <span style="color: var(--tx2); font-size: 11px;"> (${p.code_adm})</span>
+            <hr style="margin: 5px 0; border: none; border-top: 1px solid var(--line);"/>
             <b>Superficie (EPSG:32630) :</b> ${formatNumberFr(p.superficie_km2, 2)} km²<br/>
             <b>Population WorldPop 100 m :</b> ${formatNumberFr(p.population_totale, 0)} hab. (${formatNumberFr(p.densite_hab_km2, 0)} hab./km²)<br/>
             ${decompHtml}
@@ -611,10 +611,10 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
             : `<b>Incidents agrégés :</b> ${h.nombre_incidents}<br/>`;
 
         const popupHtml = `
-          <div style="font-family: sans-serif; font-size: 12.5px; line-height: 1.45; min-width: 235px;">
+          <div style="font-family: var(--font); font-size: 12.5px; line-height: 1.45; min-width: 235px;">
             <strong style="font-size: 13.5px; color: ${color};">Corridor DBSCAN #${h.cluster_id} (${h.niveau_recurrence.toUpperCase()})</strong><br/>
-            <span style="color: #64748b; font-size: 11px;">${h.algorithme || 'ST_ClusterDBSCAN + ST_ConcaveHull (EPSG:32630)'}</span>
-            <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;"/>
+            <span style="color: var(--tx2); font-size: 11px;">${h.algorithme || 'ST_ClusterDBSCAN + ST_ConcaveHull (EPSG:32630)'}</span>
+            <hr style="margin: 5px 0; border: none; border-top: 1px solid var(--line);"/>
             ${utmLine}
             ${areaLine}
             ${obsLine}
@@ -663,12 +663,12 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
             : '';
 
         const silentPopup = `
-          <div style="font-family: sans-serif; font-size: 12.5px; line-height: 1.45; min-width: 245px;">
+          <div style="font-family: var(--font); font-size: 12.5px; line-height: 1.45; min-width: 245px;">
             <strong style="color: ${sColor};">Zone silencieuse : ${z.zone_nom}</strong><br/>
             <span style="font-size: 11px; font-weight: 700; color: ${sColor};">${z.statut_alerte}</span>
-            <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;"/>
+            <hr style="margin: 5px 0; border: none; border-top: 1px solid var(--line);"/>
             ${poissonLine}
-            <p style="margin: 4px 0; color: #334155;">${z.motif}</p>
+            <p style="margin: 4px 0; color: var(--tx2);">${z.motif}</p>
             <b>Action :</b> ${z.action_requise}
           </div>
         `;
@@ -927,7 +927,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                   <span>
                     {item.label}
                     {item.count !== undefined && (
-                      <small style={{ color: '#64748b', marginLeft: '4px' }}>({item.count})</small>
+                      <small style={{ color: 'var(--tx3)', marginLeft: '4px' }}>({item.count})</small>
                     )}
                   </span>
                 </div>
@@ -955,7 +955,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                       <span className="sig-jenks-swatch" style={{ backgroundColor: color }} />
                       <span>
                         {formatNumberFr(low, dec)} – {formatNumberFr(high, dec)}
-                        <small style={{ color: '#64748b', marginLeft: '4px' }}>({count})</small>
+                        <small style={{ color: 'var(--tx3)', marginLeft: '4px' }}>({count})</small>
                       </span>
                     </div>
                   );

@@ -102,52 +102,52 @@ export const IncidentsMap: React.FC<IncidentsMapProps> = ({
         bounds.push([lat, lon]);
 
         const color = feat.properties.danger_immediat
-          ? '#dc2626'
+          ? 'var(--crit)'
           : feat.properties.statut === 'cloture'
-          ? '#64748b'
+          ? 'var(--tx3)'
           : feat.properties.statut === 'evalue'
-          ? '#16a34a'
-          : '#00e5ff';
+          ? 'var(--ok)'
+          : 'var(--water)';
 
         const circle = L.circleMarker([lat, lon], {
           radius: feat.properties.danger_immediat ? 11.5 : 8.5,
           fillColor: color,
-          color: '#ffffff',
+          color: 'var(--s1)',
           weight: 2.2,
           opacity: 1,
           fillOpacity: 0.92,
         });
 
         const popupHtml = `
-          <div style="font-family: 'Plus Jakarta Sans', sans-serif; color: #d4e4fa; background: #1c2b3c; border: 1px solid rgba(0,229,255,0.3); border-radius: 12px; padding: 12px; min-width: 245px; box-shadow: 0 12px 32px rgba(0,0,0,0.55);">
-            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(132,147,150,0.22);">
+          <div style="font-family: var(--font); color: var(--tx); background: var(--s1); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px; min-width: 245px; box-shadow: 0 12px 32px var(--shadow);">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line);">
               <div>
-                <div style="font-weight: 800; font-size: 14px; color: #d4e4fa;">Incident #${feat.properties.id} (${feat.properties.type})</div>
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #849396;">Réf : ${feat.properties.reference_publique.slice(0, 16).toUpperCase()}</div>
+                <div style="font-weight: 800; font-size: 14px; color: var(--tx);">Incident #${feat.properties.id} (${feat.properties.type})</div>
+                <div style="font-family: var(--mono); font-size: 10.5px; color: var(--tx3);">Réf : ${feat.properties.reference_publique.slice(0, 16).toUpperCase()}</div>
               </div>
             </div>
             ${
               feat.properties.danger_immediat
-                ? `<div style="margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: #93000a; color: #ffdad6; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 700;">
+                ? `<div style="margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--crit-dim); color: var(--crit); font-family: var(--mono); font-size: 10.5px; font-weight: 700;">
                     ⚠ DANGER IMMÉDIAT DÉCLARÉ — ÉVACUATION / SECOURS PRIORITAIRE
                   </div>`
                 : ''
             }
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
-              <div style="background: #122131; padding: 6px 8px; border-radius: 6px;">
-                <div style="font-size: 9.5px; color: #849396;">STATUT ACTUEL</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-family: var(--mono); font-size: 11px;">
+              <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
+                <div style="font-size: 9.5px; color: var(--tx3);">STATUT ACTUEL</div>
                 <div style="font-weight: 700; color: ${color}; text-transform: uppercase; margin-top: 2px;">${feat.properties.statut}</div>
               </div>
-              <div style="background: #122131; padding: 6px 8px; border-radius: 6px;">
-                <div style="font-size: 9.5px; color: #849396;">PRIORITÉ O.I.D</div>
-                <div style="font-weight: 700; color: ${feat.properties.danger_immediat ? '#ffb4ab' : '#00e5ff'}; margin-top: 2px;">${feat.properties.score_priorite} pts</div>
+              <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
+                <div style="font-size: 9.5px; color: var(--tx3);">PRIORITÉ O.I.D</div>
+                <div style="font-weight: 700; color: ${feat.properties.danger_immediat ? 'var(--crit)' : 'var(--water)'}; margin-top: 2px;">${feat.properties.score_priorite} pts</div>
               </div>
             </div>
-            <div style="margin-top: 8px; font-size: 11.5px; color: #bac9cc;">
+            <div style="margin-top: 8px; font-size: 11.5px; color: var(--tx2);">
               📍 WGS84 : ${lat.toFixed(4)}° N, ${lon.toFixed(4)}° W
             </div>
             <div style="margin-top: 10px; display: flex; gap: 6px;">
-              <a href="/incidents/${feat.properties.id}" style="flex: 1; text-align: center; text-decoration: none; background: #00e5ff; color: #001f24; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 7px 10px; border-radius: 6px;">
+              <a href="/incidents/${feat.properties.id}" style="flex: 1; text-align: center; text-decoration: none; background: var(--water); color: var(--water-ink); font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 7px 10px; border-radius: 6px;">
                 Ouvrir Dossier #${feat.properties.id}
               </a>
             </div>

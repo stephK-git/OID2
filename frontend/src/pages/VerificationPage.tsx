@@ -755,7 +755,7 @@ export const VerificationPage: React.FC = () => {
             >
               <span className="material-symbols-outlined">rate_review</span>
               <span>Alertes à vérifier</span>
-              <span className="nav-badge" style={{ backgroundColor: '#e02928' }}>{fileItems.length}</span>
+              <span className="nav-badge" style={{ backgroundColor: 'var(--crit)', color: 'var(--water-ink)' }}>{fileItems.length}</span>
             </button>
             <button
               type="button"
@@ -764,7 +764,7 @@ export const VerificationPage: React.FC = () => {
             >
               <span className="material-symbols-outlined">history</span>
               <span>Historique traité</span>
-              <span className="nav-badge" style={{ backgroundColor: '#00236f' }}>{historiqueItems.length}</span>
+              <span className="nav-badge" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>{historiqueItems.length}</span>
             </button>
           </div>
 
@@ -772,19 +772,19 @@ export const VerificationPage: React.FC = () => {
             <div className="nav-label">Bilan Session</div>
             <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <span style={{ color: '#444651' }}>Validés :</span>
+                <span style={{ color: 'var(--tx2)' }}>Validés :</span>
                 <span className="chip ok" style={{ fontSize: '11px', padding: '2px 8px' }}>
                   <b className="up-ok">{tally.val}</b>
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <span style={{ color: '#444651' }}>Fusionnés :</span>
+                <span style={{ color: 'var(--tx2)' }}>Fusionnés :</span>
                 <span className="chip" style={{ fontSize: '11px', padding: '2px 8px' }}>
                   <b>{tally.mer}</b>
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <span style={{ color: '#444651' }}>Rejetés :</span>
+                <span style={{ color: 'var(--tx2)' }}>Rejetés :</span>
                 <span className="chip crit" style={{ fontSize: '11px', padding: '2px 8px' }}>
                   <b className="up-crit">{tally.rej}</b>
                 </span>
@@ -794,7 +794,7 @@ export const VerificationPage: React.FC = () => {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="avatar" style={{ backgroundColor: '#1e3a8a' }}>{userInitials}</div>
+          <div className="avatar" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>{userInitials}</div>
           <div className="user-info">
             <span className="user-name">{user?.nom || 'Opérateur triage'}</span>
             <span className="user-role">VÉRIFICATEUR · PC INDÉNIÉ</span>
@@ -807,7 +807,7 @@ export const VerificationPage: React.FC = () => {
             onClick={handleLogout}
             style={{ marginLeft: 'auto', border: 'none' }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#ba1a1a' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--crit)' }}>
               logout
             </span>
           </button>
@@ -1316,11 +1316,11 @@ export const VerificationPage: React.FC = () => {
         </div>
       ) : (
         <div style={{ padding: '24px 32px' }}>
-          <div className="panel pad" style={{ border: '1px solid #c5c5d3', borderRadius: '16px', background: '#ffffff' }}>
+          <div className="panel pad" style={{ border: '1px solid var(--line)', borderRadius: '16px', background: 'var(--s1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0d1c2f' }}>Historique des alertes traitées</h2>
-                <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#444651' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--tx)' }}>Historique des alertes traitées</h2>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--tx2)' }}>
                   Traçabilité complète des signalements vérifiés, fusionnés ou rejetés
                 </p>
               </div>
@@ -1350,7 +1350,7 @@ export const VerificationPage: React.FC = () => {
                 <tbody>
                   {historiqueItems.length === 0 ? (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#757682' }}>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--tx3)' }}>
                         Aucun signalement traité dans l'historique récent.
                       </td>
                     </tr>
@@ -1370,13 +1370,13 @@ export const VerificationPage: React.FC = () => {
                         </td>
                         <td style={{ fontSize: '13px' }}>
                           {h.statut === 'valide' && h.incident_id && (
-                            <span style={{ color: '#00236f', fontWeight: 600 }}>Incident #{h.incident_id}</span>
+                            <span style={{ color: 'var(--water)', fontWeight: 600 }}>Incident #{h.incident_id}</span>
                           )}
                           {h.statut === 'rejete' && (
-                            <span style={{ color: '#ba1a1a' }}>Motif : {h.motif_rejet || 'Non précisé'}</span>
+                            <span style={{ color: 'var(--crit)' }}>Motif : {h.motif_rejet || 'Non précisé'}</span>
                           )}
                           {h.statut === 'doublon' && (
-                            <span style={{ color: '#444651' }}>Fusionné dans incident #{h.incident_id}</span>
+                            <span style={{ color: 'var(--tx2)' }}>Fusionné dans incident #{h.incident_id}</span>
                           )}
                         </td>
                       </tr>
