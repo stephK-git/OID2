@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { BrandMark } from './BrandMark';
 import { ThemeToggle } from './ThemeToggle';
-import { MapPin, Search, LogOut, LogIn, Menu, X, ArrowLeft } from 'lucide-react';
+import { MapPin, Search, LogOut, LogIn, ArrowLeft } from 'lucide-react';
 
 export interface PublicHeaderProps {
   isLanding?: boolean;
@@ -19,7 +19,6 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
   const { user, isAuthenticated, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -190,7 +189,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
 
           {/* Espace droit : ThemeToggle + Bouton d'action */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <ThemeToggle />
+            {!isLanding && <ThemeToggle />}
 
             {isAuth ? (
               <Link
@@ -254,7 +253,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
                 </Link>
                 <Link
                   to="/signaler"
-                  className="hidden md:inline-flex btn btn-primary btn-sm"
+                  className="btn btn-primary btn-sm"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -263,32 +262,8 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
                     fontSize: '13px',
                   }}
                 >
-                  <span>Signaler un incident</span>
+                  <span>Signaler<span className="hidden sm:inline"> un incident</span></span>
                 </Link>
-                {/* Bouton menu mobile pour la landing */}
-                <button
-                  id="menu-btn"
-                  type="button"
-                  onClick={() => setMobileMenuOpen((prev) => !prev)}
-                  className="md:hidden"
-                  aria-expanded={mobileMenuOpen}
-                  aria-controls="menu-mobile"
-                  aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
-                  style={{
-                    width: '44px',
-                    height: '44px',
-                    borderRadius: '10px',
-                    border: '1px solid var(--line)',
-                    backgroundColor: 'var(--s2)',
-                    color: 'var(--tx)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-                </button>
               </div>
             ) : (
               <Link
@@ -308,114 +283,6 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
             )}
           </div>
         </div>
-
-        {/* Menu mobile déroulant (Landing) */}
-        {isLanding && (
-          <div
-            id="menu-mobile"
-            className={`${mobileMenuOpen ? '' : 'hidden'} md:hidden`}
-            style={{
-              position: 'absolute',
-              top: '64px',
-              left: 0,
-              right: 0,
-              backgroundColor: 'var(--s1)',
-              borderBottom: '1px solid var(--line)',
-              boxShadow: 'var(--shadow-md)',
-              padding: '12px 16px',
-              zIndex: 39,
-            }}
-          >
-            <nav
-              style={{
-                display: 'grid',
-                gap: '6px',
-                fontSize: '15px',
-                fontWeight: 600,
-              }}
-              aria-label="Navigation mobile"
-            >
-              <a
-                href="#situation"
-                onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 'var(--r-md)',
-                  color: 'var(--tx)',
-                  textDecoration: 'none',
-                  backgroundColor: 'var(--s2)',
-                }}
-              >
-                Carte en direct
-              </a>
-              <a
-                href="#quoi"
-                onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 'var(--r-md)',
-                  color: 'var(--tx)',
-                  textDecoration: 'none',
-                  backgroundColor: 'var(--s2)',
-                }}
-              >
-                Que signaler ?
-              </a>
-              <a
-                href="#etapes"
-                onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 'var(--r-md)',
-                  color: 'var(--tx)',
-                  textDecoration: 'none',
-                  backgroundColor: 'var(--s2)',
-                }}
-              >
-                Fonctionnement
-              </a>
-              <a
-                href="#securite"
-                onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 'var(--r-md)',
-                  color: 'var(--tx)',
-                  textDecoration: 'none',
-                  backgroundColor: 'var(--s2)',
-                }}
-              >
-                Consignes de sécurité
-              </a>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '8px',
-                  marginTop: '8px',
-                  paddingTop: '8px',
-                  borderTop: '1px solid var(--line)',
-                }}
-              >
-                <Link
-                  to="/signaler"
-                  className="btn btn-primary"
-                  style={{ flex: 1, textDecoration: 'none', textAlign: 'center' }}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Signaler un incident
-                </Link>
-                <Link
-                  to="/login"
-                  className="btn btn-secondary"
-                  style={{ textDecoration: 'none' }}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Espace agent
-                </Link>
-              </div>
-            </nav>
-          </div>
-        )}
       </header>
 
       {/* Barre de navigation mobile du bas (Signaler & Suivi) */}

@@ -409,16 +409,6 @@ export const LandingPage: React.FC = () => {
           <div className="bg-surface rounded-3xl p-5 sm:p-10 shadow-2xl shadow-slate-900/10 border border-line">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 items-center">
               <div className="md:col-span-5 space-y-2">
-                <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-accent bg-[var(--water-dim)] px-2.5 py-1 rounded-md">
-                  <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20" aria-hidden="true">
-                    <path
-                      clipRule="evenodd"
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                    />
-                  </svg>
-                  Espace citoyen
-                </div>
                 <h2 className="font-display font-bold text-xl sm:text-2xl text-ink">
                   Suivre votre signalement
                 </h2>
@@ -491,9 +481,6 @@ export const LandingPage: React.FC = () => {
         {/* Situation en direct */}
         <section className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="situation">
           <div className="mb-8 sm:mb-12 space-y-3 max-w-2xl">
-            <span className="inline-block text-xs font-bold uppercase tracking-wider text-accent bg-[var(--water-dim)] px-3 py-1 rounded-md">
-              Cartographie collaborative
-            </span>
             <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-ink tracking-tight">
               Situation hydrologique en direct
             </h2>
@@ -768,9 +755,6 @@ export const LandingPage: React.FC = () => {
         <section className="py-16 sm:py-20 bg-surface2 border-y border-line" id="quoi">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl mb-8 sm:mb-10 space-y-3">
-              <span className="inline-block text-xs font-bold uppercase tracking-wider text-accent bg-[var(--water-dim)] px-3 py-1 rounded-md">
-                Typologie d&apos;incidents
-              </span>
               <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-ink tracking-tight">
                 Que pouvez-vous signaler ?
               </h2>
@@ -986,9 +970,6 @@ export const LandingPage: React.FC = () => {
         {/* Étapes */}
         <section className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="etapes">
           <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-16 space-y-3">
-            <span className="inline-block text-xs font-bold uppercase tracking-wider text-accent bg-[var(--water-dim)] px-3 py-1 rounded-md">
-              Démarche simplifiée
-            </span>
             <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-ink tracking-tight">
               Comment fonctionne le signalement ?
             </h2>
@@ -1078,9 +1059,6 @@ export const LandingPage: React.FC = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
             <div className="p-6 sm:p-12 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl mb-12 sm:mb-16 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
               <div className="lg:col-span-6 space-y-4">
-                <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Règle vitale de sécurité routière
-                </span>
                 <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-white tracking-tight leading-tight">
                   <span className="text-amber-400">30 centimètres d&apos;eau</span> suffisent pour emporter une
                   voiture.

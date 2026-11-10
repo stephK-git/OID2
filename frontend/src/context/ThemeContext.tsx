@@ -43,6 +43,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   const currentTheme: Theme = useMemo(() => {
+    // La landing page est strictement verrouillée en thème clair
+    if (location.pathname === '/') return 'light';
     if (storedTheme) return storedTheme;
     return getDefaultTheme(location.pathname);
   }, [storedTheme, location.pathname]);
