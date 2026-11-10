@@ -5162,48 +5162,49 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
     left: 0;
     right: 0;
     z-index: 1000;
-    height: 70px;
-    padding: 0 0.4rem env(safe-area-inset-bottom, 0px);
-    background: rgba(1, 15, 31, 0.96);
+    height: 64px;
+    padding: 0 0.5rem env(safe-area-inset-bottom, 0px);
+    background: var(--s1);
     backdrop-filter: blur(18px);
-    border-top: 1px solid rgba(0, 229, 255, 0.18);
-    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.45);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -4px 20px var(--shadow);
     display: flex;
     justify-content: space-around;
     align-items: center;
   }
 
-  .oid-mob-tab {
+  .oid-mob-tab,
+  .oid-mob-nav-item {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.15rem;
-    min-width: 68px;
-    height: 52px;
+    min-width: 64px;
+    height: 48px;
     padding: 0 0.5rem;
-    border-radius: 12px;
+    border-radius: var(--r-md);
     text-decoration: none;
-    color: #bac9cc;
-    font-family: "JetBrains Mono", var(--font-mono);
-    font-size: 0.65rem;
+    color: var(--tx2);
+    font-family: var(--mono);
+    font-size: 0.7rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
     transition: all 0.16s ease;
   }
 
-  .oid-mob-tab .material-symbols-outlined {
-    font-size: 22px;
+  .oid-mob-tab .material-symbols-outlined,
+  .oid-mob-nav-item .material-symbols-outlined {
+    font-size: 20px;
   }
 
-  .oid-mob-tab.active {
-    color: #00e5ff;
-    background: rgba(28, 43, 60, 0.75);
+  .oid-mob-tab.active,
+  .oid-mob-nav-item.active {
+    color: var(--water);
+    background: var(--water-dim);
   }
 
   .oid-mob-tab.oid-mob-tab-emergency {
-    color: #ffb4ab;
+    color: var(--crit);
   }
 
   .footer {

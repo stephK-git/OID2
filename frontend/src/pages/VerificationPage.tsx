@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiFetch } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
 
 interface DoublonItem {
   id: number;
@@ -741,13 +742,7 @@ export const VerificationPage: React.FC = () => {
       {/* ---------- SIDEBAR LATÉRALE FIXE (Issu de coordinateur.html) ---------- */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <div className="logo-container">
-            <div className="logo-icon" style={{ backgroundColor: '#1e3a8a' }}>OID</div>
-            <div>
-              <div className="logo-text-title">Observatoire</div>
-              <div className="logo-text-subtitle">Poste de Triage &amp; Vérification</div>
-            </div>
-          </div>
+          <BrandMark subtitle="Poste de Triage &amp; Vérification" />
         </div>
 
         <nav className="sidebar-nav">
@@ -855,13 +850,9 @@ export const VerificationPage: React.FC = () => {
               </span>
             </button>
 
-            {/* Statut Vigilance */}
-            <div className="status" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-              <span className="vig" style={{ padding: '4px 10px', borderRadius: '99px', border: '1px solid #b45309', color: '#b45309', background: '#fef3c7', fontSize: '11px', fontWeight: 700, fontFamily: 'var(--mono)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <i style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#b45309', display: 'inline-block' }} />
-                Vigilance orange v4
-              </span>
-            </div>
+            {/* Statut Vigilance & Thème */}
+            <VigilancePill />
+            <ThemeToggle />
           </div>
         </header>
 

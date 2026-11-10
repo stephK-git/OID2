@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { Navbar } from './components/Navbar';
+import { PublicHeader } from './components/shell';
 import { ProtectedRoute, CitizenOnlyRoute } from './components/ProtectedRoute';
 
 import { LandingPage } from './pages/LandingPage';
@@ -19,12 +19,13 @@ const AppShell: React.FC = () => {
   const isCommandScreen =
     location.pathname.startsWith('/coordination') ||
     location.pathname.startsWith('/verification') ||
+    location.pathname.startsWith('/enquete') ||
     location.pathname === '/login';
   const hideDefaultChrome = isCommandScreen || isLandingPage;
 
   return (
     <div className={`app-root ${isCommandScreen ? 'is-command' : ''}`}>
-      {!hideDefaultChrome && <Navbar />}
+      {!hideDefaultChrome && <PublicHeader />}
       <div className={isCommandScreen ? 'command-screen-wrap' : isLandingPage ? '' : 'main-content'}>
         <Routes>
           {/* Routes publiques */}

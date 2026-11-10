@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api/client';
+import { PublicHeader } from '../components/shell';
 
 interface LoginResponse {
   access_token: string;
@@ -134,33 +135,7 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="oid-auth-shell">
       {/* Top Security Header Bar */}
-      <header className="auth-top-bar">
-        <Link to="/" className="auth-top-brand">
-          <span className="mark">
-            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
-              radar
-            </span>
-          </span>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <b>O.I.D.</b>
-              <span className="chip water" style={{ fontSize: '10px', padding: '2px 7px' }}>
-                DISTRICT D'ABIDJAN
-              </span>
-            </div>
-            <small>Observatoire des Inondations • Portail d'Accès Opérationnel</small>
-          </div>
-        </Link>
-
-        <div className="auth-top-meta">
-          <span className="server-badge">
-            <i />
-            Serveurs Sécurisés (ANSSI-CI)
-          </span>
-          <span style={{ color: 'var(--line2)' }}>|</span>
-          <span style={{ color: 'var(--warn)', fontWeight: 600 }}>Vigilance Orange v4</span>
-        </div>
-      </header>
+      <PublicHeader isAuth />
 
       {/* Main Form Center Area */}
       <main className="auth-main-area">

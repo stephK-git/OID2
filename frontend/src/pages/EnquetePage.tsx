@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { apiFetch } from '../api/client';
+import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
 
 interface PhotoMetaItem {
   url: string;
@@ -693,16 +694,15 @@ export const EnquetePage: React.FC = () => {
            ========================================================================== */}
         <div className="oid-enq-header">
           <div className="oid-enq-header-left">
-            <div className="oid-enq-title-row">
-              <span className="oid-enq-dot" />
-              <h1 className="oid-enq-title">Missions de Terrain</h1>
-            </div>
-            <p className="oid-enq-subtitle">
+            <BrandMark subtitle="Investigations &amp; Évaluations Terrain" />
+            <p className="oid-enq-subtitle" style={{ marginTop: '6px' }}>
               Consultez vos dossiers d'investigation affectés et saisissez vos évaluations de dégâts.
             </p>
           </div>
 
           <div className="oid-enq-header-actions">
+            <VigilancePill />
+            <ThemeToggle />
             <span
               className={`oid-enq-net-pill ${isOnline ? 'online' : 'offline'}`}
               title="État de la liaison avec le Centre Opérationnel O.I.D"

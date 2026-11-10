@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiFetch, getToken } from '../api/client';
 import { IncidentsMap } from '../components/IncidentsMap';
+import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
 import {
   SigAnalysisMap,
   type PointChaud,
@@ -1125,13 +1126,7 @@ export const CoordinationPage: React.FC = () => {
       {/* ---------- SIDEBAR LATÉRALE FIXE (Issu de coordinateur.html) ---------- */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <div className="logo-container">
-            <div className="logo-icon">OID</div>
-            <div>
-              <div className="logo-text-title">Observatoire</div>
-              <div className="logo-text-subtitle">Inondations &amp; Dommages</div>
-            </div>
-          </div>
+          <BrandMark subtitle="Inondations &amp; Dommages" />
         </div>
 
         <nav className="sidebar-nav">
@@ -1317,14 +1312,13 @@ export const CoordinationPage: React.FC = () => {
 
             {/* Statut Vigilance & Heure */}
             <div className="status" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-              <span className="vig" style={{ padding: '4px 10px', borderRadius: '99px', border: '1px solid #b45309', color: '#b45309', background: '#fef3c7', fontSize: '11px', fontWeight: 700, fontFamily: 'var(--mono)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <i style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#b45309', display: 'inline-block' }} />
-                Vigilance orange v4
-              </span>
-              <span className="ck" style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: '#444651' }}>
+              <VigilancePill />
+              <span className="ck" style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--tx2)' }}>
                 {liveClock}
               </span>
             </div>
+
+            <ThemeToggle />
           </div>
         </header>
 
