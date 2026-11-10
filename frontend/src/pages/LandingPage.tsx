@@ -142,13 +142,13 @@ export const LandingPage: React.FC = () => {
               alt="Vue aérienne d'Abidjan et de la lagune Ébrié"
               className="w-full h-full object-cover object-center scale-105"
             />
-            {/* Voiles sombre dégradés : gauche plus opaque pour lisibilité du texte, droite laissant respirer la lagune */}
+            {/* Voiles sombres allégés pour rendre la photo bien plus lumineuse et visible */}
             <div
-              className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-slate-950/60"
+              className="absolute inset-0 bg-gradient-to-r from-slate-950/82 via-slate-950/50 to-slate-950/20"
               aria-hidden="true"
             />
             <div
-              className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/50"
+              className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/25"
               aria-hidden="true"
             />
           </div>
@@ -157,16 +157,16 @@ export const LandingPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               {/* Colonne gauche */}
               <div className="lg:col-span-7 space-y-6">
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-900/40 border border-blue-500/20 text-slate-300 text-xs font-semibold backdrop-blur-sm">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-950/60 border border-blue-500/30 text-slate-200 text-xs font-semibold backdrop-blur-md shadow-sm">
                   <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0"></span>
                   Plateforme certifiée de surveillance citoyenne
                 </div>
-                <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl xl:text-[64px] leading-[1.08] tracking-tight text-white">
+                <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl xl:text-[64px] leading-[1.08] tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
                   Alertez, suivez et<br />
                   protégez face aux<br />
                   <span className="text-[#58a6ff]">montées des eaux</span>.
                 </h1>
-                <p className="text-base sm:text-lg text-slate-300 max-w-2xl leading-relaxed">
+                <p className="text-base sm:text-lg text-slate-200 max-w-2xl leading-relaxed drop-shadow-[0_1px_6px_rgba(0,0,0,0.8)]">
                   Signalez un danger sur la voirie ou votre habitation en moins de 2 minutes. Vos signalements
                   alimentent les secours et alertent votre communauté en temps réel.
                 </p>
