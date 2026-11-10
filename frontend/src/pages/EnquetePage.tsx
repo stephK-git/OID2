@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
 
 interface PhotoMetaItem {
@@ -172,6 +174,23 @@ const writeOfflineQueue = (packets: OfflineQueuePacket[]) => {
 };
 
 export const EnquetePage: React.FC = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const userInitials = useMemo(() => {
+    if (!user?.nom) return 'ENQ';
+    const parts = user.nom.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return user.nom.slice(0, 3).toUpperCase();
+  }, [user]);
+
   const [dossiers, setDossiers] = useState<DossierItem[]>([]);
   const [selectedDossier, setSelectedDossier] = useState<DossierItem | null>(null);
   const [evalForm, setEvalForm] = useState<EvaluationData>(defaultEvaluation);
@@ -652,7 +671,7 @@ export const EnquetePage: React.FC = () => {
     evalForm.statut === 'soumise';
 
   return (
-    <div className="oid-enq-page">
+    <div className="app-shell page-enqueteur" id="appShell">
       {/* Lightbox Plein Écran */}
       {lightboxUrl && (
         <div className="verif-lightbox" onClick={() => setLightboxUrl(null)}>
@@ -671,53 +690,133 @@ export const EnquetePage: React.FC = () => {
         </div>
       )}
 
-      <div className="oid-enq-container">
-        {/* ==========================================================================
-            PAGE HEADER
-           ========================================================================== */}
-        <div className="oid-enq-header">
-          <div className="oid-enq-header-left">
-            <BrandMark subtitle="Investigations &amp; Évaluations Terrain" />
-            <p className="oid-enq-subtitle" style={{ marginTop: '6px' }}>
-              Consultez vos dossiers d'investigation affectés et saisissez vos évaluations de dégâts.
-            </p>
+      {/* ---------- SIDEBAR LATÉRALE FIXE (Issu du standard coordinateur/vérificateur) ---------- */}
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <BrandMark subtitle="Investigations &amp; Évaluations" />
+        </div>
+
+        <nav className="sidebar-nav">
+          <div className="nav-group">
+            <div className="nav-label">Missions Terrain</div>
+            <button
+              type="button"
+              className="nav-item actif"
+            >
+              <span className="material-symbols-outlined">folder_special</span>
+              <span>Dossiers affectés</span>
+              <span className="nav-badge" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>
+                {dossiers.length}
+              </span>
+            </button>
           </div>
 
-          <div className="oid-enq-header-actions">
-            <VigilancePill />
-            <ThemeToggle />
+          <div className="nav-group">
+            <div className="nav-label">Bilan Enquête</div>
+            <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: 'var(--tx2)' }}>Total affectés :</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  <b>{dossiers.length}</b>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: 'var(--tx2)' }}>En cours :</span>
+                <span className="chip ok" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  <b className="up-ok">
+                    {dossiers.filter((d) => d.evaluation_statut === 'brouillon' || d.evaluation_statut === 'aucune').length}
+                  </b>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: 'var(--tx2)' }}>Évalués :</span>
+                <span className="chip" style={{ fontSize: '11px', padding: '2px 8px', backgroundColor: 'var(--tertiary-dim)', color: 'var(--tertiary)' }}>
+                  <b>{dossiers.filter((d) => d.evaluation_statut === 'soumise').length}</b>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ color: 'var(--tx2)' }}>Critiques :</span>
+                <span className="chip crit" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  <b className="up-crit">
+                    {dossiers.filter((d) => d.danger_immediat || d.score_priorite >= 80).length}
+                  </b>
+                </span>
+              </div>
+            </div>
+          </div>
+        </nav>
 
+        <div className="sidebar-footer">
+          <div className="avatar" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>
+            {userInitials}
+          </div>
+          <div className="user-info">
+            <span className="user-name">{user?.nom || 'Enquêteur terrain'}</span>
+            <span className="user-role">ENQUÊTEUR · MISSION TERRAIN</span>
+          </div>
+          <button
+            type="button"
+            className="icon-btn"
+            title="Se déconnecter"
+            aria-label="Se déconnecter"
+            onClick={handleLogout}
+            style={{ marginLeft: 'auto', border: 'none' }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--crit)' }}>
+              logout
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ---------- MAIN CONTENT AREA ---------- */}
+      <main className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        <header className="top-bar">
+          <div>
+            <h1 className="page-title">Investigations &amp; Évaluations Terrain</h1>
+            <div className="page-subtitle">
+              Consultez vos dossiers d'investigation affectés et saisissez vos évaluations de dégâts.
+            </div>
+          </div>
+
+          <div className="top-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               id="btn-refresh"
               type="button"
               onClick={() => loadDossiers(true)}
               disabled={loading}
-              className="oid-enq-refresh-btn"
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              <span className={`material-symbols-outlined ${loading ? 'spin' : ''}`}>sync</span>
+              <span className={`material-symbols-outlined ${loading ? 'spin' : ''}`} style={{ fontSize: '18px' }}>
+                sync
+              </span>
               <span>Actualiser</span>
             </button>
+            <VigilancePill />
+            <ThemeToggle />
           </div>
-        </div>
+        </header>
 
-        {error && (
-          <div className="oid-error-banner" role="alert">
-            <span className="material-symbols-outlined">warning</span>
-            <span>{error}</span>
-          </div>
-        )}
+        <div className="oid-enq-container" style={{ width: '100%', maxWidth: '100%', padding: '16px 24px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          {error && (
+            <div className="oid-error-banner" role="alert">
+              <span className="material-symbols-outlined">warning</span>
+              <span>{error}</span>
+            </div>
+          )}
 
-        {successMsg && (
-          <div className="oid-enq-success-banner" role="status">
-            <span className="material-symbols-outlined">check_circle</span>
-            <span>{successMsg}</span>
-          </div>
-        )}
+          {successMsg && (
+            <div className="oid-enq-success-banner" role="status">
+              <span className="material-symbols-outlined">check_circle</span>
+              <span>{successMsg}</span>
+            </div>
+          )}
 
-        {/* ==========================================================================
-            ENQUETE LAYOUT : 2 COLUMNS À DÉFILEMENT INDÉPENDANT
-           ========================================================================== */}
-        <div className="oid-enq-grid">
+          {/* ==========================================================================
+              ENQUETE LAYOUT : 2 COLUMNS À DÉFILEMENT INDÉPENDANT
+             ========================================================================== */}
+          <div className="oid-enq-grid" style={{ height: 'calc(100vh - 140px)' }}>
           {/* LEFT COLUMN: SIDEBAR DOSSIERS AFFECTÉS (4 cols on desktop) */}
           <div className="oid-enq-left-col">
             <div className="oid-enq-sidebar-head">
@@ -1434,6 +1533,7 @@ export const EnquetePage: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
-  );
+    </main>
+  </div>
+);
 };
