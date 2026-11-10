@@ -90,7 +90,7 @@
 }
 
 .oid-landing-page .font-display {
-  font-family: 'Space Grotesk', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font);
 }
 
 .oid-landing-page .font-sans {

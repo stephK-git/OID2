@@ -12,13 +12,33 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        var stored = localStorage.getItem('oid-theme');
+        var theme;
+        if (stored === 'light' || stored === 'dark') {
+          theme = stored;
+        } else {
+          var p = window.location.pathname;
+          var isAgent =
+            p.startsWith('/login') ||
+            p.startsWith('/verification') ||
+            p.startsWith('/coordination') ||
+            p.startsWith('/enquete') ||
+            p.startsWith('/agent');
+          theme = isAgent ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       if (typeof tailwind !== 'undefined') {
@@ -31,7 +51,7 @@
             extend: {
               fontFamily: {
                 sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
-                display: ['"Space Grotesk"', 'sans-serif'],
+                display: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
               },
               colors: {
                 brand: {

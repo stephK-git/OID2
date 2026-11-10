@@ -1360,7 +1360,7 @@ export const LandingPage: React.FC = () => {
                   </g>
                   <text
                     fill="#fbbf24"
-                    fontFamily="'Space Grotesk', sans-serif"
+                    fontFamily="'Plus Jakarta Sans', sans-serif"
                     fontSize="20"
                     fontWeight="700"
                     textAnchor="middle"

@@ -1,0 +1,163 @@
+/* ==========================================================================
+   OID TOKENS & THÈMES UNIFIÉS (Phase 1)
+   Unique source de vérité pour le thème sombre et clair
+   ========================================================================== */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces & fonds */
+  --bg: #04101c;
+  --s1: #081a2b;
+  --s2: #0d2338;
+  --s3: #14304a;
+
+  /* Lignes & bordures */
+  --line: #1b3a57;
+  --line2: #2a5073;
+
+  /* Textes & contrastes */
+  --tx: #e8f1f8;
+  --tx2: #9db3c6;
+  --tx3: #7390a5;
+
+  /* Eau & Accent principal */
+  --water: #3fd0f0;
+  --water-ink: #032a36;
+  --water-hi: #6adcf5;
+  --water-dim: rgba(63, 208, 240, 0.13);
+
+  /* États & alertes */
+  --ok: #4fd6a0;
+  --warn: #f2b24a;
+  --crit: #ff6b5e;
+  --crit-ink: #2b0a07;
+  --ok-dim: rgba(79, 214, 160, 0.13);
+  --warn-dim: rgba(242, 178, 74, 0.13);
+  --crit-dim: rgba(255, 107, 94, 0.14);
+
+  /* Interaction & élévation */
+  --focus: rgba(63, 208, 240, 0.5);
+  --shadow: rgba(0, 0, 0, 0.55);
+  --scrim: rgba(2, 10, 18, 0.72);
+
+  /* Couleurs de cartographie */
+  --map-land: #0a1e30;
+  --map-water: #0f3b5c;
+  --map-sea: #0b2c47;
+  --map-grid: rgba(120, 170, 210, 0.07);
+  --map-road: rgba(157, 179, 198, 0.28);
+  --map-label: #5f7d93;
+  --map-label-water: #6fa5c8;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surfaces & fonds */
+  --bg: #f3f6fa;
+  --s1: #ffffff;
+  --s2: #eaf0f6;
+  --s3: #dde7f1;
+
+  /* Lignes & bordures */
+  --line: #d3dee9;
+  --line2: #b8c8d9;
+
+  /* Textes & contrastes (≥ 4.5:1 garanti) */
+  --tx: #0b1f33;
+  --tx2: #45607a;
+  --tx3: #5b7389;
+
+  /* Eau & Accent principal */
+  --water: #0b5fc4;
+  --water-ink: #ffffff;
+  --water-hi: #1d70d6;
+  --water-dim: rgba(11, 95, 196, 0.10);
+
+  /* États & alertes */
+  --ok: #0b7a4f;
+  --warn: #8a5300;
+  --crit: #b3261e;
+  --crit-ink: #ffffff;
+  --ok-dim: rgba(11, 122, 79, 0.10);
+  --warn-dim: rgba(138, 83, 0, 0.10);
+  --crit-dim: rgba(179, 38, 30, 0.09);
+
+  /* Interaction & élévation */
+  --focus: rgba(11, 95, 196, 0.45);
+  --shadow: rgba(11, 31, 51, 0.18);
+  --scrim: rgba(11, 31, 51, 0.45);
+
+  /* Couleurs de cartographie en clair */
+  --map-land: #e6edf5;
+  --map-water: #c2dcf2;
+  --map-sea: #b0d0ea;
+  --map-grid: rgba(11, 31, 51, 0.06);
+  --map-road: rgba(91, 115, 137, 0.25);
+  --map-label: #45607a;
+  --map-label-water: #0b5fc4;
+}
+
+:root {
+  /* Typographie unifiée */
+  --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: var(--font);
+  --font-mono: var(--mono);
+
+  /* Rayons de bordure */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: 18px;
+
+  /* Ombres */
+  --shadow-sm: 0 1px 3px var(--shadow);
+  --shadow-md: 0 6px 16px -4px var(--shadow);
+  --shadow-lg: 0 14px 28px -6px var(--shadow);
+
+  /* Aliases legacy pour compatibilité */
+  --primary: var(--water);
+  --primary-hover: var(--water-hi);
+  --primary-light: var(--water-dim);
+  --navy: var(--s1);
+  --navy-light: var(--s2);
+  --bg-page: var(--bg);
+  --bg-card: var(--s1);
+  --text-main: var(--tx);
+  --text-muted: var(--tx2);
+  --border-color: var(--line);
+  --danger: var(--crit);
+  --danger-light: var(--crit-dim);
+  --warning: var(--warn);
+  --warning-light: var(--warn-dim);
+  --success: var(--ok);
+  --success-light: var(--ok-dim);
+
+  /* Aliases unifiés pour la famille --v-* (Vérification & Coordination) */
+  --v-surface: var(--bg);
+  --v-surface-lowest: var(--bg);
+  --v-surface-low: var(--s1);
+  --v-surface-container: var(--s1);
+  --v-surface-high: var(--s2);
+  --v-surface-highest: var(--s3);
+  --v-primary: var(--water);
+  --v-primary-container: var(--water-dim);
+  --v-on-primary-container: var(--water-hi);
+  --v-secondary: var(--water-hi);
+  --v-tertiary: var(--ok);
+  --v-tertiary-container: var(--ok-dim);
+  --v-on-tertiary-container: var(--ok);
+  --v-error: var(--crit);
+  --v-error-container: var(--crit-dim);
+  --v-on-error-container: var(--crit);
+  --v-on-surface: var(--tx);
+  --v-on-surface-variant: var(--tx2);
+  --v-outline: var(--line2);
+  --v-outline-variant: var(--line);
+}

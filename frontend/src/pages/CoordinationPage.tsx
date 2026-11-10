@@ -1063,7 +1063,7 @@ export const CoordinationPage: React.FC = () => {
   }, [activeTab]);
 
   return (
-    <div className="app-shell theme-clair page-coordinateur" id="appShell">
+    <div className="app-shell page-coordinateur" id="appShell">
       {/* Symboles SVG natifs du poste de commandement */}
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
         <symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12 18.5 5.5"/></symbol>

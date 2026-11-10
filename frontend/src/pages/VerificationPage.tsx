@@ -699,7 +699,7 @@ export const VerificationPage: React.FC = () => {
   }, [user]);
 
   return (
-    <div className="app-shell theme-clair page-verificateur" id="appShell">
+    <div className="app-shell page-verificateur" id="appShell">
       {/* Définitions d'icônes SVG O.I.D. */}
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
         <symbol id="i-radar" viewBox="0 0 24 24">
