@@ -133,31 +133,27 @@ export const LandingPage: React.FC = () => {
       <PublicHeader isLanding activeSection={activeSection} />
 
       <main id="contenu">
-        {/* HERO */}
-        <section className="relative bg-gradient-to-b from-slate-900 via-blue-950 to-slate-950 text-white pt-12 pb-36 sm:pt-20 sm:pb-44 overflow-hidden">
-          <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20" aria-hidden="true">
-            <svg
-              className="absolute -right-40 lg:-right-20 top-1/2 -translate-y-1/2 w-[640px] h-[640px] lg:w-[900px] lg:h-[900px]"
-              fill="none"
-              viewBox="0 0 800 800"
-            >
-              <circle
-                className="animate-pulse-slow"
-                cx="400"
-                cy="400"
-                r="100"
-                stroke="#60a5fa"
-                strokeDasharray="8 8"
-                strokeWidth="2"
-              />
-              <circle cx="400" cy="400" r="180" stroke="#3b82f6" strokeWidth="2" />
-              <circle cx="400" cy="400" r="260" stroke="#60a5fa" strokeDasharray="12 12" strokeWidth="1.5" />
-              <circle cx="400" cy="400" r="340" stroke="#2563eb" strokeWidth="2" />
-              <circle cx="400" cy="400" r="420" stroke="#1d4ed8" strokeWidth="1" />
-            </svg>
+        {/* HERO AVEC FOND PHOTO (ABIDJAN / LAGUNE ÉBRIÉ) */}
+        <section className="relative bg-slate-950 text-white pt-12 pb-36 sm:pt-20 sm:pb-44 overflow-hidden">
+          {/* Photo d'arrière-plan */}
+          <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+            <img
+              src="/images/hero-abidjan.jpg"
+              alt="Vue aérienne d'Abidjan et de la lagune Ébrié"
+              className="w-full h-full object-cover object-center scale-105"
+            />
+            {/* Voiles sombre dégradés : gauche plus opaque pour lisibilité du texte, droite laissant respirer la lagune */}
+            <div
+              className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-slate-950/60"
+              aria-hidden="true"
+            />
+            <div
+              className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/50"
+              aria-hidden="true"
+            />
           </div>
 
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               {/* Colonne gauche */}
               <div className="lg:col-span-7 space-y-6">
