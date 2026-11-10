@@ -180,11 +180,6 @@ export const EnquetePage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [draftSavedPulse, setDraftSavedPulse] = useState(false);
   const [lastSavedLabel, setLastSavedLabel] = useState<string>('Prêt pour saisie contradictoire');
-  const [isOnline, setIsOnline] = useState<boolean>(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  );
-  const [offlineQueue, setOfflineQueue] = useState<OfflineQueuePacket[]>(() => readOfflineQueue());
-  const [syncingOffline, setSyncingOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -321,7 +316,6 @@ export const EnquetePage: React.FC = () => {
   const flushOfflineQueue = useCallback(async () => {
     const queue = readOfflineQueue();
     if (queue.length === 0) return;
-    setSyncingOffline(true);
     const remaining: OfflineQueuePacket[] = [];
     let syncedCount = 0;
 
@@ -339,8 +333,6 @@ export const EnquetePage: React.FC = () => {
     }
 
     writeOfflineQueue(remaining);
-    setOfflineQueue(remaining);
-    setSyncingOffline(false);
 
     if (syncedCount > 0) {
       setSuccessMsg(`${syncedCount} paquet(s) hors-ligne synchronisé(s) avec le serveur O.I.D.`);
@@ -360,17 +352,11 @@ export const EnquetePage: React.FC = () => {
 
   useEffect(() => {
     const handleOnline = () => {
-      setIsOnline(true);
       flushOfflineQueue();
     };
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
     window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
     return () => {
       window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
     };
   }, [flushOfflineQueue]);
 
@@ -528,7 +514,6 @@ export const EnquetePage: React.FC = () => {
       { incidentId, payload, queuedAt: new Date().toISOString() },
     ];
     writeOfflineQueue(updated);
-    setOfflineQueue(updated);
   };
 
   const handleSaveDraft = async () => {
@@ -666,8 +651,6 @@ export const EnquetePage: React.FC = () => {
     selectedDossier.statut !== 'affecte' &&
     evalForm.statut === 'soumise';
 
-  const pendingPacketsCount = offlineQueue.length + (newPhotos.length > 0 ? 1 : 0);
-
   return (
     <div className="oid-enq-page">
       {/* Lightbox Plein Écran */}
@@ -703,13 +686,6 @@ export const EnquetePage: React.FC = () => {
           <div className="oid-enq-header-actions">
             <VigilancePill />
             <ThemeToggle />
-            <span
-              className={`oid-enq-net-pill ${isOnline ? 'online' : 'offline'}`}
-              title="État de la liaison avec le Centre Opérationnel O.I.D"
-            >
-              <span className="oid-enq-net-dot" />
-              <span>{isOnline ? 'LIAISON PC : EN LIGNE' : 'MODE HORS-LIGNE ACTIF'}</span>
-            </span>
 
             <button
               id="btn-refresh"
@@ -856,46 +832,6 @@ export const EnquetePage: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
-
-            {/* SYNCHRO FOOTER MINI-WIDGET */}
-            <div className="oid-enq-sync-widget">
-              <div className="oid-enq-sync-top">
-                <span className="oid-enq-sync-lbl">Queue SQLite / Cache Local</span>
-                <span className="oid-enq-sync-val">
-                  {pendingPacketsCount} paquet{pendingPacketsCount > 1 ? 's' : ''} en attente
-                </span>
-              </div>
-              <div className="oid-enq-sync-bar">
-                <div
-                  className="oid-enq-sync-fill"
-                  style={{
-                    width: offlineQueue.length > 0 ? '65%' : '100%',
-                    backgroundColor: offlineQueue.length > 0 ? 'var(--water)' : 'var(--ok)',
-                  }}
-                />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
-                <span className="oid-enq-sync-sub">
-                  {offlineQueue.length > 0
-                    ? `${offlineQueue.length} brouillon(s) hors-ligne prêt(s) à synchroniser.`
-                    : 'Base locale prête. Saisie hors-ligne synchronisée automatiquement dès reconnexion.'}
-                </span>
-                {offlineQueue.length > 0 && isOnline && (
-                  <button
-                    type="button"
-                    disabled={syncingOffline}
-                    onClick={flushOfflineQueue}
-                    className="oid-enq-refresh-btn"
-                    style={{ padding: '0.25rem 0.55rem', fontSize: '0.65rem' }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-                      cloud_upload
-                    </span>
-                    <span>{syncingOffline ? 'Synchro...' : 'Synchro'}</span>
-                  </button>
-                )}
-              </div>
             </div>
           </div>
 
