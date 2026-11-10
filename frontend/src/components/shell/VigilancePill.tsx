@@ -45,3 +45,4 @@ export const VigilancePill: React.FC<VigilancePillProps> = ({
     </span>
   );
 };
+
