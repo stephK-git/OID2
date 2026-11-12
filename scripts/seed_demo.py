@@ -1,8 +1,13 @@
 """Initialisation opérationnelle des comptes de référence, des 13 communes réelles et d'incidents types."""
 
 import json
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from app.core.security import hash_password
 from app.db.session import SessionLocal
@@ -15,14 +20,17 @@ from geoalchemy2.shape import from_shape
 from shapely.geometry import MultiPolygon, Point, Polygon, shape
 from sqlalchemy import select
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
 COMMUNES_GEOJSON_PATH = ROOT_DIR / "data" / "geo" / "abidjan_13_communes.geojson"
 
 USERS_INIT = [
-    ("Vérificateur Permanence", "verificateur@oid.demo", "verificateur", None),
-    ("Enquêteur Terrain Principal", "enqueteur@oid.demo", "enqueteur", None),
-    ("Coordinateur Cellule Crise", "coordinateur@oid.demo", "coordinateur", None),
-    ("Enquêteur Secteur Cocody", "enqueteur.cocody@oid.demo", "enqueteur", "Cocody"),
+    ("Vérificateur Permanence", "verificateur@oid.demo", "demo1234", "verificateur", None),
+    ("Enquêteur Terrain Principal", "enqueteur@oid.demo", "demo1234", "enqueteur", None),
+    ("Coordinateur Cellule Crise", "coordinateur@oid.demo", "demo1234", "coordinateur", None),
+    ("Enquêteur Secteur Cocody", "enqueteur.cocody@oid.demo", "demo1234", "enqueteur", "Cocody"),
+    # Comptes alignés sur les boutons de démonstration de LoginPage.tsx
+    ("Vérificateur Permanence", "verificateur@oid.org", "Demo1234!", "verificateur", None),
+    ("Enquêteur Terrain Principal", "enqueteur@oid.org", "Demo1234!", "enqueteur", None),
+    ("Coordinateur Cellule Crise", "coordinateur@oid.org", "Demo1234!", "coordinateur", None),
 ]
 
 
@@ -60,14 +68,14 @@ def main():
 
         # 2. Comptes opérationnels
         user_map: dict[str, Utilisateur] = {}
-        for nom, email, role, zone_nom in USERS_INIT:
+        for nom, email, raw_password, role, zone_nom in USERS_INIT:
             email_clean = email.strip().lower()
             u = db.scalar(select(Utilisateur).where(Utilisateur.email == email_clean))
             if u is None:
                 u = Utilisateur(
                     nom=nom,
                     email=email_clean,
-                    mot_de_passe_hash=hash_password("demo1234"),
+                    mot_de_passe_hash=hash_password(raw_password),
                     role=role,
                     zone_id=zone_map[zone_nom].id if zone_nom and zone_nom in zone_map else None,
                     actif=True,

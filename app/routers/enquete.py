@@ -20,7 +20,7 @@ from app.models.signalement import Signalement
 from app.models.utilisateur import Utilisateur
 from app.models.zone import Zone
 from app.routers.verification import _resolve_commune
-from app.services.photos import PhotoError, inspect_photo_metadata, save_photo_data_url
+from app.services.photos import PhotoError, delete_stored_photo, inspect_photo_metadata, save_photo_data_url
 from app.services.statuts import transition_incident
 
 router = APIRouter(prefix="/enquete", tags=["enquete"])
@@ -311,8 +311,10 @@ def supprimer_photo_brouillon(
     photo = db.scalar(select(Photo).where(Photo.evaluation_id == ev.id, Photo.url == url))
     if photo is None:
         raise HTTPException(404, "Photo introuvable dans ce brouillon.")
+    photo_url = photo.url
     db.delete(photo)
     db.commit()
+    delete_stored_photo(photo_url, PHOTO_UPLOAD_DIR)
     photos = [p.url for p in db.scalars(select(Photo).where(Photo.evaluation_id == ev.id)).all()]
     photos_meta = [inspect_photo_metadata(u, PHOTO_UPLOAD_DIR) for u in photos]
     return {"ok": True, "photos": photos, "photos_meta": photos_meta}

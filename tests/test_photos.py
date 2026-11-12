@@ -29,3 +29,36 @@ def test_save_photo_data_url(tmp_path) -> None:
     url = save_photo_data_url(PNG_DATA_URL, tmp_path)
     assert url.startswith("/uploads/") and url.endswith(".png")
     assert (tmp_path / url.rsplit("/", 1)[1]).read_bytes() == PNG_BYTES
+
+
+def test_save_photo_supabase_storage(tmp_path, monkeypatch) -> None:
+    from app.core.config import settings
+
+    captured: dict[str, object] = {}
+
+    class _FakeResp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def _fake_urlopen(req, timeout=0):
+        captured["url"] = req.full_url
+        captured["method"] = req.get_method()
+        captured["data"] = req.data
+        captured["headers"] = dict(req.header_items())
+        return _FakeResp()
+
+    monkeypatch.setattr(settings, "supabase_url", "https://demo.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role_key", "secret-key")
+    monkeypatch.setattr(settings, "supabase_storage_bucket", "oid-photos")
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    url = save_photo_data_url(PNG_DATA_URL, tmp_path)
+    assert url.startswith("https://demo.supabase.co/storage/v1/object/public/oid-photos/")
+    assert url.endswith(".png")
+    assert captured["method"] == "POST"
+    assert captured["data"] == PNG_BYTES

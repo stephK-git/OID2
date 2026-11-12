@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     base_url: str = "http://localhost:8000"
     cors_origins: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
 
+    # Stockage objet Supabase Storage (optionnel en local ; recommandé en production)
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_storage_bucket: str = "oid-photos"
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_postgres_driver(cls, value: str) -> str:
@@ -41,6 +46,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def supabase_storage_enabled(self) -> bool:
+        return bool(self.supabase_url.strip() and self.supabase_service_role_key.strip())
 
 
 settings = Settings()

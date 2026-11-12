@@ -1,20 +1,24 @@
-"""Décodage et stockage local des photos de signalement (démonstration).
-
-Les photos sont conservées hors base de données : la table `photo` ne stocke
-que l'URL publique du fichier. En production, remplacer ce stockage local par
-un stockage objet (Supabase Storage ou Cloudflare R2).
-"""
+"""Décodage et stockage des photos de signalement (local en dev, Supabase Storage en prod)."""
 
 import base64
 import binascii
 import hashlib
+import logging
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.core.config import settings
+
+logger = logging.getLogger("oid.photos")
+
 PHOTO_MAX_BYTES = 10 * 1024 * 1024
 _EXTENSIONS = {"jpeg": "jpg", "png": "png", "webp": "webp"}
+_MIME_BY_EXT = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
 _DATA_URL_RE = re.compile(r"^data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/=\s]+)$")
 
 
@@ -44,11 +48,85 @@ def decode_photo_data_url(data_url: str) -> tuple[bytes, str]:
     return raw, _EXTENSIONS[mime]
 
 
+def _upload_to_supabase_storage(raw: bytes, extension: str, filename: str) -> str:
+    """Envoie le binaire vers Supabase Storage et retourne l'URL publique permanente."""
+    base_url = settings.supabase_url.strip().rstrip("/")
+    bucket = urllib.parse.quote(settings.supabase_storage_bucket.strip(), safe="")
+    key = settings.supabase_service_role_key.strip()
+    object_name = urllib.parse.quote(filename, safe="")
+    upload_endpoint = f"{base_url}/storage/v1/object/{bucket}/{object_name}"
+    content_type = _MIME_BY_EXT.get(extension, "application/octet-stream")
+
+    req = urllib.request.Request(
+        upload_endpoint,
+        data=raw,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
+            "Content-Type": content_type,
+            "x-upsert": "true",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status >= 400:
+                raise PhotoError(f"Échec d'envoi vers Supabase Storage (HTTP {resp.status}).")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        logger.error("Supabase Storage HTTP %s: %s", exc.code, body)
+        raise PhotoError(f"Erreur Supabase Storage ({exc.code}) : vérifiez que le bucket '{settings.supabase_storage_bucket}' existe et est public.") from exc
+    except urllib.error.URLError as exc:
+        logger.error("Supabase Storage unreachable: %s", exc.reason)
+        raise PhotoError("Impossible de joindre Supabase Storage pour enregistrer la photo.") from exc
+
+    return f"{base_url}/storage/v1/object/public/{bucket}/{object_name}"
+
+
+def delete_stored_photo(photo_url: str, upload_dir: Path) -> None:
+    """Supprime une photo sur Supabase Storage ou en local (best-effort)."""
+    if not photo_url:
+        return
+    if photo_url.startswith("/uploads/"):
+        filename = photo_url.rsplit("/", 1)[-1]
+        target = upload_dir / filename
+        if target.is_file():
+            target.unlink(missing_ok=True)
+        return
+
+    if not settings.supabase_storage_enabled:
+        return
+
+    base_url = settings.supabase_url.strip().rstrip("/")
+    bucket = settings.supabase_storage_bucket.strip()
+    prefix = f"{base_url}/storage/v1/object/public/{urllib.parse.quote(bucket, safe='')}/"
+    if not photo_url.startswith(prefix):
+        return
+
+    object_name = photo_url[len(prefix) :]
+    key = settings.supabase_service_role_key.strip()
+    delete_endpoint = f"{base_url}/storage/v1/object/{urllib.parse.quote(bucket, safe='')}/{object_name}"
+    req = urllib.request.Request(
+        delete_endpoint,
+        method="DELETE",
+        headers={"Authorization": f"Bearer {key}", "apikey": key},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except Exception as exc:
+        logger.warning("Suppression distante Supabase Storage ignorée (%s): %s", photo_url, exc)
+
+
 def save_photo_data_url(data_url: str, upload_dir: Path) -> str:
-    """Enregistre la photo et renvoie son URL publique (chemin relatif)."""
+    """Enregistre la photo (Supabase Storage si configuré, sinon disque local) et renvoie son URL."""
     raw, extension = decode_photo_data_url(data_url)
-    upload_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{uuid.uuid4().hex}.{extension}"
+
+    if settings.supabase_storage_enabled:
+        return _upload_to_supabase_storage(raw, extension, filename)
+
+    upload_dir.mkdir(parents=True, exist_ok=True)
     (upload_dir / filename).write_bytes(raw)
     return f"/uploads/{filename}"
 
