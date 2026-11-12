@@ -1,0 +1,28 @@
+# Blueprint Render pour l'API O.I.D (FastAPI + PostGIS sur Supabase).
+# Documentation : https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: oid-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Coller l'URL Supabase (Transaction Pooler ou Direct avec ?sslmode=require)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440"
+      - key: RATE_LIMIT
+        value: 5/minute
+      - key: DEBUG
+        value: "false"
+      - key: BASE_URL
+        sync: false # Ex: https://oid-api.onrender.com
+      - key: CORS_ORIGINS
+        sync: false # Ex: https://oid-abidjan.vercel.app
+

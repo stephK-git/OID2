@@ -14,7 +14,12 @@ class Signalement(Base):
     __tablename__ = "signalement"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    reference_suivi: Mapped[str] = mapped_column(String(64), unique=True, index=True, default=lambda: uuid.uuid4().hex)
+    reference_suivi: Mapped[str] = mapped_column(
+        String(64),
+        unique=True,
+        index=True,
+        default=lambda: f"OID-{datetime.utcnow().year}-{uuid.uuid4().hex[:6].upper()}",
+    )
     incident_id: Mapped[int | None] = mapped_column(ForeignKey("incident.id"), nullable=True)
     type: Mapped[str] = mapped_column(String(40))
     geom = mapped_column(Geometry("POINT", srid=4326))

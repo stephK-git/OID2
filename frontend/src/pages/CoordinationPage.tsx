@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { apiFetch, getToken } from '../api/client';
-import { IncidentsMap } from '../components/IncidentsMap';
+import { apiFetch, apiUrl, getToken } from '../api/client';
 import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
 import {
   SigAnalysisMap,
@@ -12,10 +11,6 @@ import {
   type IndiceVulnerabilite,
   type ZoneSilencieuse,
   type CommunesGeoJsonCollection,
-  type MaillesPopulationCollection,
-  type GetisOrdCollection,
-  type HexThematique,
-  type SigMetadata,
 } from '../components/SigAnalysisMap';
 
 interface StatsData {
@@ -124,7 +119,7 @@ interface UtilisateurItem {
   dossiers_actifs: number;
 }
 
-type CoordTab = 'kpis' | 'carte' | 'incidents' | 'analyses' | 'utilisateurs';
+type CoordTab = 'kpis' | 'carte' | 'incidents' | 'utilisateurs';
 type MapQuickFilter = 'tous' | 'danger' | 'ouverts' | 'evalues' | 'clotures';
 type IncidentStatusFilter = 'tous' | 'a_affecter' | 'ouverts' | 'affectes' | 'evalues' | 'clotures' | 'danger';
 type IncidentSortKey = 'priorite' | 'date';
@@ -289,8 +284,48 @@ const IncidentMiniMap: React.FC<{
   return <div ref={containerRef} style={{ height: '205px', width: '100%' }} />;
 };
 
+const EMPTY_HOTSPOTS: PointChaud[] = [];
+const EMPTY_VULNERABILITIES: IndiceVulnerabilite[] = [];
+const EMPTY_SILENT_ZONES: ZoneSilencieuse[] = [];
+const NOOP_HEX_THEME = () => {};
+
+const LiveClockDisplay: React.FC = () => {
+  const [clock, setClock] = useState<string>(() => {
+    return (
+      new Date().toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'UTC',
+      }) + ' UTC'
+    );
+  });
+
+  useEffect(() => {
+    const tick = () => {
+      setClock(
+        new Date().toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZone: 'UTC',
+        }) + ' UTC'
+      );
+    };
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <span className="ck" style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--tx2)' }}>
+      {clock}
+    </span>
+  );
+};
+
 export const CoordinationPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<CoordTab>('kpis');
+  const [isMapKpiSidebarOpen, setIsMapKpiSidebarOpen] = useState(true);
   const [stats, setStats] = useState<StatsData | null>(null);
   const [incidents, setIncidents] = useState<IncidentItem[]>([]);
   const [enqueteurs, setEnqueteurs] = useState<EnqueteurItem[]>([]);
@@ -298,16 +333,6 @@ export const CoordinationPage: React.FC = () => {
   const [utilisateurs, setUtilisateurs] = useState<UtilisateurItem[]>([]);
   const [carteGeoJson, setCarteGeoJson] = useState<any>(null);
   const [communesGeoJson, setCommunesGeoJson] = useState<CommunesGeoJsonCollection | null>(null);
-  const [maillesGeoJson, setMaillesGeoJson] = useState<MaillesPopulationCollection | null>(null);
-  const [getisOrdGeoJson, setGetisOrdGeoJson] = useState<GetisOrdCollection | null>(null);
-  const [hexThematique, setHexThematique] = useState<HexThematique>('densite');
-  const [sigMetadata, setSigMetadata] = useState<SigMetadata | null>(null);
-  const [selectedSigZoneId, setSelectedSigZoneId] = useState<number | ''>('');
-  const [pointsChauds, setPointsChauds] = useState<PointChaud[]>([]);
-  const [vulnerabilites, setVulnerabilites] = useState<IndiceVulnerabilite[]>([]);
-  const [zonesSilencieuses, setZonesSilencieuses] = useState<ZoneSilencieuse[]>([]);
-  const [sigFocusTarget, setSigFocusTarget] = useState<{ lat: number; lon: number; zoom?: number } | null>(null);
-  const [loadingAnalyses, setLoadingAnalyses] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -325,7 +350,7 @@ export const CoordinationPage: React.FC = () => {
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>('tous');
 
-  // Affectation modal / state (table rapide Onglet 1 + panneau Onglet 3)
+  // Affectation modal / state (table rapide Onglet 2 + panneau Onglet 3)
   const [affectingId, setAffectingId] = useState<number | null>(null);
   const [selectedEnqueteurId, setSelectedEnqueteurId] = useState<number | ''>('');
 
@@ -339,25 +364,37 @@ export const CoordinationPage: React.FC = () => {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [liveClock, setLiveClock] = useState<string>('--:--:-- UTC');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const tick = () => {
-      setLiveClock(
-        new Date().toLocaleTimeString('fr-FR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          timeZone: 'UTC',
-        }) + ' UTC'
-      );
-    };
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
+  const handleSelectMapCommune = useCallback((zid: number | '') => {
+    setMapCommuneFilter(zid ? String(zid) : 'all');
   }, []);
+
+  const carteFocusTarget = useMemo(() => {
+    if (!mapFocusIncidentId) return null;
+    const inc = incidents.find((i) => i.id === mapFocusIncidentId);
+    return inc?.coords ? { lat: inc.coords.lat, lon: inc.coords.lon, zoom: 15 } : null;
+  }, [mapFocusIncidentId, incidents]);
+
+  const enrichedCarteGeoJson = useMemo(() => {
+    if (!carteGeoJson || !carteGeoJson.features) return carteGeoJson;
+    const feats = carteGeoJson.features.map((feat: any) => {
+      if (feat.properties && feat.properties.zone_id != null) return feat;
+      const incItem = incidents.find((i) => i.id === feat.properties?.id);
+      if (incItem && incItem.zone_id != null) {
+        return {
+          ...feat,
+          properties: {
+            ...feat.properties,
+            zone_id: incItem.zone_id,
+          },
+        };
+      }
+      return feat;
+    });
+    return { ...carteGeoJson, features: feats };
+  }, [carteGeoJson, incidents]);
 
   const handleLogout = () => {
     logout();
@@ -378,6 +415,25 @@ export const CoordinationPage: React.FC = () => {
   const detailColRef = useRef<HTMLDivElement>(null);
   const queueListRef = useRef<HTMLDivElement>(null);
   const reopenInputRef = useRef<HTMLInputElement>(null);
+
+  const handleOpenIncidentFromMap = useCallback((id: number) => {
+    setIncidentFilter('tous');
+    setIncidentSearch('');
+    setSelectedIncidentId(id);
+    setActiveTab('incidents');
+    window.setTimeout(() => {
+      if (detailScrollRef.current) {
+        detailScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      if (queueListRef.current) {
+        const cardEl = queueListRef.current.querySelector(`[data-iid="${id}"]`) as HTMLElement | null;
+        cardEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      if (window.innerWidth < 1080 && detailColRef.current) {
+        detailColRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 120);
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -404,16 +460,20 @@ export const CoordinationPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [sData, iData, eData, zData] = await Promise.all([
+      const [sData, iData, eData, zData, commData] = await Promise.all([
         apiFetch<StatsData>('/coordination/stats'),
         apiFetch<IncidentItem[]>('/coordination/incidents'),
         apiFetch<EnqueteurItem[]>('/coordination/enqueteurs'),
         apiFetch<ZoneItem[]>('/coordination/zones'),
+        apiFetch<CommunesGeoJsonCollection>('/analyses/communes').catch(() => null),
       ]);
       setStats(sData);
       setIncidents(iData);
       setEnqueteurs(eData);
       setZones(zData);
+      if (commData) {
+        setCommunesGeoJson(commData);
+      }
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement des données.');
     } finally {
@@ -424,8 +484,16 @@ export const CoordinationPage: React.FC = () => {
   const loadCarte = async () => {
     setLoading(true);
     try {
-      const geo = await apiFetch<any>('/coordination/carte');
+      const [geo, commData] = await Promise.all([
+        apiFetch<any>('/coordination/carte'),
+        communesGeoJson
+          ? Promise.resolve(communesGeoJson)
+          : apiFetch<CommunesGeoJsonCollection>('/analyses/communes').catch(() => null),
+      ]);
       setCarteGeoJson(geo);
+      if (commData) {
+        setCommunesGeoJson(commData);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -442,93 +510,16 @@ export const CoordinationPage: React.FC = () => {
     }
   };
 
-  const buildMaillesUrl = (zoneFilter: number | '', thematique: HexThematique) => {
-    const thParam = thematique === 'getis_ord' ? 'densite' : thematique;
-    const params = new URLSearchParams({ thematique: thParam });
-    if (zoneFilter) params.set('zone_id', String(zoneFilter));
-    return `/analyses/mailles-population?${params.toString()}`;
-  };
-
-  const buildGetisUrl = (zoneFilter: number | '') => {
-    return zoneFilter ? `/analyses/getis-ord?zone_id=${zoneFilter}` : '/analyses/getis-ord';
-  };
-
-  const loadAnalyses = async (
-    zoneFilter: number | '' = selectedSigZoneId,
-    thematique: HexThematique = hexThematique
-  ) => {
-    setLoadingAnalyses(true);
-    try {
-      const maillesUrl = buildMaillesUrl(zoneFilter, thematique);
-      const getisUrl = buildGetisUrl(zoneFilter);
-      const [metaData, commData, mailleData, giData, pcData, vData, zsData, geoData] = await Promise.all([
-        apiFetch<SigMetadata>('/analyses/metadonnees'),
-        apiFetch<CommunesGeoJsonCollection>('/analyses/communes'),
-        apiFetch<MaillesPopulationCollection>(maillesUrl),
-        apiFetch<GetisOrdCollection>(getisUrl),
-        apiFetch<PointChaud[]>('/analyses/points-chauds'),
-        apiFetch<IndiceVulnerabilite[]>('/analyses/vulnerabilite'),
-        apiFetch<ZoneSilencieuse[]>('/analyses/zones-silencieuses'),
-        apiFetch<any>('/coordination/carte'),
-      ]);
-      setSigMetadata(metaData);
-      setCommunesGeoJson(commData);
-      setMaillesGeoJson(mailleData);
-      setGetisOrdGeoJson(giData);
-      setPointsChauds(pcData);
-      setVulnerabilites(vData);
-      setZonesSilencieuses(zsData);
-      setCarteGeoJson(geoData);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors du chargement des analyses spatiales.');
-    } finally {
-      setLoadingAnalyses(false);
-    }
-  };
-
   const handleRefreshAll = () => {
     loadData();
     if (activeTab === 'carte') loadCarte();
-    else if (activeTab === 'analyses') loadAnalyses(selectedSigZoneId, hexThematique);
     else if (activeTab === 'utilisateurs') loadUtilisateurs();
-  };
-
-  const handleSelectSigZone = async (zoneId: number | '') => {
-    setSelectedSigZoneId(zoneId);
-    if (!zoneId) {
-      setSigFocusTarget(null);
-    }
-    try {
-      const [mailleData, giData] = await Promise.all([
-        apiFetch<MaillesPopulationCollection>(buildMaillesUrl(zoneId, hexThematique)),
-        apiFetch<GetisOrdCollection>(buildGetisUrl(zoneId)),
-      ]);
-      setMaillesGeoJson(mailleData);
-      setGetisOrdGeoJson(giData);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors du filtrage communal du maillage.');
-    }
-  };
-
-  const handleChangeHexThematique = async (nextTheme: HexThematique) => {
-    setHexThematique(nextTheme);
-    if (nextTheme === 'getis_ord') return;
-    try {
-      const mailleData = await apiFetch<MaillesPopulationCollection>(
-        buildMaillesUrl(selectedSigZoneId, nextTheme)
-      );
-      setMaillesGeoJson(mailleData);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors du changement de thématique hexagonale.');
-    }
   };
 
   useEffect(() => {
     loadData();
     if (activeTab === 'carte') {
       loadCarte();
-    } else if (activeTab === 'analyses') {
-      loadAnalyses();
     } else if (activeTab === 'utilisateurs') {
       loadUtilisateurs();
     }
@@ -544,6 +535,7 @@ export const CoordinationPage: React.FC = () => {
       setAffectingId(null);
       setSelectedEnqueteurId('');
       loadData();
+      if (activeTab === 'carte') loadCarte();
     } catch (err: any) {
       alert(`Erreur d'affectation : ${err.message}`);
     }
@@ -554,6 +546,7 @@ export const CoordinationPage: React.FC = () => {
     try {
       await apiFetch(`/coordination/incidents/${incidentId}/cloturer`, { method: 'POST' });
       loadData();
+      if (activeTab === 'carte') loadCarte();
     } catch (err: any) {
       alert(`Erreur : ${err.message}`);
     }
@@ -568,6 +561,7 @@ export const CoordinationPage: React.FC = () => {
         body: JSON.stringify({ motif }),
       });
       loadData();
+      if (activeTab === 'carte') loadCarte();
     } catch (err: any) {
       alert(`Erreur : ${err.message}`);
     }
@@ -661,7 +655,7 @@ export const CoordinationPage: React.FC = () => {
 
   const downloadFile = (endpoint: string, filename: string) => {
     const token = getToken();
-    fetch(endpoint, {
+    fetch(apiUrl(endpoint), {
       headers: { Authorization: token ? `Bearer ${token}` : '' },
     })
       .then((res) => res.blob())
@@ -678,38 +672,6 @@ export const CoordinationPage: React.FC = () => {
   };
 
   // --- Métriques dérivées ---
-  const mapCounts = useMemo(() => {
-    const feats: any[] = carteGeoJson?.features || [];
-    return {
-      tous: feats.length,
-      danger: feats.filter((f) => f.properties?.danger_immediat).length,
-      ouverts: feats.filter((f) => ['ouvert', 'affecte', 'rouvert'].includes(f.properties?.statut)).length,
-      evalues: feats.filter((f) => f.properties?.statut === 'evalue').length,
-      clotures: feats.filter((f) => f.properties?.statut === 'cloture').length,
-    };
-  }, [carteGeoJson]);
-
-  const filteredCarteGeoJson = useMemo(() => {
-    if (!carteGeoJson) return null;
-    const q = mapSearchRef.trim().toLowerCase();
-    const feats = (carteGeoJson.features || []).filter((f: any) => {
-      const p = f.properties || {};
-      if (mapFilter === 'danger' && !p.danger_immediat) return false;
-      if (mapFilter === 'ouverts' && !['ouvert', 'affecte', 'rouvert'].includes(p.statut)) return false;
-      if (mapFilter === 'evalues' && p.statut !== 'evalue') return false;
-      if (mapFilter === 'clotures' && p.statut !== 'cloture') return false;
-      if (mapCommuneFilter !== 'all' && p.zone_id && String(p.zone_id) !== mapCommuneFilter) return false;
-      if (q) {
-        const refMatch = (p.reference_publique || '').toLowerCase().includes(q);
-        const idMatch = String(p.id).includes(q);
-        const typeMatch = (p.type || '').toLowerCase().includes(q);
-        if (!refMatch && !idMatch && !typeMatch) return false;
-      }
-      return true;
-    });
-    return { ...carteGeoJson, features: feats };
-  }, [carteGeoJson, mapFilter, mapCommuneFilter, mapSearchRef]);
-
   const topCriticalIncidents = useMemo(() => {
     return [...incidents]
       .filter((i) => i.statut !== 'cloture')
@@ -875,7 +837,7 @@ export const CoordinationPage: React.FC = () => {
     }
   };
 
-  // Pagination de la table dans l'onglet 1 (Vue Stratégique & Impact : 5 par page)
+  // Pagination de la table dans l'onglet 2 (Carte opérationnelle : 5 par page)
   const kpiPageSize = 5;
   const kpiTotalPages = Math.max(1, Math.ceil(filteredIncidents.length / kpiPageSize));
   const kpiPaginatedIncidents = useMemo(() => {
@@ -1045,11 +1007,6 @@ export const CoordinationPage: React.FC = () => {
           title: "Gestion Opérationnelle des Incidents",
           subtitle: "Triage, affectation des enquêteurs et suivi des résolutions",
         };
-      case 'analyses':
-        return {
-          title: "Analyses Décisionnelles & RETEX",
-          subtitle: "Modélisation spatiale, zones de vulnérabilité et retour d'expérience",
-        };
       case 'utilisateurs':
         return {
           title: "Comptes & Accréditations",
@@ -1118,7 +1075,7 @@ export const CoordinationPage: React.FC = () => {
               <span className="material-symbols-outlined">close</span>
               <span>Fermer l'aperçu</span>
             </button>
-            <img src={lightboxUrl} alt="Inspection plein écran du sinistre" />
+            <img src={apiUrl(lightboxUrl)} alt="Inspection plein écran du sinistre" />
           </div>
         </div>
       )}
@@ -1163,18 +1120,6 @@ export const CoordinationPage: React.FC = () => {
               <span className="nav-badge" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>
                 {filteredIncidents.length}
               </span>
-            </button>
-          </div>
-
-          <div className="nav-group">
-            <div className="nav-label">Analyses &amp; Retex</div>
-            <button
-              type="button"
-              className={`nav-item ${activeTab === 'analyses' ? 'actif' : ''}`}
-              onClick={() => setActiveTab('analyses')}
-            >
-              <span className="material-symbols-outlined">bar_chart</span>
-              <span>Analyses SIG &amp; RETEX</span>
             </button>
           </div>
 
@@ -1280,19 +1225,6 @@ export const CoordinationPage: React.FC = () => {
                     <span className="tag">CSV</span>
                     <b>Exporter le registre (Excel)</b>
                   </button>
-                  <hr />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      downloadFile('/analyses/retex.pdf', 'OID-RETEX-Post-Crise.pdf');
-                      setExportMenuOpen(false);
-                    }}
-                  >
-                    <span className="tag" style={{ color: 'var(--crit)', borderColor: 'var(--crit)' }}>
-                      RETEX
-                    </span>
-                    <b style={{ color: 'var(--crit)' }}>Rapport post-crise</b>
-                  </button>
                 </div>
               )}
             </div>
@@ -1313,9 +1245,7 @@ export const CoordinationPage: React.FC = () => {
             {/* Statut Vigilance & Heure */}
             <div className="status" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
               <VigilancePill />
-              <span className="ck" style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--tx2)' }}>
-                {liveClock}
-              </span>
+              <LiveClockDisplay />
             </div>
 
             <ThemeToggle />
@@ -1349,9 +1279,9 @@ export const CoordinationPage: React.FC = () => {
                   type="button"
                   className="btn btn-pri"
                   onClick={handleRefreshAll}
-                  disabled={loading || loadingAnalyses}
+                  disabled={loading}
                 >
-                  <svg className={`icon ${loading || loadingAnalyses ? 'spin' : ''}`}>
+                  <svg className={`icon ${loading ? 'spin' : ''}`}>
                     <use href="#i-refresh" />
                   </svg>
                   <span>Actualiser</span>
@@ -1465,9 +1395,243 @@ export const CoordinationPage: React.FC = () => {
                 </div>
               </div>
             </section>
+          </div>
+        </section>
+      )}
+
+        {/* ==========================================================================
+            ONGLET 2 : CARTE OPÉRATIONNELLE DES INCIDENTS (Mode Opérationnel SIG)
+           ========================================================================== */}
+        {activeTab === 'carte' && (
+          <div className="oid-coord-stack">
+            <div id="sig-op-map-anchor" className="oid-coord-sig-map-card oid-coord-map-with-sidebar">
+              {/* Panneau latéral rétractable des Indicateurs Stratégiques (250px) */}
+              <aside
+                className={`oid-map-kpi-sidebar ${!isMapKpiSidebarOpen ? 'is-collapsed' : ''}`}
+                aria-label="Indicateurs stratégiques opérationnels"
+              >
+                <div className="oid-map-kpi-sidebar-header">
+                  <div className="oid-map-kpi-sidebar-title-group">
+                    <div className="oid-map-kpi-sidebar-title">
+                      <span className="material-symbols-outlined" style={{ fontSize: '17px', color: '#00e5ff' }}>
+                        monitoring
+                      </span>
+                      <span>Indicateurs Stratégiques</span>
+                    </div>
+                    <span className="oid-map-kpi-sidebar-subtitle">Situation Opérationnelle · 24h</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMapKpiSidebarOpen(false)}
+                    className="oid-map-kpi-sidebar-toggle-btn"
+                    title="Replier le panneau des indicateurs (250px)"
+                    aria-label="Replier le panneau"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>chevron_left</span>
+                  </button>
+                </div>
+
+                <div className="oid-map-kpi-sidebar-content">
+                  {/* SECTION 1: KPIS OPÉRATIONNELS */}
+                  <div className="oid-map-kpi-sec">
+                    <div className="oid-map-kpi-sec-title">
+                      <span>Pilotage Opérationnel</span>
+                      <span className="oid-map-kpi-badge live">Live</span>
+                    </div>
+
+                    <div className="oid-map-kpi-items">
+                      {/* Total Incidents */}
+                      <div className="oid-map-kpi-card">
+                        <div className="oid-map-kpi-card-head">
+                          <span className="oid-map-kpi-card-label">Total incidents</span>
+                          <span className="oid-map-kpi-tag ok">24h</span>
+                        </div>
+                        <div className="oid-map-kpi-card-value">
+                          {stats?.incidents ?? incidents.length}
+                        </div>
+                        <span className="oid-map-kpi-card-hint">Tous statuts confondus</span>
+                      </div>
+
+                      {/* Incidents Ouverts */}
+                      <div className="oid-map-kpi-card highlight-crit">
+                        <div className="oid-map-kpi-card-head">
+                          <span className="oid-map-kpi-card-label">Incidents ouverts</span>
+                          <span className="oid-map-kpi-tag crit">actifs</span>
+                        </div>
+                        <div className="oid-map-kpi-card-value text-crit">
+                          {stats?.ouverts ?? 0}
+                        </div>
+                        <span className="oid-map-kpi-card-hint">En attente ou en enquête</span>
+                      </div>
+
+                      {/* Couverture Évaluations */}
+                      <div className="oid-map-kpi-card">
+                        <div className="oid-map-kpi-card-head">
+                          <span className="oid-map-kpi-card-label">Couverture éval.</span>
+                          <span className="oid-map-kpi-tag ok">cible 85%</span>
+                        </div>
+                        <div className="oid-map-kpi-card-value text-ok">
+                          {stats?.couverture ?? '0%'}
+                        </div>
+                        <span className="oid-map-kpi-card-hint">Dossiers avec évaluation</span>
+                      </div>
+
+                      {/* Retards SLA */}
+                      <div className="oid-map-kpi-card highlight-warn">
+                        <div className="oid-map-kpi-card-head">
+                          <span className="oid-map-kpi-card-label">Retards SLA</span>
+                          <span className="oid-map-kpi-tag warn">&gt; 2h</span>
+                        </div>
+                        <div className="oid-map-kpi-card-value text-warn">
+                          {stats?.retards_total ?? 0}
+                        </div>
+                        <span className="oid-map-kpi-card-hint">
+                          {stats?.retard_critique ?? 0} crit. · {stats?.retard_standard ?? 0} std
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION 2: BILAN HUMAIN SENDAI */}
+                  <div className="oid-map-kpi-sec">
+                    <div className="oid-map-kpi-sec-title">
+                      <span>Bilan Humain (Sendai)</span>
+                    </div>
+
+                    <div className="oid-map-kpi-impact-grid">
+                      <div className="oid-map-kpi-impact-chip">
+                        <div className="oid-map-kpi-impact-l">
+                          <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#38bdf8' }}>family_restroom</span>
+                          <span>Ménages</span>
+                        </div>
+                        <span className="oid-map-kpi-impact-v">{(stats?.menages_touches ?? 0).toLocaleString('fr-FR')}</span>
+                      </div>
+
+                      <div className="oid-map-kpi-impact-chip">
+                        <div className="oid-map-kpi-impact-l">
+                          <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#38bdf8' }}>groups</span>
+                          <span>Personnes</span>
+                        </div>
+                        <span className="oid-map-kpi-impact-v">{(stats?.personnes_affectees ?? 0).toLocaleString('fr-FR')}</span>
+                      </div>
+
+                      <div className="oid-map-kpi-impact-chip">
+                        <div className="oid-map-kpi-impact-l">
+                          <span className="material-symbols-outlined text-warn" style={{ fontSize: '15px' }}>personal_injury</span>
+                          <span>Blessés</span>
+                        </div>
+                        <span className="oid-map-kpi-impact-v text-warn">{(stats?.blesses ?? 0).toLocaleString('fr-FR')}</span>
+                      </div>
+
+                      <div className="oid-map-kpi-impact-chip">
+                        <div className="oid-map-kpi-impact-l">
+                          <span className="material-symbols-outlined text-warn" style={{ fontSize: '15px' }}>night_shelter</span>
+                          <span>Déplacés</span>
+                        </div>
+                        <span className="oid-map-kpi-impact-v text-warn">{(stats?.deplaces ?? 0).toLocaleString('fr-FR')}</span>
+                      </div>
+
+                      <div className="oid-map-kpi-impact-chip">
+                        <div className="oid-map-kpi-impact-l">
+                          <span className="material-symbols-outlined text-coral" style={{ fontSize: '15px' }}>person_search</span>
+                          <span>Disparus</span>
+                        </div>
+                        <span className="oid-map-kpi-impact-v text-coral">{String(stats?.disparus ?? 0).padStart(2, '0')}</span>
+                      </div>
+
+                      <div className="oid-map-kpi-impact-chip">
+                        <div className="oid-map-kpi-impact-l">
+                          <span className="material-symbols-outlined text-coral" style={{ fontSize: '15px' }}>sentiment_very_dissatisfied</span>
+                          <span>Décès</span>
+                        </div>
+                        <span className="oid-map-kpi-impact-v text-coral">{String(stats?.deces ?? 0).padStart(2, '0')}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+
+              {/* Conteneur de la Carte Leaflet */}
+              <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+                <SigAnalysisMap
+                  mode="operationnel"
+                  communesGeoJson={communesGeoJson}
+                  maillesGeoJson={null}
+                  getisOrdGeoJson={null}
+                  hexThematique="densite"
+                  onChangeHexThematique={NOOP_HEX_THEME}
+                  hotspots={EMPTY_HOTSPOTS}
+                  vulnerabilities={EMPTY_VULNERABILITIES}
+                  silentZones={EMPTY_SILENT_ZONES}
+                  incidentsGeoJson={enrichedCarteGeoJson}
+                  sigMetadata={null}
+                  selectedZoneId={mapCommuneFilter !== 'all' ? Number(mapCommuneFilter) : ''}
+                  onSelectZoneId={handleSelectMapCommune}
+                  statusFilter={mapFilter}
+                  onChangeStatusFilter={setMapFilter}
+                  searchRef={mapSearchRef}
+                  onChangeSearchRef={setMapSearchRef}
+                  focusTarget={carteFocusTarget}
+                  onOpenIncidentDetail={handleOpenIncidentFromMap}
+                  onToggleKpiSidebar={() => setIsMapKpiSidebarOpen((prev) => !prev)}
+                  isKpiSidebarOpen={isMapKpiSidebarOpen}
+                />
+              </div>
+            </div>
+
+            {/* Grille contextuelle rapide sous la carte : Accès direct aux 3 derniers incidents critiques */}
+            {topCriticalIncidents.length > 0 && (
+              <div className="oid-coord-alpha-grid">
+                {topCriticalIncidents.map((inc) => {
+                  const zoneName = zones.find((z) => z.id === inc.zone_id)?.nom || 'District Abidjan';
+                  return (
+                    <div key={inc.id} className="oid-coord-alpha-card">
+                      <div className="oid-coord-alpha-top">
+                        <div className="oid-coord-alpha-badge">
+                          <span
+                            className={`oid-dot ${inc.danger_immediat ? 'bg-coral pulse' : 'bg-cyan'}`}
+                          />
+                          <span className={inc.danger_immediat ? 'text-coral' : 'text-cyan'}>
+                            {inc.danger_immediat
+                              ? `URGENCE ALPHA #${inc.id}`
+                              : `INTERVENTION EN COURS #${inc.id}`}
+                          </span>
+                        </div>
+                        <span className="oid-coord-alpha-zone">{zoneName}</span>
+                      </div>
+
+                      <p className="oid-coord-alpha-title">
+                        {getIncidentTypeMeta(inc.type).title}
+                      </p>
+                      <p className="oid-coord-alpha-desc">
+                        {inc.description_synthese ||
+                          `Signalements regroupés sur ${zoneName}. Score de priorité: ${inc.score_priorite} pts.`}
+                      </p>
+
+                      <div className="oid-coord-alpha-foot">
+                        <span className="oid-coord-alpha-time">
+                          {formatRelativeTime(inc.cree_le)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMapFocusIncidentId(inc.id);
+                          }}
+                          className="oid-coord-locate-link"
+                          title="Localiser l'incident sur la carte"
+                        >
+                          <span className="material-symbols-outlined">my_location</span>
+                          <span>Localiser</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Table des incidents réels avec jauges physiques d'eau */}
-            <section>
+            <section style={{ padding: '0 20px 32px' }}>
               <div className="sec-head">
                 <div>
                   <div className="eyebrow">Tableau de bord opérationnel</div>
@@ -1602,140 +1766,6 @@ export const CoordinationPage: React.FC = () => {
                 </div>
               </div>
             </section>
-          </div>
-        </section>
-      )}
-
-        {/* ==========================================================================
-            ONGLET 2 : CARTE INTERACTIVE DES INCIDENTS (Intégration de CarteInteractive.html)
-           ========================================================================== */}
-        {activeTab === 'carte' && (
-          <div className="oid-coord-stack">
-            {/* Barre de Filtres Rapides */}
-            <div className="oid-coord-map-filterbar">
-              <div className="oid-coord-map-filters-left">
-                <div className="oid-coord-filter-chip">
-                  <span className="material-symbols-outlined">location_city</span>
-                  <select
-                    value={mapCommuneFilter}
-                    onChange={(e) => setMapCommuneFilter(e.target.value)}
-                    className="oid-coord-transparent-select"
-                    aria-label="Filtrer par commune"
-                  >
-                    <option value="all">District d'Abidjan (Toutes communes)</option>
-                    {zones.map((z) => (
-                      <option key={z.id} value={String(z.id)}>
-                        {z.nom}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="oid-coord-filter-chip">
-                  <span className="material-symbols-outlined">filter_alt</span>
-                  <select
-                    value={mapFilter}
-                    onChange={(e) => setMapFilter(e.target.value as MapQuickFilter)}
-                    className="oid-coord-transparent-select"
-                    aria-label="Filtrer par statut sur la carte"
-                  >
-                    <option value="tous">Tous les statuts ({mapCounts.tous})</option>
-                    <option value="danger">Danger immédiat ({mapCounts.danger})</option>
-                    <option value="ouverts">Ouverts &amp; Affectés ({mapCounts.ouverts})</option>
-                    <option value="evalues">Évalués ({mapCounts.evalues})</option>
-                    <option value="clotures">Clôturés ({mapCounts.clotures})</option>
-                  </select>
-                </div>
-
-                <div className="oid-coord-filter-chip search">
-                  <span className="material-symbols-outlined">search</span>
-                  <input
-                    type="text"
-                    value={mapSearchRef}
-                    onChange={(e) => setMapSearchRef(e.target.value)}
-                    placeholder="Réf. ex: OID-ABJ-2024..."
-                    className="oid-coord-map-search-input"
-                  />
-                </div>
-              </div>
-
-              {/* Légende Interactive */}
-              <div className="oid-coord-map-legend-strip">
-                <span className="oid-coord-legend-title">Légende :</span>
-                <div className="oid-coord-legend-item">
-                  <span className="oid-dot bg-coral pulse" />
-                  <span>Danger immédiat</span>
-                </div>
-                <div className="oid-coord-legend-item">
-                  <span className="oid-dot bg-cyan" />
-                  <span>Ouvert / Affecté</span>
-                </div>
-                <div className="oid-coord-legend-item">
-                  <span className="oid-dot bg-green" />
-                  <span>Évalué</span>
-                </div>
-                <div className="oid-coord-legend-item">
-                  <span className="oid-dot bg-slate" />
-                  <span>Clôturé</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Conteneur Carte Interactive Immersif Leaflet Tactique */}
-            <IncidentsMap
-              data={filteredCarteGeoJson}
-              focusIncidentId={mapFocusIncidentId}
-              totalCounts={mapCounts}
-            />
-
-            {/* Grille contextuelle rapide sous la carte : Accès direct aux 3 derniers incidents critiques */}
-            {topCriticalIncidents.length > 0 && (
-              <div className="oid-coord-alpha-grid">
-                {topCriticalIncidents.map((inc) => {
-                  const zoneName = zones.find((z) => z.id === inc.zone_id)?.nom || 'District Abidjan';
-                  return (
-                    <div key={inc.id} className="oid-coord-alpha-card">
-                      <div className="oid-coord-alpha-top">
-                        <div className="oid-coord-alpha-badge">
-                          <span
-                            className={`oid-dot ${inc.danger_immediat ? 'bg-coral pulse' : 'bg-cyan'}`}
-                          />
-                          <span className={inc.danger_immediat ? 'text-coral' : 'text-cyan'}>
-                            {inc.danger_immediat
-                              ? `URGENCE ALPHA #${inc.id}`
-                              : `INTERVENTION EN COURS #${inc.id}`}
-                          </span>
-                        </div>
-                        <span className="oid-coord-alpha-zone">{zoneName}</span>
-                      </div>
-
-                      <p className="oid-coord-alpha-title">
-                        {formatIncidentType(inc.type)} — Réf {inc.reference_publique.slice(0, 8).toUpperCase()}
-                      </p>
-                      <p className="oid-coord-alpha-desc">
-                        Statut : {inc.statut.toUpperCase()} · Créé le {formatShortDate(inc.cree_le)}
-                      </p>
-
-                      <div className="oid-coord-alpha-foot">
-                        <span className={inc.danger_immediat ? 'text-coral' : 'text-cyan'}>
-                          Priorité: {inc.score_priorite} pts
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setMapFocusIncidentId(inc.id)}
-                          className="oid-coord-locate-link"
-                        >
-                          <span>Localiser</span>
-                          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-                            near_me
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
 
@@ -2204,7 +2234,7 @@ export const CoordinationPage: React.FC = () => {
                                       onClick={() => setLightboxUrl(pMeta.url)}
                                       title="Cliquer pour agrandir"
                                     >
-                                      <img src={pMeta.url} alt={`Preuve visuelle #${idx + 1}`} />
+                                      <img src={apiUrl(pMeta.url)} alt={`Preuve visuelle #${idx + 1}`} />
                                       <div className="verif-photo-size">{pMeta.taille_formatee}</div>
                                     </div>
 
@@ -2422,16 +2452,18 @@ export const CoordinationPage: React.FC = () => {
                                   <span className="material-symbols-outlined">task_alt</span>
                                   <span>Clôturer l'incident #{selectedIncident.id}</span>
                                 </button>
-                                <a
-                                  href={`/incidents/${selectedIncident.id}`}
+                                <button
+                                  type="button"
+                                  onClick={() => window.print()}
                                   className="verif-btn-reject"
                                   style={{ textDecoration: 'none' }}
+                                  title="Imprimer ou exporter la fiche complète de l'incident"
                                 >
                                   <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                                    open_in_new
+                                    print
                                   </span>
-                                  <span>Fiche complète</span>
-                                </a>
+                                  <span>Imprimer fiche</span>
+                                </button>
                               </div>
                             </div>
                           )}
@@ -2486,401 +2518,7 @@ export const CoordinationPage: React.FC = () => {
         )}
 
         {/* ==========================================================================
-            ONGLET 4 : ANALYSES SPATIALES & RETEX (Intégration de AnalyseRetex.html)
-           ========================================================================== */}
-        {activeTab === 'analyses' && (
-          <div className="oid-coord-stack">
-            {/* 1. CARTE SIG INTERACTIVE MULTI-THÉMATIQUE */}
-            <div id="sig-map-anchor" className="oid-coord-sig-map-card">
-              <div className="oid-coord-sig-map-topbar">
-                <div className="oid-coord-panel-title-row">
-                  <span className="material-symbols-outlined text-cyan">layers</span>
-                  <h3>
-                    Cartographie Décisionnelle Multi-Thématique (WorldPop · Aléa MNT · Risque IV · Getis-Ord Gi*)
-                  </h3>
-                </div>
-                <div className="oid-coord-webgl-pill">
-                  <span className="oid-dot bg-mint pulse" />
-                  <span>Moteur WebGL Actif</span>
-                </div>
-              </div>
-
-              <SigAnalysisMap
-                communesGeoJson={communesGeoJson}
-                maillesGeoJson={maillesGeoJson}
-                getisOrdGeoJson={getisOrdGeoJson}
-                hexThematique={hexThematique}
-                onChangeHexThematique={handleChangeHexThematique}
-                hotspots={pointsChauds}
-                vulnerabilities={vulnerabilites}
-                silentZones={zonesSilencieuses}
-                incidentsGeoJson={carteGeoJson}
-                sigMetadata={sigMetadata}
-                selectedZoneId={selectedSigZoneId}
-                onSelectZoneId={handleSelectSigZone}
-                focusTarget={sigFocusTarget}
-              />
-            </div>
-
-            {/* 2. BANDEAU PHASE 3 — RÉFÉRENTIEL GÉOMATIQUE & GÉOSTATISTIQUE EPSG:32630 */}
-            <div className="oid-coord-retex-banner">
-              <div className="oid-coord-retex-banner-left">
-                <span className="oid-coord-phase-pill">
-                  Phase 3 — Référentiel Géomatique &amp; Géostatistique EPSG:32630
-                </span>
-                <h2>Analyses Spatiales Multi-Échelles &amp; RETEX Post-Crise</h2>
-                <p>
-                  Limites réelles des 13 communes d'Abidjan (OSM / OCHA COD-AB), maillage hexagonal de 300 m
-                  (EPSG:32630) croisant WorldPop 100 m, MNT (~38 m) et hydrographie, corridors PostGIS
-                  ST_ClusterDBSCAN + ST_ConcaveHull, autocorrélation Getis-Ord Gi*, indice multicritère Aléa ×
-                  Exposition × Vulnérabilité (Fisher-Jenks) et modèle de Poisson Observé / Attendu.
-                </p>
-              </div>
-              <div className="oid-coord-retex-banner-actions">
-                <button
-                  type="button"
-                  onClick={() => loadAnalyses(selectedSigZoneId, hexThematique)}
-                  disabled={loadingAnalyses}
-                  className="oid-coord-export-btn"
-                >
-                  <span className={`material-symbols-outlined text-cyan ${loadingAnalyses ? 'spin' : ''}`}>
-                    refresh
-                  </span>
-                  <span>Recalculer</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => downloadFile('/analyses/retex.pdf', 'OID-RETEX-Post-Crise.pdf')}
-                  className="oid-coord-retex-dl-btn"
-                >
-                  <span className="material-symbols-outlined">download</span>
-                  <span>Télécharger le RETEX (.PDF)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 3. SIG METADATA STRIP (4 Cartes) */}
-            <div className="oid-coord-kpi-grid">
-              <div className="oid-coord-sig-meta-card">
-                <span className="oid-coord-sig-meta-lbl">Projection métrique</span>
-                <strong className="text-cyan">
-                  {sigMetadata?.scr_calcul || 'EPSG:32630 (WGS 84 / UTM zone 30N)'}
-                </strong>
-              </div>
-              <div className="oid-coord-sig-meta-card">
-                <span className="oid-coord-sig-meta-lbl">Couverture administrative</span>
-                <strong>
-                  {sigMetadata
-                    ? `${sigMetadata.couverture_administrative.nb_communes} communes · ${sigMetadata.couverture_administrative.superficie_totale_km2.toLocaleString('fr-FR')} km²`
-                    : '13 communes · 2 119 km²'}
-                </strong>
-              </div>
-              <div className="oid-coord-sig-meta-card">
-                <span className="oid-coord-sig-meta-lbl">Maillage hexagonal actif</span>
-                <strong className="text-mint">
-                  {sigMetadata
-                    ? `${sigMetadata.maillage_hexagonal.nb_mailles_actives.toLocaleString('fr-FR')} mailles (${sigMetadata.maillage_hexagonal.cote_m} m · ${sigMetadata.maillage_hexagonal.superficie_unitaire_km2} km²)`
-                    : 'Maillage 300 m · 0,234 km²'}
-                </strong>
-              </div>
-              <div className="oid-coord-sig-meta-card">
-                <span className="oid-coord-sig-meta-lbl">Population WorldPop 100 m</span>
-                <strong className="text-sky">
-                  {sigMetadata
-                    ? `${Math.round(sigMetadata.couverture_administrative.population_totale_worldpop).toLocaleString('fr-FR')} hab.`
-                    : '5 342 000 hab.'}
-                </strong>
-              </div>
-            </div>
-
-            {/* 4. SECTION 1 : CORRIDORS D'INONDATION & HOTSPOTS (ST_ClusterDBSCAN + ST_ConcaveHull) */}
-            <div className="oid-coord-panel">
-              <div className="oid-coord-panel-head">
-                <div className="oid-coord-panel-title-row">
-                  <span className="material-symbols-outlined text-coral">hub</span>
-                  <div>
-                    <h3>Corridors d'Inondation &amp; Hotspots (ST_ClusterDBSCAN + ST_ConcaveHull)</h3>
-                    <p className="oid-coord-panel-sub">
-                      Agrégation spatio-temporelle continue des signalements validés et alertes capteurs.
-                    </p>
-                  </div>
-                </div>
-                <span className="oid-coord-corridor-count">
-                  {pointsChauds.length} corridor(s) prioritaire(s) actif(s)
-                </span>
-              </div>
-
-              <div className="oid-coord-table-wrap">
-                <table className="oid-coord-table">
-                  <thead>
-                    <tr>
-                      <th>Corridor &amp; Emprise</th>
-                      <th>Centroïde (WGS84 / UTM)</th>
-                      <th>Observations DBSCAN</th>
-                      <th>Dangers Vitaux</th>
-                      <th>Priorité Moy.</th>
-                      <th>Récurrence</th>
-                      <th>Typologies</th>
-                      <th style={{ textAlign: 'right' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pointsChauds.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="oid-coord-empty-row">
-                          Aucun corridor multi-observations (minpoints ≥ 2 sous 450 m) détecté actuellement.
-                        </td>
-                      </tr>
-                    ) : (
-                      pointsChauds.map((pt) => (
-                        <tr key={pt.cluster_id}>
-                          <td>
-                            <div className="oid-coord-corridor-name">
-                              <span
-                                className={`oid-dot ${
-                                  pt.danger_immediat_total > 0 ? 'bg-coral pulse' : 'bg-sky-strong'
-                                }`}
-                              />
-                              <strong>Corridor #{pt.cluster_id}</strong>
-                            </div>
-                            <div className="oid-coord-mono-sub">
-                              Emprise:{' '}
-                              {pt.superficie_cluster_km2 !== undefined
-                                ? `${pt.superficie_cluster_km2.toFixed(3)} km²`
-                                : '—'}
-                              {pt.perimetre_m !== undefined
-                                ? ` (Périmètre ${Math.round(pt.perimetre_m).toLocaleString('fr-FR')} m)`
-                                : ''}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="mono">
-                              {pt.centre.lat.toFixed(5)}, {pt.centre.lon.toFixed(5)}
-                            </div>
-                            {pt.centre.utm_e !== undefined && pt.centre.utm_n !== undefined && (
-                              <div className="oid-coord-mono-sub">
-                                E {Math.round(pt.centre.utm_e).toLocaleString('fr-FR')} m · N{' '}
-                                {Math.round(pt.centre.utm_n).toLocaleString('fr-FR')} m
-                              </div>
-                            )}
-                          </td>
-                          <td>
-                            <strong className="text-cyan">
-                              {pt.nombre_observations ?? pt.nombre_incidents} obs.
-                            </strong>{' '}
-                            <span className="oid-coord-mono-sub">
-                              ({pt.nombre_incidents} inc. · {pt.nombre_signalements ?? 0} sig.)
-                            </span>
-                          </td>
-                          <td>
-                            {pt.danger_immediat_total > 0 ? (
-                              <span className="oid-coord-prio-danger">
-                                {pt.danger_immediat_total} critique(s)
-                              </span>
-                            ) : (
-                              <span className="oid-coord-status-pill status-evalue">0 critique</span>
-                            )}
-                          </td>
-                          <td>
-                            <strong className={pt.score_moyen_priorite >= 80 ? 'text-coral' : 'text-sky'}>
-                              {pt.score_moyen_priorite} / 100
-                            </strong>
-                          </td>
-                          <td>
-                            <span
-                              className={`oid-coord-rec-pill ${
-                                pt.niveau_recurrence === 'critique' ? 'is-crit' : 'is-forte'
-                              }`}
-                            >
-                              {pt.niveau_recurrence}
-                            </span>
-                          </td>
-                          <td>{pt.types_dominants.map(formatIncidentType).join(', ')}</td>
-                          <td style={{ textAlign: 'right' }}>
-                            <div className="oid-coord-actions-group">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSigFocusTarget({ lat: pt.centre.lat, lon: pt.centre.lon, zoom: 15 });
-                                  document.getElementById('sig-map-anchor')?.scrollIntoView({ behavior: 'smooth' });
-                                }}
-                                className="oid-coord-btn-action neutral"
-                              >
-                                Localiser
-                              </button>
-                              <a
-                                href={`https://www.google.com/maps?q=${pt.centre.lat},${pt.centre.lon}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="oid-coord-btn-action primary"
-                                style={{ textDecoration: 'none' }}
-                              >
-                                GPS
-                              </a>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* 5. SECTION 2 : ZONES SILENCIEUSES DÉTECTÉES (Modèle de Poisson Observé Oᵢ vs Attendu Eᵢ) */}
-            <div className="oid-coord-panel">
-              <div className="oid-coord-panel-head">
-                <div className="oid-coord-panel-title-row">
-                  <span className="material-symbols-outlined text-mint">volume_off</span>
-                  <div>
-                    <h3>Zones Silencieuses Détectées (Modèle de Poisson Observé Oᵢ vs Attendu Eᵢ)</h3>
-                    <p className="oid-coord-panel-sub">
-                      Identification probabiliste des poches territoriales privées de communication ou isolées
-                      hydrauliquement.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {zonesSilencieuses.length === 0 ? (
-                <div className="oid-coord-empty-row">
-                  Aucune anomalie statistique de sous-signalement (Poisson Oᵢ / Eᵢ) détectée actuellement.
-                </div>
-              ) : (
-                <div className="oid-coord-silent-grid">
-                  {zonesSilencieuses.map((z) => {
-                    const isHigh = z.niveau_severite === 'haute';
-                    return (
-                      <div key={z.zone_id} className="oid-coord-silent-card">
-                        <div className="oid-coord-silent-head">
-                          <div>
-                            <h4>{z.zone_nom}</h4>
-                            <span className="oid-coord-mono-sub">
-                              Commune d'Abidjan · Surveillance télémétrique
-                            </span>
-                          </div>
-                          <span className={`oid-coord-silent-badge ${isHigh ? 'crit' : 'warn'}`}>
-                            {z.statut_alerte || (isHigh ? 'DÉFICIT STATISTIQUE ANORMAL' : 'VIGILANCE SOUS-SIGNALEMENT')}
-                          </span>
-                        </div>
-
-                        {z.observe !== undefined && z.attendu !== undefined && (
-                          <div className={`oid-coord-poisson-formula ${isHigh ? 'text-coral' : 'text-sky'}`}>
-                            Oᵢ = {z.observe} vs Eᵢ = {z.attendu.toFixed(2)} (
-                            {z.ecart_relatif_pct !== undefined && z.ecart_relatif_pct >= 0 ? '+' : ''}
-                            {z.ecart_relatif_pct?.toFixed(0)}%) · r_D = {z.residu_poisson?.toFixed(2)} · p ={' '}
-                            {z.p_value_poisson?.toFixed(3)}
-                          </div>
-                        )}
-
-                        <div className="oid-coord-silent-motif">
-                          <span className="oid-coord-silent-eyebrow">Motif d'alerte :</span>
-                          <p>{z.motif}</p>
-                        </div>
-
-                        <div className="oid-coord-silent-action">
-                          <div className="oid-coord-silent-action-head">
-                            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                              local_police
-                            </span>
-                            <span>Action opérationnelle requise :</span>
-                          </div>
-                          <p>{z.action_requise}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* 6. SECTION 3 : INDICE MULTICRITÈRE UNDRR PAR COMMUNE (13 Communes) */}
-            {vulnerabilites.length > 0 && (
-              <div className="oid-coord-panel">
-                <div className="oid-coord-panel-head">
-                  <div className="oid-coord-panel-title-row">
-                    <span className="material-symbols-outlined text-sky">analytics</span>
-                    <div>
-                      <h3>
-                        Indice Multicritère de Risque Communal (Aléa × Exposition × Vulnérabilité — 13 Communes)
-                      </h3>
-                      <p className="oid-coord-panel-sub">
-                        Classification par seuils naturels de Fisher-Jenks sur le référentiel EPSG:32630.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="oid-coord-table-wrap">
-                  <table className="oid-coord-table">
-                    <thead>
-                      <tr>
-                        <th>Commune (Code)</th>
-                        <th>Population WorldPop</th>
-                        <th>Aléa</th>
-                        <th>Exposition</th>
-                        <th>Vulnérabilité</th>
-                        <th>Indice IV (/100)</th>
-                        <th>Classe Jenks</th>
-                        <th style={{ textAlign: 'right' }}>Ciblage</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {vulnerabilites.map((v) => (
-                        <tr key={v.zone_id}>
-                          <td>
-                            <strong>{v.zone_nom}</strong>
-                            <div className="oid-coord-mono-sub">
-                              {v.code_adm} · {v.superficie_km2?.toFixed(1)} km²
-                            </div>
-                          </td>
-                          <td>
-                            <strong>{Math.round(v.population_totale || 0).toLocaleString('fr-FR')}</strong> hab.
-                          </td>
-                          <td>{v.score_alea?.toFixed(0) ?? '—'}/100</td>
-                          <td>{v.score_exposition?.toFixed(0) ?? '—'}/100</td>
-                          <td>{v.score_vulnerabilite_soc?.toFixed(0) ?? '—'}/100</td>
-                          <td>
-                            <strong className="text-cyan">{v.indice_vulnerabilite.toFixed(1)} / 100</strong>
-                          </td>
-                          <td>
-                            <span
-                              className={`oid-coord-rec-pill ${
-                                ['critique', 'eleve', 'forte'].includes((v.classe_risque || '').toLowerCase())
-                                  ? 'is-crit'
-                                  : 'is-forte'
-                              }`}
-                            >
-                              {v.classe_jenks_label || v.classe_risque}
-                            </span>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleSelectSigZone(v.zone_id);
-                                if (v.centre) {
-                                  setSigFocusTarget({ lat: v.centre.lat, lon: v.centre.lon, zoom: 13 });
-                                }
-                                document.getElementById('sig-map-anchor')?.scrollIntoView({ behavior: 'smooth' });
-                              }}
-                              className="oid-coord-btn-action neutral"
-                            >
-                              Maillage
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ==========================================================================
-            ONGLET 5 : GESTION DES COMPTES AGENTS
+            ONGLET 4 : GESTION DES COMPTES AGENTS
            ========================================================================== */}
         {activeTab === 'utilisateurs' && (
           <div className="oid-coord-stack">

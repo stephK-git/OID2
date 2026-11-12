@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Flame, VolumeX, Eye, MapPin, Grid, Layers, Compass as CompassIcon, Activity } from 'lucide-react';
+import { Flame, VolumeX, Eye, MapPin, Grid, Layers, Compass as CompassIcon, Activity, RotateCcw, Filter, Search, X, ChevronDown, BarChart2 } from 'lucide-react';
 
 export type HexThematique = 'densite' | 'alea' | 'vulnerabilite' | 'getis_ord';
 
@@ -159,7 +159,8 @@ export interface SigMetadata {
   maj_referentiel?: string | null;
 }
 
-interface SigAnalysisMapProps {
+export interface SigAnalysisMapProps {
+  mode?: 'analyse' | 'operationnel';
   communesGeoJson: CommunesGeoJsonCollection | null;
   maillesGeoJson: MaillesPopulationCollection | null;
   getisOrdGeoJson: GetisOrdCollection | null;
@@ -173,6 +174,14 @@ interface SigAnalysisMapProps {
   selectedZoneId: number | '';
   onSelectZoneId: (zoneId: number | '') => void;
   focusTarget?: { lat: number; lon: number; zoom?: number } | null;
+  statusFilter?: 'tous' | 'danger' | 'ouverts' | 'evalues' | 'clotures';
+  onChangeStatusFilter?: (status: any) => void;
+  searchRef?: string;
+  onChangeSearchRef?: (search: string) => void;
+  onRequestAssign?: (incidentId: number) => void;
+  onOpenIncidentDetail?: (incidentId: number) => void;
+  onToggleKpiSidebar?: () => void;
+  isKpiSidebarOpen?: boolean;
 }
 
 type BasemapKey = 'sobre' | 'hot' | 'osm' | 'topo';
@@ -280,7 +289,24 @@ function formatNumberFr(val: number, decimals = 0): string {
   });
 }
 
+/**
+ * Cadrage sur l'emprise du District d'Abidjan avec un cran de zoom supplémentaire (+1),
+ * correspondant exactement à un cadrage complet suivi d'un clic sur le bouton « + ».
+ */
+function fitDistrictBoundsWithPlusOne(
+  map: L.Map,
+  bounds: L.LatLngBounds | null | undefined,
+  animate = true
+): void {
+  if (!bounds || !bounds.isValid()) return;
+  map.invalidateSize(false);
+  const baseZoom = Math.min(12, map.getBoundsZoom(bounds, false, L.point(44, 44)));
+  const targetZoom = Math.min(map.getMaxZoom() || 18, baseZoom + 1);
+  map.setView(bounds.getCenter(), targetZoom, { animate });
+}
+
 export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
+  mode = 'analyse',
   communesGeoJson,
   maillesGeoJson,
   getisOrdGeoJson,
@@ -294,11 +320,109 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
   selectedZoneId,
   onSelectZoneId,
   focusTarget,
+  statusFilter = 'tous',
+  onChangeStatusFilter,
+  searchRef = '',
+  onChangeSearchRef,
+  onRequestAssign,
+  onOpenIncidentDetail,
+  onToggleKpiSidebar,
+  isKpiSidebarOpen,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
+  const svgRendererRef = useRef<L.SVG | null>(null);
+  const hasInitialFitRef = useRef<boolean>(false);
+  const openIncidentIdRef = useRef<number | null>(null);
+  const selectedZoneIdRef = useRef<number | ''>(selectedZoneId);
+  const prevSelectedZoneIdRef = useRef<number | ''>(selectedZoneId);
+  const onSelectZoneIdRef = useRef<(zid: number | '') => void>(onSelectZoneId);
+  const onOpenIncidentDetailRef = useRef<((id: number) => void) | undefined>(onOpenIncidentDetail);
+  const incidentsGeoJsonRef = useRef(incidentsGeoJson);
+  const activeCommunePopupRef = useRef<L.Popup | null>(null);
+  const lastLayerClickTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    selectedZoneIdRef.current = selectedZoneId;
+    onSelectZoneIdRef.current = onSelectZoneId;
+    incidentsGeoJsonRef.current = incidentsGeoJson;
+    onOpenIncidentDetailRef.current = onOpenIncidentDetail;
+  }, [selectedZoneId, onSelectZoneId, incidentsGeoJson, onOpenIncidentDetail]);
+
+  // Interception universelle des clics sur les boutons d'action des popups Leaflet
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    const handleContainerClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement)?.closest('[data-incident-action="open-dossier"]') as HTMLElement | null;
+      if (target) {
+        e.preventDefault();
+        e.stopPropagation();
+        const incId = Number(target.getAttribute('data-incident-id'));
+        if (incId) {
+          if (onOpenIncidentDetailRef.current) {
+            onOpenIncidentDetailRef.current(incId);
+          } else if (onRequestAssign) {
+            onRequestAssign(incId);
+          }
+        }
+      }
+    };
+
+    container.addEventListener('click', handleContainerClick);
+    return () => {
+      container.removeEventListener('click', handleContainerClick);
+    };
+  }, [onRequestAssign]);
+
+  const [isLayersDrawerOpen, setIsLayersDrawerOpen] = useState(false);
+  const [isFiltersDrawerOpen, setIsFiltersDrawerOpen] = useState(false);
+  const [statusCollapseOpen, setStatusCollapseOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const filtersDrawerRef = useRef<HTMLDivElement>(null);
+
+  // Fermeture des volets au clic en dehors
+  useEffect(() => {
+    if (!isLayersDrawerOpen && !isFiltersDrawerOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        isLayersDrawerOpen &&
+        drawerRef.current &&
+        !drawerRef.current.contains(target) &&
+        !target.closest('.oid-map-layers-toggle-btn')
+      ) {
+        setIsLayersDrawerOpen(false);
+      }
+      if (
+        isFiltersDrawerOpen &&
+        filtersDrawerRef.current &&
+        !filtersDrawerRef.current.contains(target) &&
+        !target.closest('.oid-map-filters-toggle-btn')
+      ) {
+        setIsFiltersDrawerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isLayersDrawerOpen, isFiltersDrawerOpen]);
+
+  const handleToggleLayersDrawer = () => {
+    setIsLayersDrawerOpen((prev) => {
+      if (!prev) setIsFiltersDrawerOpen(false);
+      return !prev;
+    });
+  };
+
+  const handleToggleFiltersDrawer = () => {
+    setIsFiltersDrawerOpen((prev) => {
+      if (!prev) setIsLayersDrawerOpen(false);
+      return !prev;
+    });
+  };
 
   // Groupes de couches ordonnés (du fond thématique vers les ponctuels d'alerte)
   const maillesLayerRef = useRef<L.LayerGroup>(L.layerGroup());
@@ -308,11 +432,11 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
   const incidentsLayerRef = useRef<L.LayerGroup>(L.layerGroup());
 
   const [basemap, setBasemap] = useState<BasemapKey>('sobre');
-  const [showMaillesPop, setShowMaillesPop] = useState(true);
+  const [showMaillesPop, setShowMaillesPop] = useState(mode !== 'operationnel');
   const [showCommunes, setShowCommunes] = useState(true);
   const [communeChoropleth, setCommuneChoropleth] = useState<'contour' | 'vulnerabilite'>('contour');
-  const [showHotspots, setShowHotspots] = useState(true);
-  const [showSilent, setShowSilent] = useState(true);
+  const [showHotspots, setShowHotspots] = useState(mode !== 'operationnel');
+  const [showSilent, setShowSilent] = useState(mode !== 'operationnel');
   const [showIncidents, setShowIncidents] = useState(true);
 
   const [cursorCoords, setCursorCoords] = useState<{
@@ -335,7 +459,15 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
         attributionControl: true,
         preferCanvas: true,
         renderer: canvasRenderer,
+        closePopupOnClick: false,
       }).setView([5.36, -4.01], 11);
+
+      // Panneau dédié aux incidents avec z-index prioritaire pour garantir la visibilité au-dessus des polygones
+      if (!map.getPane('incidentsPane')) {
+        const incidentPane = map.createPane('incidentsPane');
+        incidentPane.style.zIndex = '620';
+      }
+      svgRendererRef.current = L.svg({ pane: 'incidentsPane' });
 
       const bm = BASEMAPS[basemap];
       tileLayerRef.current = L.tileLayer(bm.url, {
@@ -344,12 +476,12 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
         className: bm.tileClassName || '',
       }).addTo(map);
 
-      // Barre d'échelle métrique réglementaire (sans unités impériales)
+      // Barre d'échelle métrique réglementaire compacte (sans unités impériales)
       L.control
         .scale({
           metric: true,
           imperial: false,
-          maxWidth: 160,
+          maxWidth: 85,
           position: 'bottomleft',
         })
         .addTo(map);
@@ -371,10 +503,39 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
         });
       });
 
+      // Clic dans le vide de la carte (ex: lagune ou hors commune) : réinitialise le zoom vers le cadrage district
+      map.on('click', () => {
+        if (Date.now() - lastLayerClickTimeRef.current < 250) {
+          return;
+        }
+        if (mode === 'operationnel') {
+          if (activeCommunePopupRef.current) {
+            map.closePopup(activeCommunePopupRef.current);
+            activeCommunePopupRef.current = null;
+          }
+          if (selectedZoneIdRef.current !== '') {
+            selectedZoneIdRef.current = '';
+            onSelectZoneIdRef.current('');
+          }
+        }
+      });
+
       mapInstanceRef.current = map;
     }
 
+    // Observation automatique du redimensionnement du conteneur (ex: repli/dépli du volet 250px)
+    let resizeObserver: ResizeObserver | null = null;
+    if (mapContainerRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        mapInstanceRef.current?.invalidateSize();
+      });
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
     return () => {
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -405,7 +566,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
         duration: 1.1,
       });
     }
-  }, [focusTarget]);
+  }, [focusTarget?.lat, focusTarget?.lon, focusTarget?.zoom]);
 
   // 4. Rendu Canvas du maillage hexagonal 300 m (Densité / Aléa / Risque IV / Getis-Ord Gi*)
   useEffect(() => {
@@ -524,18 +685,18 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
           return {
             renderer,
             fillColor: vuln.couleur,
-            fillOpacity: showMaillesPop ? 0.2 : 0.52,
-            color: isSelected ? '#0284c7' : '#0f172a',
-            weight: isSelected ? 3.2 : 1.8,
+            fillOpacity: isSelected ? 0.45 : showMaillesPop ? 0.2 : 0.52,
+            color: isSelected ? '#8b5cf6' : '#0f172a',
+            weight: isSelected ? 3.8 : 1.8,
           };
         }
 
         return {
           renderer,
-          fillColor: '#0f172a',
-          fillOpacity: isSelected ? 0.06 : 0.01,
-          color: isSelected ? '#0284c7' : '#0f172a',
-          weight: isSelected ? 3.2 : 1.7,
+          fillColor: isSelected ? '#8b5cf6' : '#0f172a',
+          fillOpacity: isSelected ? 0.14 : 0.02,
+          color: isSelected ? '#7c3aed' : '#0f172a',
+          weight: isSelected ? 3.6 : 1.7,
         };
       },
       onEachFeature: (feature, layer) => {
@@ -563,168 +724,519 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
             <span style="color: #64748b; font-size: 11px;">Source : ${p.source_geom}</span>
           </div>
         `;
-        layer.bindPopup(popupHtml);
-        layer.bindTooltip(`${p.nom} (${formatNumberFr(p.densite_hab_km2, 0)} hab./km²)`, {
+        if (mode !== 'operationnel') {
+          layer.bindPopup(popupHtml);
+        }
+        // En mode opérationnel : affichage strict du nom de la commune au survol (sans densité)
+        layer.bindTooltip(mode === 'operationnel' ? p.nom : `${p.nom} (${formatNumberFr(p.densite_hab_km2, 0)} hab./km²)`, {
           sticky: true,
           direction: 'top',
+        });
+
+        // Gestion du clic communal :
+        // - En mode opérationnel :
+        //   1er clic : Sélection et cadrage/zoom sur la commune (sans popup, tous les incidents restent visibles)
+        //   2ème clic : Affichage du mini-rapport opérationnel des incidents de la commune (avec détails)
+        //   3ème clic sur un espace de la même commune : Fermeture du popup, désélection et dézoom vers la vue district (cadrage initial)
+        // - En mode analyse : sélection et affichage de la fiche d'analyse
+        layer.on('click', (e: L.LeafletMouseEvent) => {
+          lastLayerClickTimeRef.current = Date.now();
+          L.DomEvent.stopPropagation(e);
+          if (e.originalEvent) {
+            e.originalEvent.stopPropagation();
+          }
+
+          if (mode === 'operationnel') {
+            const currentSelected = selectedZoneIdRef.current;
+            const isSameZone = currentSelected !== '' && Number(currentSelected) === Number(p.zone_id);
+            const isPopupOpen = Boolean(activeCommunePopupRef.current && map.hasLayer(activeCommunePopupRef.current));
+
+            if (!isSameZone) {
+              // 1er CLIC : Sélection et zoom sur la commune (sans popup)
+              if (activeCommunePopupRef.current) {
+                map.closePopup(activeCommunePopupRef.current);
+                activeCommunePopupRef.current = null;
+              }
+              selectedZoneIdRef.current = p.zone_id;
+              onSelectZoneId(p.zone_id);
+            } else if (!isPopupOpen) {
+              // 2ème CLIC : Affichage du mini-rapport opérationnel des incidents de la commune
+              const allIncs: any[] = incidentsGeoJsonRef.current?.features || [];
+              const zoneIncs = allIncs.filter(
+                (f: any) => f.properties?.zone_id && Number(f.properties.zone_id) === Number(p.zone_id)
+              );
+              const nbTotal = zoneIncs.length;
+              const nbDanger = zoneIncs.filter((f: any) => f.properties?.danger_immediat).length;
+              const nbOuverts = zoneIncs.filter(
+                (f: any) => ['ouvert', 'rouvert'].includes(f.properties?.statut) && !f.properties?.enqueteur_id
+              ).length;
+              const nbAffectes = zoneIncs.filter(
+                (f: any) =>
+                  f.properties?.statut === 'affecte' ||
+                  (['ouvert', 'rouvert'].includes(f.properties?.statut) && f.properties?.enqueteur_id)
+              ).length;
+              const nbEvalues = zoneIncs.filter((f: any) => f.properties?.statut === 'evalue').length;
+              const nbClotures = zoneIncs.filter((f: any) => f.properties?.statut === 'cloture').length;
+
+              const opPopupHtml = `
+                <div style="font-family: var(--font); color: var(--tx); background: var(--s1); border: 1px solid rgba(139, 92, 246, 0.5); border-radius: var(--r-md); padding: 14px; min-width: 260px; box-shadow: 0 12px 32px var(--shadow);">
+                  <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line);">
+                    <div>
+                      <div style="font-weight: 800; font-size: 15px; color: var(--tx);">Commune : ${p.nom}</div>
+                      <div style="font-family: var(--mono); font-size: 10.5px; color: var(--tx3);">${p.code_adm || 'District Autonome'}</div>
+                    </div>
+                    <span style="font-family: var(--mono); font-size: 11px; font-weight: 700; background: rgba(139, 92, 246, 0.16); border: 1px solid rgba(139, 92, 246, 0.35); padding: 3px 8px; border-radius: 6px; color: #c084fc;">
+                      ${nbTotal} dossier${nbTotal > 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  ${
+                    nbDanger > 0
+                      ? `<div style="margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); color: #ef4444; font-family: var(--mono); font-size: 11px; font-weight: 700;">
+                          ⚠ ${nbDanger} DANGER${nbDanger > 1 ? 'S' : ''} IMMÉDIAT${nbDanger > 1 ? 'S' : ''} DÉCLARÉ${nbDanger > 1 ? 'S' : ''}
+                        </div>`
+                      : ''
+                  }
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-family: var(--mono); font-size: 11px;">
+                    <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
+                      <div style="font-size: 9.5px; color: var(--tx3);">OUVERTS (À AFFECTER)</div>
+                      <div style="font-weight: 700; color: #00e5ff; margin-top: 2px;">${nbOuverts}</div>
+                    </div>
+                    <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
+                      <div style="font-size: 9.5px; color: var(--tx3);">AFFECTÉS (EN COURS)</div>
+                      <div style="font-weight: 700; color: #38bdf8; margin-top: 2px;">${nbAffectes}</div>
+                    </div>
+                    <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
+                      <div style="font-size: 9.5px; color: var(--tx3);">ÉVALUÉS (TERRAIN)</div>
+                      <div style="font-weight: 700; color: #10b981; margin-top: 2px;">${nbEvalues}</div>
+                    </div>
+                    <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
+                      <div style="font-size: 9.5px; color: var(--tx3);">CLÔTURÉS</div>
+                      <div style="font-weight: 700; color: #64748b; margin-top: 2px;">${nbClotures}</div>
+                    </div>
+                  </div>
+
+                  <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--tx2); display: flex; justify-content: space-between;">
+                    <span>Population : ${formatNumberFr(p.population_totale, 0)} hab.</span>
+                    <span>${formatNumberFr(p.superficie_km2, 1)} km²</span>
+                  </div>
+                </div>
+              `;
+
+              const popup = L.popup({
+                className: 'oid-tactical-leaflet-popup',
+                autoClose: true,
+                closeOnClick: false,
+                autoPan: true,
+                autoPanPadding: [24, 24],
+              })
+                .setLatLng(e.latlng)
+                .setContent(opPopupHtml)
+                .openOn(map);
+
+              activeCommunePopupRef.current = popup;
+              popup.on('remove', () => {
+                if (activeCommunePopupRef.current === popup) {
+                  activeCommunePopupRef.current = null;
+                }
+              });
+            } else {
+              // 3ème CLIC : Clic sur un espace de la même commune alors que le popup est ouvert
+              // -> Fermeture du popup, désélection et dézoom vers la vue district (cadrage initial)
+              if (activeCommunePopupRef.current) {
+                map.closePopup(activeCommunePopupRef.current);
+                activeCommunePopupRef.current = null;
+              }
+              selectedZoneIdRef.current = '';
+              onSelectZoneId('');
+            }
+          } else {
+            // Mode analyse : bascule de sélection
+            if (selectedZoneId === p.zone_id) {
+              onSelectZoneId('');
+            } else {
+              onSelectZoneId(p.zone_id);
+            }
+          }
+        });
+
+        layer.on('mouseover', (e: any) => {
+          if (e.target?._path) {
+            e.target._path.style.cursor = 'pointer';
+          }
         });
       },
     });
 
     communesLayerRef.current.addLayer(commLayer);
 
-    if (selectedZoneId === '' && !focusTarget && commLayer.getBounds().isValid()) {
-      map.fitBounds(commLayer.getBounds(), { padding: [20, 20], maxZoom: 12 });
+    // Cadrage initial unique sur tout le District + 1 cran de zoom en mode opérationnel (ne se ré-exécute pas pour ne pas fermer les popups ouvertes)
+    if (!hasInitialFitRef.current && commLayer.getBounds().isValid()) {
+      hasInitialFitRef.current = true;
+      if (mode === 'operationnel') {
+        fitDistrictBoundsWithPlusOne(map, commLayer.getBounds(), false);
+      } else {
+        map.fitBounds(commLayer.getBounds(), { padding: [20, 20], maxZoom: 12 });
+      }
     }
-  }, [showCommunes, communeChoropleth, showMaillesPop, communesGeoJson, vulnerabilities, selectedZoneId]);
+  }, [showCommunes, communeChoropleth, showMaillesPop, communesGeoJson, vulnerabilities, mode, selectedZoneId]);
 
-  // 6. Couches opérationnelles (Corridors ST_ClusterDBSCAN + ST_ConcaveHull, Zones silencieuses Poisson, Incidents)
+  const getDistrictBounds = (): L.LatLngBounds | null => {
+    const coords: L.LatLng[] = [];
+    communesLayerRef.current.eachLayer((group: any) => {
+      if (group.eachLayer) {
+        group.eachLayer((l: any) => {
+          if (l.getBounds && l.getBounds().isValid()) {
+            coords.push(l.getBounds().getSouthWest());
+            coords.push(l.getBounds().getNorthEast());
+          }
+        });
+      }
+    });
+    if (coords.length > 0) {
+      return L.latLngBounds(coords);
+    }
+    if (communesGeoJson && communesGeoJson.features?.length) {
+      const tempLayer = L.geoJSON(communesGeoJson as any);
+      if (tempLayer.getBounds().isValid()) {
+        return tempLayer.getBounds();
+      }
+    }
+    return null;
+  };
+
+  // Zoom dynamique lors de la sélection explicite d'une commune dans le sélecteur ou sur la carte
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const prevZoneId = prevSelectedZoneIdRef.current;
+    prevSelectedZoneIdRef.current = selectedZoneId;
+
+    if (selectedZoneId === '') {
+      if (activeCommunePopupRef.current) {
+        map.closePopup(activeCommunePopupRef.current);
+        activeCommunePopupRef.current = null;
+      }
+      if (hasInitialFitRef.current && prevZoneId !== '') {
+        const bounds = getDistrictBounds();
+        if (bounds) {
+          if (mode === 'operationnel') {
+            fitDistrictBoundsWithPlusOne(map, bounds, true);
+          } else {
+            map.fitBounds(bounds, { padding: [20, 20], maxZoom: 12 });
+          }
+        }
+      }
+      return;
+    }
+    let foundBounds: L.LatLngBounds | null = null;
+    communesLayerRef.current.eachLayer((group: any) => {
+      if (group.eachLayer) {
+        group.eachLayer((l: any) => {
+          if (l.feature?.properties?.zone_id === Number(selectedZoneId)) {
+            if (l.getBounds && l.getBounds().isValid()) {
+              foundBounds = l.getBounds();
+            }
+          }
+        });
+      }
+    });
+    if (foundBounds) {
+      map.fitBounds(foundBounds, { padding: [28, 28], maxZoom: 14 });
+    }
+  }, [selectedZoneId, mode]);
+
+  const handleFitDistrict = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (activeCommunePopupRef.current) {
+      map.closePopup(activeCommunePopupRef.current);
+      activeCommunePopupRef.current = null;
+    }
+    prevSelectedZoneIdRef.current = '';
+    selectedZoneIdRef.current = '';
+    onSelectZoneId('');
+    const bounds = getDistrictBounds();
+    if (bounds) {
+      fitDistrictBoundsWithPlusOne(map, bounds, true);
+    }
+  };
+
+  // 6. Rendu des Corridors d'Inondation & Hotspots (ST_ClusterDBSCAN + ST_ConcaveHull)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
     const renderer = canvasRendererRef.current || undefined;
-
     hotspotsLayerRef.current.clearLayers();
-    if (showHotspots) {
-      hotspots.forEach((h) => {
-        const color =
-          h.niveau_recurrence === 'critique'
-            ? '#dc2626'
-            : h.niveau_recurrence === 'forte'
-            ? '#ea580c'
-            : '#d97706';
+    if (!showHotspots) return;
 
-        const utmLine =
-          h.centre.utm_e && h.centre.utm_n
-            ? `<b>Centroïde UTM 30N :</b> E ${formatNumberFr(h.centre.utm_e, 0)} m · N ${formatNumberFr(h.centre.utm_n, 0)} m<br/>`
-            : '';
+    hotspots.forEach((h) => {
+      const color =
+        h.niveau_recurrence === 'critique'
+          ? '#dc2626'
+          : h.niveau_recurrence === 'forte'
+          ? '#ea580c'
+          : '#d97706';
 
-        const areaLine =
-          h.superficie_cluster_km2 !== undefined
-            ? `<b>Emprise concave (UTM 30N) :</b> ${formatNumberFr(h.superficie_cluster_km2, 3)} km² (périmètre ${formatNumberFr(h.perimetre_m ?? 0, 0)} m)<br/>`
-            : '';
+      const utmLine =
+        h.centre.utm_e && h.centre.utm_n
+          ? `<b>Centroïde UTM 30N :</b> E ${formatNumberFr(h.centre.utm_e, 0)} m · N ${formatNumberFr(h.centre.utm_n, 0)} m<br/>`
+          : '';
 
-        const obsLine =
-          h.nombre_observations !== undefined
-            ? `<b>Observations DBSCAN :</b> ${h.nombre_observations} (${h.nombre_incidents} incident(s), ${h.nombre_signalements ?? 0} signalement(s))<br/>`
-            : `<b>Incidents agrégés :</b> ${h.nombre_incidents}<br/>`;
+      const areaLine =
+        h.superficie_cluster_km2 !== undefined
+          ? `<b>Emprise concave (UTM 30N) :</b> ${formatNumberFr(h.superficie_cluster_km2, 3)} km² (périmètre ${formatNumberFr(h.perimetre_m ?? 0, 0)} m)<br/>`
+          : '';
 
-        const popupHtml = `
-          <div style="font-family: var(--font); font-size: 12.5px; line-height: 1.45; min-width: 235px;">
-            <strong style="font-size: 13.5px; color: ${color};">Corridor DBSCAN #${h.cluster_id} (${h.niveau_recurrence.toUpperCase()})</strong><br/>
-            <span style="color: var(--tx2); font-size: 11px;">${h.algorithme || 'ST_ClusterDBSCAN + ST_ConcaveHull (EPSG:32630)'}</span>
-            <hr style="margin: 5px 0; border: none; border-top: 1px solid var(--line);"/>
-            ${utmLine}
-            ${areaLine}
-            ${obsLine}
-            <b>Priorité moyenne :</b> ${h.score_moyen_priorite} / 100<br/>
-            <b>Typologies :</b> ${h.types_dominants.join(', ')}
-          </div>
-        `;
+      const obsLine =
+        h.nombre_observations !== undefined
+          ? `<b>Observations DBSCAN :</b> ${h.nombre_observations} (${h.nombre_incidents} incident(s), ${h.nombre_signalements ?? 0} signalement(s))<br/>`
+          : `<b>Incidents agrégés :</b> ${h.nombre_incidents}<br/>`;
 
-        // Polygone organique issu de PostGIS ST_ConcaveHull (zéro disque fixe de 600 m)
-        if (h.emprise_geojson) {
-          const hullLayer = L.geoJSON(h.emprise_geojson as any, {
-            style: () => ({
-              renderer,
-              fillColor: color,
-              fillOpacity: 0.28,
-              color,
-              weight: 2.6,
-              dashArray: '6, 4',
-            }),
-          });
-          hullLayer.bindPopup(popupHtml);
-          hotspotsLayerRef.current.addLayer(hullLayer);
-        }
+      const popupHtml = `
+        <div style="font-family: var(--font); font-size: 12.5px; line-height: 1.45; min-width: 235px;">
+          <strong style="font-size: 13.5px; color: ${color};">Corridor DBSCAN #${h.cluster_id} (${h.niveau_recurrence.toUpperCase()})</strong><br/>
+          <span style="color: var(--tx2); font-size: 11px;">${h.algorithme || 'ST_ClusterDBSCAN + ST_ConcaveHull (EPSG:32630)'}</span>
+          <hr style="margin: 5px 0; border: none; border-top: 1px solid var(--line);"/>
+          ${utmLine}
+          ${areaLine}
+          ${obsLine}
+          <b>Priorité moyenne :</b> ${h.score_moyen_priorite} / 100<br/>
+          <b>Typologies :</b> ${h.types_dominants.join(', ')}
+        </div>
+      `;
 
-        const marker = L.circleMarker([h.centre.lat, h.centre.lon], {
-          radius: 8,
-          fillColor: color,
-          color: '#ffffff',
-          weight: 2.2,
-          opacity: 1,
-          fillOpacity: 0.95,
+      if (h.emprise_geojson) {
+        const hullLayer = L.geoJSON(h.emprise_geojson as any, {
+          style: () => ({
+            renderer,
+            fillColor: color,
+            fillOpacity: 0.28,
+            color,
+            weight: 2.6,
+            dashArray: '6, 4',
+          }),
         });
-        marker.bindPopup(popupHtml);
-        hotspotsLayerRef.current.addLayer(marker);
-      });
-    }
+        hullLayer.bindPopup(popupHtml);
+        hotspotsLayerRef.current.addLayer(hullLayer);
+      }
 
+      const marker = L.circleMarker([h.centre.lat, h.centre.lon], {
+        renderer,
+        radius: 8,
+        fillColor: color,
+        color: '#ffffff',
+        weight: 2.2,
+        opacity: 1,
+        fillOpacity: 0.95,
+      });
+      marker.bindPopup(popupHtml);
+      hotspotsLayerRef.current.addLayer(marker);
+    });
+  }, [showHotspots, hotspots]);
+
+  // 7. Rendu des Zones Silencieuses (Modèle de Poisson)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const renderer = canvasRendererRef.current || undefined;
     silentLayerRef.current.clearLayers();
-    if (showSilent) {
-      silentZones.forEach((z) => {
-        const sColor = z.niveau_severite === 'haute' ? '#b91c1c' : '#d97706';
-        const poissonLine =
-          z.observe !== undefined && z.attendu !== undefined
-            ? `<b>Modèle de Poisson :</b> O<sub>i</sub> = <b>${z.observe}</b> observé(s) vs E<sub>i</sub> = <b>${formatNumberFr(z.attendu, 2)}</b> attendu(s) (${z.ecart_relatif_pct !== undefined && z.ecart_relatif_pct >= 0 ? '+' : ''}${formatNumberFr(z.ecart_relatif_pct ?? 0, 0)} %)<br/>
-               <b>Test statistique :</b> r<sub>D</sub> = <code>${formatNumberFr(z.residu_poisson ?? 0, 2)}</code> · p = <code>${formatNumberFr(z.p_value_poisson ?? 0, 3)}</code><br/>`
-            : '';
+    if (!showSilent) return;
 
-        const silentPopup = `
-          <div style="font-family: var(--font); font-size: 12.5px; line-height: 1.45; min-width: 245px;">
-            <strong style="color: ${sColor};">Zone silencieuse : ${z.zone_nom}</strong><br/>
-            <span style="font-size: 11px; font-weight: 700; color: ${sColor};">${z.statut_alerte}</span>
-            <hr style="margin: 5px 0; border: none; border-top: 1px solid var(--line);"/>
-            ${poissonLine}
-            <p style="margin: 4px 0; color: var(--tx2);">${z.motif}</p>
-            <b>Action :</b> ${z.action_requise}
-          </div>
-        `;
+    silentZones.forEach((z) => {
+      const sColor = z.niveau_severite === 'haute' ? '#b91c1c' : '#d97706';
+      const poissonLine =
+        z.observe !== undefined && z.attendu !== undefined
+          ? `<b>Modèle de Poisson :</b> O<sub>i</sub> = <b>${z.observe}</b> observé(s) vs E<sub>i</sub> = <b>${formatNumberFr(z.attendu, 2)}</b> attendu(s) (${z.ecart_relatif_pct !== undefined && z.ecart_relatif_pct >= 0 ? '+' : ''}${formatNumberFr(z.ecart_relatif_pct ?? 0, 0)} %)<br/>
+             <b>Test statistique :</b> r<sub>D</sub> = <code>${formatNumberFr(z.residu_poisson ?? 0, 2)}</code> · p = <code>${formatNumberFr(z.p_value_poisson ?? 0, 3)}</code><br/>`
+          : '';
 
-        if (z.geojson) {
-          const zPoly = L.geoJSON(z.geojson as any, {
-            style: () => ({
-              renderer,
-              fillColor: sColor,
-              fillOpacity: 0.12,
-              color: sColor,
-              weight: 2.4,
-              dashArray: '7, 5',
-            }),
-          });
-          zPoly.bindPopup(silentPopup);
-          silentLayerRef.current.addLayer(zPoly);
-        }
+      const silentPopup = `
+        <div style="font-family: var(--font); font-size: 12.5px; line-height: 1.45; min-width: 245px;">
+          <strong style="color: ${sColor};">Zone silencieuse : ${z.zone_nom}</strong><br/>
+          <span style="font-size: 11px; font-weight: 700; color: ${sColor};">${z.statut_alerte}</span>
+          <hr style="margin: 5px 0; border: none; border-top: 1px solid var(--line);"/>
+          ${poissonLine}
+          <p style="margin: 4px 0; color: var(--tx2);">${z.motif}</p>
+          <b>Action :</b> ${z.action_requise}
+        </div>
+      `;
 
-        if (z.centre) {
-          const alertMarker = L.circleMarker([z.centre.lat, z.centre.lon], {
-            radius: 10,
+      if (z.geojson) {
+        const zPoly = L.geoJSON(z.geojson as any, {
+          style: () => ({
+            renderer,
             fillColor: sColor,
-            color: '#ffffff',
-            weight: 2.5,
-            fillOpacity: 0.92,
-          });
-          alertMarker.bindPopup(silentPopup);
-          silentLayerRef.current.addLayer(alertMarker);
-        }
-      });
-    }
+            fillOpacity: 0.12,
+            color: sColor,
+            weight: 2.4,
+            dashArray: '7, 5',
+          }),
+        });
+        zPoly.bindPopup(silentPopup);
+        silentLayerRef.current.addLayer(zPoly);
+      }
+
+      if (z.centre) {
+        const alertMarker = L.circleMarker([z.centre.lat, z.centre.lon], {
+          renderer,
+          radius: 10,
+          fillColor: sColor,
+          color: '#ffffff',
+          weight: 2.5,
+          fillOpacity: 0.92,
+        });
+        alertMarker.bindPopup(silentPopup);
+        silentLayerRef.current.addLayer(alertMarker);
+      }
+    });
+  }, [showSilent, silentZones]);
+
+  // 8. Rendu des Incidents Opérationnels (Couche SVG haute réactivité avec persistance de popup)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
 
     incidentsLayerRef.current.clearLayers();
-    if (showIncidents && incidentsGeoJson?.features) {
-      incidentsGeoJson.features.forEach((feat: any) => {
-        const [lon, lat] = feat.geometry.coordinates;
-        if (typeof lat !== 'number' || typeof lon !== 'number') return;
-        const pColor = feat.properties.danger_immediat ? '#dc2626' : '#0284c7';
-        const pMarker = L.circleMarker([lat, lon], {
-          radius: 6,
-          fillColor: pColor,
-          color: '#ffffff',
-          weight: 1.8,
-          fillOpacity: 0.95,
-        });
-        pMarker.bindPopup(`
-          <div style="font-size: 12px;">
-            <strong>Incident #${feat.properties.id}</strong> (${feat.properties.type})<br/>
-            Statut : ${feat.properties.statut} · Priorité : ${feat.properties.score_priorite} pts
-          </div>
-        `);
-        incidentsLayerRef.current.addLayer(pMarker);
+    if (!showIncidents || !incidentsGeoJson?.features) return;
+
+    const q = (searchRef || '').trim().toLowerCase();
+    const allIncidents: any[] = incidentsGeoJson.features || [];
+    const featsToRender = allIncidents.filter((feat) => {
+      if (mode !== 'operationnel') return true;
+      const p = feat.properties || {};
+      if (statusFilter === 'danger' && !p.danger_immediat) return false;
+      if (statusFilter === 'ouverts' && !['ouvert', 'affecte', 'rouvert'].includes(p.statut)) return false;
+      if (statusFilter === 'evalues' && p.statut !== 'evalue') return false;
+      if (statusFilter === 'clotures' && p.statut !== 'cloture') return false;
+      // Note : les incidents des autres communes restent toujours visibles au clic sur une commune
+      if (q) {
+        const refMatch = (p.reference_publique || '').toLowerCase().includes(q);
+        const idMatch = String(p.id).includes(q);
+        const typeMatch = (p.type || '').toLowerCase().includes(q);
+        if (!refMatch && !idMatch && !typeMatch) return false;
+      }
+      return true;
+    });
+
+    const markersById = new Map<number, L.CircleMarker>();
+
+    featsToRender.forEach((feat: any) => {
+      const [lon, lat] = feat.geometry.coordinates;
+      if (typeof lat !== 'number' || typeof lon !== 'number') return;
+      const isDanger = Boolean(feat.properties.danger_immediat);
+      const statut = feat.properties.statut || 'ouvert';
+      const pColor = isDanger
+        ? '#ef4444'
+        : statut === 'cloture'
+        ? '#64748b'
+        : statut === 'evalue'
+        ? '#10b981'
+        : '#00e5ff';
+
+      const isSelectedCommuneIncident =
+        selectedZoneId !== '' && feat.properties.zone_id && Number(feat.properties.zone_id) === Number(selectedZoneId);
+
+      // SVG Renderer dédié dans le panneau prioritaire incidentsPane pour garantir la visibilité au-dessus des polygones
+      const pMarker = L.circleMarker([lat, lon], {
+        renderer: svgRendererRef.current || undefined,
+        pane: 'incidentsPane',
+        radius: isDanger
+          ? (isSelectedCommuneIncident ? 11.5 : 9.5)
+          : (isSelectedCommuneIncident ? 9 : 7),
+        fillColor: pColor,
+        color: '#ffffff',
+        weight: isSelectedCommuneIncident ? 2.8 : 2,
+        opacity: 1,
+        fillOpacity: selectedZoneId === '' || isSelectedCommuneIncident ? 0.95 : 0.85,
       });
+
+      const popupHtml = `
+        <div style="font-family: var(--font); color: var(--tx); background: var(--s1); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px; min-width: 245px; box-shadow: 0 12px 32px var(--shadow);">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line);">
+            <div>
+              <div style="font-weight: 800; font-size: 14px; color: var(--tx);">Incident #${feat.properties.id} (${feat.properties.type})</div>
+              <div style="font-family: var(--mono); font-size: 10.5px; color: var(--tx3);">Réf : ${(feat.properties.reference_publique || '').slice(0, 16).toUpperCase()}</div>
+            </div>
+          </div>
+          ${
+            isDanger
+              ? `<div style="margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); color: #ef4444; font-family: var(--mono); font-size: 10.5px; font-weight: 700;">
+                  ⚠ DANGER IMMÉDIAT DÉCLARÉ — ÉVACUATION / SECOURS PRIORITAIRE
+                </div>`
+              : ''
+          }
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-family: var(--mono); font-size: 11px;">
+            <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
+              <div style="font-size: 9.5px; color: var(--tx3);">STATUT ACTUEL</div>
+              <div style="font-weight: 700; color: ${pColor}; text-transform: uppercase; margin-top: 2px;">${statut}</div>
+            </div>
+            <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
+              <div style="font-size: 9.5px; color: var(--tx3);">PRIORITÉ O.I.D</div>
+              <div style="font-weight: 700; color: ${isDanger ? '#ef4444' : '#00e5ff'}; margin-top: 2px;">${feat.properties.score_priorite ?? 0} pts</div>
+            </div>
+          </div>
+          <div style="margin-top: 8px; font-size: 11.5px; color: var(--tx2);">
+            📍 WGS84 : ${lat.toFixed(4)}° N, ${Math.abs(lon).toFixed(4)}° W
+          </div>
+          <div style="margin-top: 10px; display: flex; gap: 6px;">
+            <button
+              type="button"
+              data-incident-action="open-dossier"
+              data-incident-id="${feat.properties.id}"
+              style="flex: 1; text-align: center; border: none; cursor: pointer; background: #00e5ff; color: #051424; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--font);"
+            >
+              <span class="material-symbols-outlined" style="font-size: 15px; font-weight: 700; line-height: 1;">folder_open</span>
+              <span>Ouvrir Dossier #${feat.properties.id}</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Options garantissant la persistance de la popup : closeOnClick=false empêche la fermeture intempestive au clic carte
+      pMarker.bindPopup(popupHtml, {
+        className: 'oid-tactical-leaflet-popup',
+        autoClose: true,
+        closeOnClick: false,
+        autoPan: true,
+        autoPanPadding: [24, 24],
+      });
+
+      pMarker.on('popupopen', () => {
+        openIncidentIdRef.current = feat.properties.id;
+      });
+
+      pMarker.on('popupclose', () => {
+        if (openIncidentIdRef.current === feat.properties.id) {
+          openIncidentIdRef.current = null;
+        }
+      });
+
+      pMarker.on('click', (e: L.LeafletMouseEvent) => {
+        lastLayerClickTimeRef.current = Date.now();
+        if (e.originalEvent) {
+          e.originalEvent.stopPropagation();
+        }
+        if (onRequestAssign) {
+          onRequestAssign(feat.properties.id);
+        }
+      });
+
+      markersById.set(feat.properties.id, pMarker);
+      incidentsLayerRef.current.addLayer(pMarker);
+    });
+
+    // Maintien automatique de la popup ouverte en cas de réévaluation des incidents
+    if (openIncidentIdRef.current !== null) {
+      const activeMarker = markersById.get(openIncidentIdRef.current);
+      if (activeMarker) {
+        activeMarker.openPopup();
+      }
     }
-  }, [showHotspots, showSilent, showIncidents, hotspots, silentZones, incidentsGeoJson]);
+  }, [showIncidents, incidentsGeoJson, mode, statusFilter, selectedZoneId, searchRef, onRequestAssign]);
 
   const jenksMeta = maillesGeoJson?.classification;
   const totalHexCount =
@@ -732,137 +1244,35 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
       ? getisOrdGeoJson?.features?.length || 0
       : maillesGeoJson?.total_mailles || 0;
 
+  const allIncidentsList: any[] = incidentsGeoJson?.features || [];
+  const incidentCounts = {
+    tous: allIncidentsList.length,
+    danger: allIncidentsList.filter((f) => f.properties?.danger_immediat).length,
+    ouverts: allIncidentsList.filter((f) => ['ouvert', 'affecte', 'rouvert'].includes(f.properties?.statut)).length,
+    evalues: allIncidentsList.filter((f) => f.properties?.statut === 'evalue').length,
+    clotures: allIncidentsList.filter((f) => f.properties?.statut === 'cloture').length,
+  };
+
+  const hasActiveFilters = Boolean(
+    (selectedZoneId !== '' && selectedZoneId != null) ||
+    (statusFilter && statusFilter !== 'tous') ||
+    (searchRef && searchRef.trim() !== '')
+  );
+
+  const handleResetFilters = () => {
+    onSelectZoneId('');
+    if (onChangeStatusFilter) {
+      onChangeStatusFilter('tous');
+    }
+    if (onChangeSearchRef) {
+      onChangeSearchRef('');
+    }
+  };
+
   return (
     <div className="sig-map-wrapper">
-      {/* Barre supérieure : Sélecteur de fond de plan + Thématique hexagonale + Filtre communal + Couches */}
-      <div className="sig-map-controls">
-        <div className="sig-controls-row">
-          <span className="sig-map-controls-title">
-            <Layers size={15} />
-            <span>Fond :</span>
-          </span>
-          <select
-            value={basemap}
-            onChange={(e) => setBasemap(e.target.value as BasemapKey)}
-            className="sig-select-compact"
-            aria-label="Choix du fond cartographique"
-          >
-            {Object.entries(BASEMAPS).map(([key, cfg]) => (
-              <option key={key} value={key}>
-                {cfg.label}
-              </option>
-            ))}
-          </select>
-
-          <span className="sig-map-controls-title" style={{ marginLeft: '0.4rem' }}>
-            <Activity size={15} />
-            <span>Mailles 300 m :</span>
-          </span>
-          <select
-            value={hexThematique}
-            onChange={(e) => onChangeHexThematique(e.target.value as HexThematique)}
-            className="sig-select-compact"
-            aria-label="Thématique du maillage hexagonal 300 m"
-          >
-            <option value="densite">Densité WorldPop 100 m (Fisher-Jenks)</option>
-            <option value="alea">Aléa physique MNT + Hydro (Fisher-Jenks)</option>
-            <option value="vulnerabilite">Risque multicritère A × E × V (Fisher-Jenks)</option>
-            <option value="getis_ord">Autocorrélation Getis-Ord Gi* (Points chauds)</option>
-          </select>
-
-          <span className="sig-map-controls-title" style={{ marginLeft: '0.4rem' }}>
-            <CompassIcon size={15} />
-            <span>Commune :</span>
-          </span>
-          <select
-            value={selectedZoneId}
-            onChange={(e) => onSelectZoneId(e.target.value ? Number(e.target.value) : '')}
-            className="sig-select-compact"
-            aria-label="Filtrer par commune"
-          >
-            <option value="">
-              District d'Abidjan — 13 communes ({sigMetadata?.maillage_hexagonal.nb_mailles_actives || totalHexCount} mailles)
-            </option>
-            {communesGeoJson?.features.map((f: any) => (
-              <option key={f.properties.zone_id} value={f.properties.zone_id}>
-                {f.properties.nom} ({formatNumberFr(f.properties.population_totale, 0)} hab. · {f.properties.superficie_km2} km²)
-              </option>
-            ))}
-          </select>
-
-          <span className="sig-map-controls-title" style={{ marginLeft: '0.4rem' }}>
-            <span>Communes :</span>
-          </span>
-          <select
-            value={communeChoropleth}
-            onChange={(e) => setCommuneChoropleth(e.target.value as 'contour' | 'vulnerabilite')}
-            className="sig-select-compact"
-          >
-            <option value="contour">Contours administratifs seuls</option>
-            <option value="vulnerabilite">Choroplèthe indice IV communal</option>
-          </select>
-        </div>
-
-        <div className="sig-controls-row" style={{ marginTop: '0.55rem' }}>
-          <span className="sig-map-controls-title">
-            <Eye size={15} />
-            <span>Couches SIG :</span>
-          </span>
-
-          <label className="sig-layer-toggle">
-            <input
-              type="checkbox"
-              checked={showMaillesPop}
-              onChange={(e) => setShowMaillesPop(e.target.checked)}
-            />
-            <Grid size={14} color="#d95f0e" />
-            <span>Hexagones 300 m ({totalHexCount})</span>
-          </label>
-
-          <label className="sig-layer-toggle">
-            <input
-              type="checkbox"
-              checked={showCommunes}
-              onChange={(e) => setShowCommunes(e.target.checked)}
-            />
-            <Layers size={14} color="#0f172a" />
-            <span>Limites réelles (13 communes)</span>
-          </label>
-
-          <label className="sig-layer-toggle">
-            <input
-              type="checkbox"
-              checked={showIncidents}
-              onChange={(e) => setShowIncidents(e.target.checked)}
-            />
-            <MapPin size={14} color="#0284c7" />
-            <span>Incidents ({incidentsGeoJson?.features?.length || 0})</span>
-          </label>
-
-          <label className="sig-layer-toggle">
-            <input
-              type="checkbox"
-              checked={showHotspots}
-              onChange={(e) => setShowHotspots(e.target.checked)}
-            />
-            <Flame size={14} color="#dc2626" />
-            <span>Corridors DBSCAN ({hotspots.length})</span>
-          </label>
-
-          <label className="sig-layer-toggle">
-            <input
-              type="checkbox"
-              checked={showSilent}
-              onChange={(e) => setShowSilent(e.target.checked)}
-            />
-            <VolumeX size={14} color="#b91c1c" />
-            <span>Zones silencieuses Poisson ({silentZones.length})</span>
-          </label>
-        </div>
-      </div>
-
       {/* Canevas cartographique avec Flèche du Nord et Coordonnées UTM 30N en surimpression */}
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', overflow: 'hidden', isolation: 'isolate', zIndex: 1 }}>
         <div
           ref={mapContainerRef}
           style={{
@@ -873,6 +1283,505 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
             zIndex: 10,
           }}
         />
+
+        {/* Bouton icône de couches situé directement sous les boutons + et - de Leaflet */}
+        <button
+          type="button"
+          onClick={handleToggleLayersDrawer}
+          className={`oid-map-layers-toggle-btn ${isLayersDrawerOpen ? 'is-active' : ''}`}
+          title="Fonds et couches de la carte"
+          aria-label="Ouvrir le panneau des fonds et couches cartographiques"
+        >
+          <Layers size={17} />
+        </button>
+
+        {/* Bouton icône de filtres situé directement sous le bouton de couches */}
+        <button
+          type="button"
+          onClick={handleToggleFiltersDrawer}
+          className={`oid-map-filters-toggle-btn ${isFiltersDrawerOpen ? 'is-active' : ''} ${hasActiveFilters ? 'has-filter' : ''}`}
+          title="Filtres & Recherche d'incidents"
+          aria-label="Ouvrir le panneau des filtres et recherche"
+        >
+          <Filter size={16} />
+        </button>
+
+        {/* Bouton icône du volet des indicateurs stratégiques (250px) */}
+        {onToggleKpiSidebar && (
+          <button
+            type="button"
+            onClick={onToggleKpiSidebar}
+            className={`oid-map-kpi-toggle-btn ${isKpiSidebarOpen ? 'is-active' : ''}`}
+            title={isKpiSidebarOpen ? 'Masquer le volet indicateurs (250px)' : 'Afficher le volet indicateurs (250px)'}
+            aria-label="Afficher ou masquer les indicateurs stratégiques"
+          >
+            <BarChart2 size={16} />
+          </button>
+        )}
+
+        {/* Volet latéral (Sidebar Drawer) des Fonds & Couches */}
+        {isLayersDrawerOpen && (
+          <div
+            ref={drawerRef}
+            className="oid-map-layers-drawer"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+          >
+            <div className="oid-drawer-header">
+              <div className="oid-drawer-title">
+                <Layers size={16} color="#00e5ff" />
+                <span>Fonds &amp; Couches</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLayersDrawerOpen(false)}
+                className="oid-drawer-close-btn"
+                title="Fermer le volet"
+                aria-label="Fermer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="oid-drawer-body">
+              {/* 1. SECTION FONDS DE PLAN */}
+              <div>
+                <div className="oid-drawer-section-title">
+                  <Layers size={13} />
+                  <span>Fond de Plan</span>
+                </div>
+                <div className="oid-drawer-basemaps-grid">
+                  {Object.entries(BASEMAPS).map(([key, cfg]) => {
+                    const isActive = basemap === key;
+                    const shortName =
+                      key === 'sobre'
+                        ? 'Gris Clair OID'
+                        : key === 'hot'
+                        ? 'HOT Crise'
+                        : key === 'osm'
+                        ? 'OSM Couleur'
+                        : 'Topographique';
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setBasemap(key as BasemapKey)}
+                        className={`oid-drawer-basemap-card ${isActive ? 'is-active' : ''}`}
+                        title={cfg.label}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+                          <span style={{ fontWeight: 700 }}>{shortName}</span>
+                          {isActive && <span style={{ color: '#00e5ff', fontSize: '11px' }}>✓</span>}
+                        </div>
+                        <div style={{ fontSize: '9.5px', opacity: 0.75, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {cfg.label.split('(')[0].trim()}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. SECTION COUCHES GÉOGRAPHIQUES */}
+              <div>
+                <div className="oid-drawer-section-title">
+                  <Eye size={13} />
+                  <span>Couches Visibles</span>
+                </div>
+
+                <div className="oid-drawer-layers-list">
+                  {/* Couche Incidents */}
+                  <div
+                    className="oid-drawer-layer-item"
+                    onClick={() => setShowIncidents((prev) => !prev)}
+                  >
+                    <div className="oid-drawer-layer-left">
+                      <MapPin size={15} color="#00e5ff" />
+                      <span>Incidents Opérationnels</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '10.5px', fontFamily: 'var(--mono)', color: 'var(--tx3)' }}>
+                        {incidentCounts.tous}
+                      </span>
+                      <div className={`oid-drawer-switch ${showIncidents ? 'is-on' : ''}`}>
+                        <div className="oid-drawer-switch-thumb" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Couche Limites Administratives */}
+                  <div
+                    className="oid-drawer-layer-item"
+                    onClick={() => setShowCommunes((prev) => !prev)}
+                  >
+                    <div className="oid-drawer-layer-left">
+                      <Layers size={15} color="#38bdf8" />
+                      <span>Limites des 13 Communes</span>
+                    </div>
+                    <div className={`oid-drawer-switch ${showCommunes ? 'is-on' : ''}`}>
+                      <div className="oid-drawer-switch-thumb" />
+                    </div>
+                  </div>
+
+                  {/* Mode choroplèthe si communes activées (mode analyse) */}
+                  {showCommunes && mode !== 'operationnel' && (
+                    <div style={{ padding: '2px 8px 6px 28px', marginTop: '-4px' }}>
+                      <select
+                        value={communeChoropleth}
+                        onChange={(e) => setCommuneChoropleth(e.target.value as 'contour' | 'vulnerabilite')}
+                        className="sig-select-compact"
+                        style={{ width: '100%', fontSize: '11px' }}
+                      >
+                        <option value="contour">Contours administratifs seuls</option>
+                        <option value="vulnerabilite">Choroplèthe indice IV communal</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Couches analytiques en mode analyse */}
+                  {mode !== 'operationnel' && (
+                    <>
+                      {/* Hexagones 300 m */}
+                      <div
+                        className="oid-drawer-layer-item"
+                        onClick={() => setShowMaillesPop((prev) => !prev)}
+                      >
+                        <div className="oid-drawer-layer-left">
+                          <Grid size={15} color="#d95f0e" />
+                          <span>Hexagones 300 m</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '10.5px', fontFamily: 'var(--mono)', color: 'var(--tx3)' }}>
+                            {totalHexCount}
+                          </span>
+                          <div className={`oid-drawer-switch ${showMaillesPop ? 'is-on' : ''}`}>
+                            <div className="oid-drawer-switch-thumb" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {showMaillesPop && (
+                        <div style={{ padding: '2px 8px 6px 28px', marginTop: '-4px' }}>
+                          <select
+                            value={hexThematique}
+                            onChange={(e) => onChangeHexThematique && onChangeHexThematique(e.target.value as HexThematique)}
+                            className="sig-select-compact"
+                            style={{ width: '100%', fontSize: '11px' }}
+                          >
+                            <option value="densite">Densité WorldPop 100 m</option>
+                            <option value="alea">Aléa physique MNT + Hydro</option>
+                            <option value="vulnerabilite">Risque multicritère A×E×V</option>
+                            <option value="getis_ord">Points chauds Getis-Ord Gi*</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Corridors DBSCAN */}
+                      <div
+                        className="oid-drawer-layer-item"
+                        onClick={() => setShowHotspots((prev) => !prev)}
+                      >
+                        <div className="oid-drawer-layer-left">
+                          <Flame size={15} color="#dc2626" />
+                          <span>Corridors &amp; Hotspots</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '10.5px', fontFamily: 'var(--mono)', color: 'var(--tx3)' }}>
+                            {hotspots.length}
+                          </span>
+                          <div className={`oid-drawer-switch ${showHotspots ? 'is-on' : ''}`}>
+                            <div className="oid-drawer-switch-thumb" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Zones Silencieuses Poisson */}
+                      <div
+                        className="oid-drawer-layer-item"
+                        onClick={() => setShowSilent((prev) => !prev)}
+                      >
+                        <div className="oid-drawer-layer-left">
+                          <VolumeX size={15} color="#b91c1c" />
+                          <span>Zones Silencieuses (Poisson)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '10.5px', fontFamily: 'var(--mono)', color: 'var(--tx3)' }}>
+                            {silentZones.length}
+                          </span>
+                          <div className={`oid-drawer-switch ${showSilent ? 'is-on' : ''}`}>
+                            <div className="oid-drawer-switch-thumb" />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Volet latéral (Sidebar Drawer) des Filtres & Recherche */}
+        {isFiltersDrawerOpen && (
+          <div
+            ref={filtersDrawerRef}
+            className="oid-map-filters-drawer"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+          >
+            <div className="oid-drawer-header">
+              <div className="oid-drawer-title">
+                <Filter size={16} color="#00e5ff" />
+                <span>Filtres &amp; Recherche</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFiltersDrawerOpen(false)}
+                className="oid-drawer-close-btn"
+                title="Fermer le volet"
+                aria-label="Fermer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="oid-drawer-body">
+              {/* 1. RECHERCHE TEXTUELLE */}
+              {onChangeSearchRef && (
+                <div>
+                  <div className="oid-drawer-section-title">
+                    <Search size={13} />
+                    <span>Recherche Rapide</span>
+                  </div>
+                  <div className="oid-drawer-search-wrap">
+                    <span className="oid-drawer-search-icon">
+                      <Search size={14} />
+                    </span>
+                    <input
+                      type="text"
+                      value={searchRef || ''}
+                      onChange={(e) => onChangeSearchRef(e.target.value)}
+                      placeholder="Réf. incident (#12, OID-ABJ...)"
+                      className="oid-drawer-search-input"
+                    />
+                    {searchRef && (
+                      <button
+                        type="button"
+                        onClick={() => onChangeSearchRef('')}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--tx3)',
+                          cursor: 'pointer',
+                          padding: '2px',
+                          display: 'flex',
+                        }}
+                        title="Effacer la recherche"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. FILTRAGE PAR COMMUNE & CADRAGE */}
+              <div>
+                <div className="oid-drawer-section-title">
+                  <CompassIcon size={13} />
+                  <span>Ciblage Territorial</span>
+                </div>
+                <select
+                  value={selectedZoneId}
+                  onChange={(e) => onSelectZoneId(e.target.value ? Number(e.target.value) : '')}
+                  className="oid-drawer-select"
+                  aria-label="Sélectionner une commune"
+                >
+                  <option value="">
+                    District d'Abidjan (10 urbaines + 3 périphériques)
+                  </option>
+                  {communesGeoJson?.features.map((f: any) => (
+                    <option key={f.properties.zone_id} value={f.properties.zone_id}>
+                      {f.properties.nom} ({formatNumberFr(f.properties.population_totale, 0)} hab. · {f.properties.superficie_km2} km²)
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleFitDistrict}
+                  className="oid-drawer-reset-btn"
+                  style={{ marginTop: '8px', borderColor: 'rgba(0, 229, 255, 0.3)', color: '#00e5ff' }}
+                  title="Recentrer et ajuster la vue sur l'ensemble du District d'Abidjan"
+                >
+                  <RotateCcw size={13} />
+                  <span>Cadrer tout le District</span>
+                </button>
+              </div>
+
+              {/* 3. FILTRAGE PAR STATUT D'INCIDENT (ACCORDÉON / COLLAPSIBLE) */}
+              {onChangeStatusFilter && (
+                <div>
+                  <div
+                    onClick={() => setStatusCollapseOpen((prev) => !prev)}
+                    className="oid-drawer-collapse-header"
+                    title={statusCollapseOpen ? 'Replier les statuts' : 'Déplier les statuts'}
+                  >
+                    <div className="oid-drawer-section-title" style={{ marginBottom: 0 }}>
+                      <Filter size={13} />
+                      <span>Statut des Incidents</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span
+                        style={{
+                          fontSize: '10.5px',
+                          fontFamily: 'var(--mono)',
+                          color: statusFilter && statusFilter !== 'tous' ? '#00e5ff' : 'var(--tx3)',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {statusFilter === 'danger'
+                          ? 'Danger'
+                          : statusFilter === 'ouverts'
+                          ? 'Ouverts'
+                          : statusFilter === 'evalues'
+                          ? 'Évalués'
+                          : statusFilter === 'clotures'
+                          ? 'Clôturés'
+                          : `Tous (${incidentCounts.tous})`}
+                      </span>
+                      <ChevronDown
+                        size={15}
+                        className={`oid-drawer-chevron ${statusCollapseOpen ? 'is-open' : ''}`}
+                      />
+                    </div>
+                  </div>
+
+                  {statusCollapseOpen && (
+                    <div className="oid-drawer-status-chips" style={{ marginTop: '8px' }}>
+                      {[
+                        { key: 'tous', label: 'Tous les statuts', count: incidentCounts.tous, color: '#00e5ff' },
+                        { key: 'danger', label: '⚠ Danger immédiat', count: incidentCounts.danger, color: '#ef4444' },
+                        { key: 'ouverts', label: 'Ouverts & Affectés', count: incidentCounts.ouverts, color: '#38bdf8' },
+                        { key: 'evalues', label: 'Évalués (terrain)', count: incidentCounts.evalues, color: '#10b981' },
+                        { key: 'clotures', label: 'Clôturés (résolus)', count: incidentCounts.clotures, color: '#64748b' },
+                      ].map((st) => {
+                        const isActive = (statusFilter || 'tous') === st.key;
+                        return (
+                          <div
+                            key={st.key}
+                            onClick={() => onChangeStatusFilter(st.key as any)}
+                            className={`oid-drawer-status-chip ${isActive ? 'is-active' : ''}`}
+                          >
+                            <span style={{ color: isActive ? st.color : 'inherit' }}>{st.label}</span>
+                            <span
+                              style={{
+                                fontFamily: 'var(--mono)',
+                                fontSize: '10.5px',
+                                background: isActive ? 'rgba(0, 229, 255, 0.15)' : 'var(--s1)',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                color: isActive ? st.color : 'var(--tx3)',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {st.count}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 4. MODE ANALYSE : THÉMATIQUE DES MAILLES */}
+              {mode !== 'operationnel' && onChangeHexThematique && (
+                <div>
+                  <div className="oid-drawer-section-title">
+                    <Activity size={13} />
+                    <span>Thématique Mailles 300 m</span>
+                  </div>
+                  <select
+                    value={hexThematique}
+                    onChange={(e) => onChangeHexThematique(e.target.value as HexThematique)}
+                    className="oid-drawer-select"
+                    aria-label="Thématique du maillage hexagonal 300 m"
+                  >
+                    <option value="densite">Densité WorldPop 100 m</option>
+                    <option value="alea">Aléa physique MNT + Hydro</option>
+                    <option value="vulnerabilite">Risque multicritère A × E × V</option>
+                    <option value="getis_ord">Points chauds Getis-Ord Gi*</option>
+                  </select>
+                </div>
+              )}
+
+              {/* 5. RÉINITIALISATION DES FILTRES */}
+              {hasActiveFilters && (
+                <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px solid var(--line)' }}>
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="oid-drawer-reset-btn"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Réinitialiser tous les filtres</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Légende flottante opérationnelle (centrée en bas au plus près du bord, sans titre, sur une ligne) */}
+        {mode === 'operationnel' && (
+          <div
+            className="oid-map-floating-legend"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+          >
+            <div className="oid-map-floating-legend-item" title="Danger immédiat">
+              <span className="oid-dot bg-coral pulse" />
+              <span>Danger</span>
+              <span className="oid-map-floating-legend-count">({incidentCounts.danger})</span>
+            </div>
+            <div className="oid-map-floating-legend-item" title="Ouvert / En intervention">
+              <span className="oid-dot bg-cyan" />
+              <span>Ouvert / Interv.</span>
+              <span className="oid-map-floating-legend-count">({incidentCounts.ouverts})</span>
+            </div>
+            <div className="oid-map-floating-legend-item" title="Évalué terrain">
+              <span className="oid-dot bg-green" />
+              <span>Évalué</span>
+              <span className="oid-map-floating-legend-count">({incidentCounts.evalues})</span>
+            </div>
+            <div className="oid-map-floating-legend-item" title="Clôturé">
+              <span className="oid-dot bg-slate" />
+              <span>Clôturé</span>
+              <span className="oid-map-floating-legend-count">({incidentCounts.clotures})</span>
+            </div>
+            <div className="oid-map-floating-legend-item" title="Limites administratives (13 communes)">
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '10px',
+                  height: '8px',
+                  border: '1.5px dashed #0284c7',
+                  background: 'rgba(2, 132, 199, 0.14)',
+                  borderRadius: '2px',
+                }}
+              />
+              <span>Limites (13)</span>
+            </div>
+          </div>
+        )}
 
         {/* Flèche du Nord géomatique (SVG) */}
         <div className="sig-north-arrow" title="Nord géographique / UTM Zone 30N">
@@ -885,100 +1794,101 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
           </svg>
         </div>
 
-        {/* Barre temps réel des coordonnées curseur (WGS84 + EPSG:32630) */}
+        {/* Barre temps réel des coordonnées curseur (WGS84 + EPSG:32630) - compacte et discrète */}
         <div className="sig-coords-overlay">
           {cursorCoords ? (
             <>
               <span>
-                <strong>WGS84 :</strong> {cursorCoords.lat.toFixed(5)}° N, {Math.abs(cursorCoords.lon).toFixed(5)}° W
+                {cursorCoords.lat.toFixed(4)}°N, {Math.abs(cursorCoords.lon).toFixed(4)}°W
               </span>
-              <span className="sig-coords-sep">|</span>
+              <span className="sig-coords-sep">·</span>
               <span>
-                <strong>UTM 30N (EPSG:32630) :</strong> E {formatNumberFr(cursorCoords.easting, 0)} m · N{' '}
-                {formatNumberFr(cursorCoords.northing, 0)} m
+                UTM {formatNumberFr(cursorCoords.easting, 0)}E {formatNumberFr(cursorCoords.northing, 0)}N
               </span>
             </>
           ) : (
-            <span>Survolez la carte pour lire les coordonnées WGS84 et métriques UTM 30N (EPSG:32630)</span>
+            <span>WGS84 · UTM 30N</span>
           )}
         </div>
       </div>
 
-      {/* Légende Statistique Graduée (Fisher-Jenks ou Getis-Ord Gi*) & Cartouche de Sources */}
-      <div className="sig-map-legend-panel">
-        {hexThematique === 'getis_ord' && getisOrdGeoJson ? (
-          <div className="sig-jenks-block">
-            <div className="sig-jenks-header">
-              <strong>
-                Autocorrélation spatiale locale Getis-Ord Gi* — Voisinage euclidien d ≤ {getisOrdGeoJson.rayon_voisinage_m} m (EPSG:32630)
-              </strong>
-              <span className="sig-gvf-badge" title="Score Z maximal observé sur le maillage">
-                Pic Z(Gi*) = {getisOrdGeoJson.resume.z_max >= 0 ? '+' : ''}
-                {formatNumberFr(getisOrdGeoJson.resume.z_max, 2)} · Mailles chaudes :{' '}
-                {getisOrdGeoJson.resume.nb_hotspots_99 +
-                  getisOrdGeoJson.resume.nb_hotspots_95 +
-                  getisOrdGeoJson.resume.nb_hotspots_90}
-              </span>
-            </div>
-            <div className="sig-jenks-scale">
-              {getisOrdGeoJson.legende.map((item) => (
-                <div key={item.classe} className="sig-jenks-class-item">
-                  <span className="sig-jenks-swatch" style={{ backgroundColor: item.couleur }} />
-                  <span>
-                    {item.label}
-                    {item.count !== undefined && (
-                      <small style={{ color: 'var(--tx3)', marginLeft: '4px' }}>({item.count})</small>
-                    )}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          jenksMeta &&
-          jenksMeta.breaks.length >= 2 && (
+      {/* Légende Statistique Graduée (Fisher-Jenks ou Getis-Ord Gi*) & Cartouche de Sources (Mode Analyse uniquement) */}
+      {mode !== 'operationnel' && (
+        <div className="sig-map-legend-panel">
+          {hexThematique === 'getis_ord' && getisOrdGeoJson ? (
             <div className="sig-jenks-block">
               <div className="sig-jenks-header">
-                <strong>{HEX_THEMATIQUE_TITLES[hexThematique === 'getis_ord' ? 'densite' : hexThematique]}</strong>
-                <span className="sig-gvf-badge" title="Goodness of Variance Fit (qualité d'ajustement de Fisher-Jenks)">
-                  Fisher-Jenks · GVF = {jenksMeta.gvf.toFixed(3)}
+                <strong>
+                  Autocorrélation spatiale locale Getis-Ord Gi* — Voisinage euclidien d ≤ {getisOrdGeoJson.rayon_voisinage_m} m (EPSG:32630)
+                </strong>
+                <span className="sig-gvf-badge" title="Score Z maximal observé sur le maillage">
+                  Pic Z(Gi*) = {getisOrdGeoJson.resume.z_max >= 0 ? '+' : ''}
+                  {formatNumberFr(getisOrdGeoJson.resume.z_max, 2)} · Mailles chaudes :{' '}
+                  {getisOrdGeoJson.resume.nb_hotspots_99 +
+                    getisOrdGeoJson.resume.nb_hotspots_95 +
+                    getisOrdGeoJson.resume.nb_hotspots_90}
                 </span>
               </div>
               <div className="sig-jenks-scale">
-                {jenksMeta.palette.map((color, idx) => {
-                  const low = jenksMeta.breaks[idx] ?? 0;
-                  const high = jenksMeta.breaks[idx + 1] ?? low;
-                  const count = jenksMeta.counts[idx] ?? 0;
-                  const dec = hexThematique === 'densite' ? 0 : 1;
-                  return (
-                    <div key={idx} className="sig-jenks-class-item">
-                      <span className="sig-jenks-swatch" style={{ backgroundColor: color }} />
-                      <span>
-                        {formatNumberFr(low, dec)} – {formatNumberFr(high, dec)}
-                        <small style={{ color: 'var(--tx3)', marginLeft: '4px' }}>({count})</small>
-                      </span>
-                    </div>
-                  );
-                })}
+                {getisOrdGeoJson.legende.map((item) => (
+                  <div key={item.classe} className="sig-jenks-class-item">
+                    <span className="sig-jenks-swatch" style={{ backgroundColor: item.couleur }} />
+                    <span>
+                      {item.label}
+                      {item.count !== undefined && (
+                        <small style={{ color: 'var(--tx3)', marginLeft: '4px' }}>({item.count})</small>
+                      )}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-          )
-        )}
+          ) : (
+            jenksMeta &&
+            jenksMeta.breaks.length >= 2 && (
+              <div className="sig-jenks-block">
+                <div className="sig-jenks-header">
+                  <strong>{HEX_THEMATIQUE_TITLES[hexThematique === 'getis_ord' ? 'densite' : hexThematique]}</strong>
+                  <span className="sig-gvf-badge" title="Goodness of Variance Fit (qualité d'ajustement de Fisher-Jenks)">
+                    Fisher-Jenks · GVF = {jenksMeta.gvf.toFixed(3)}
+                  </span>
+                </div>
+                <div className="sig-jenks-scale">
+                  {jenksMeta.palette.map((color, idx) => {
+                    const low = jenksMeta.breaks[idx] ?? 0;
+                    const high = jenksMeta.breaks[idx + 1] ?? low;
+                    const count = jenksMeta.counts[idx] ?? 0;
+                    const dec = hexThematique === 'densite' ? 0 : 1;
+                    return (
+                      <div key={idx} className="sig-jenks-class-item">
+                        <span className="sig-jenks-swatch" style={{ backgroundColor: color }} />
+                        <span>
+                          {formatNumberFr(low, dec)} – {formatNumberFr(high, dec)}
+                          <small style={{ color: 'var(--tx3)', marginLeft: '4px' }}>({count})</small>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )
+          )}
 
-        <div className="sig-sources-cartouche">
-          <span>
-            <strong>SCR Calcul :</strong> {sigMetadata?.scr_calcul || 'EPSG:32630 (WGS 84 / UTM zone 30N)'}
-          </span>
-          <span>•</span>
-          <span>
-            <strong>Limites & Hydro :</strong> OpenStreetMap (ODbL) / OCHA COD-AB (13 communes + réseau de drainage)
-          </span>
-          <span>•</span>
-          <span>
-            <strong>Démographie & Relief :</strong> WorldPop 100 m (CC-BY 4.0) · MNT SRTM-Copernicus (~38 m)
-          </span>
+          <div className="sig-sources-cartouche">
+            <span>
+              <strong>SCR Calcul :</strong> {sigMetadata?.scr_calcul || 'EPSG:32630 (WGS 84 / UTM zone 30N)'}
+            </span>
+            <span>•</span>
+            <span>
+              <strong>Limites &amp; Hydro :</strong> OpenStreetMap (ODbL) / OCHA COD-AB (13 communes)
+            </span>
+            <span>•</span>
+            <span>
+              <strong>Démographie &amp; Relief :</strong> WorldPop 100 m (CC-BY 4.0) · MNT SRTM-Copernicus (~38 m)
+            </span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

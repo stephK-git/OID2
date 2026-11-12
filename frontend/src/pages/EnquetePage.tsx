@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiFetch } from '../api/client';
+import { apiFetch, apiUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
 
@@ -1222,7 +1222,7 @@ export const EnquetePage: React.FC = () => {
                                   onClick={() => setLightboxUrl(pUrl)}
                                 >
                                   <div className="oid-enq-photo-img-wrap">
-                                    <img src={pUrl} alt={`Preuve terrain #${idx + 1}`} />
+                                    <img src={apiUrl(pUrl)} alt={`Preuve terrain #${idx + 1}`} />
                                     <div className="oid-enq-photo-geotag">{geoTagCode}</div>
                                     <div className="oid-enq-photo-sha">{shaLabel}</div>
                                     {!isReadOnly && (
@@ -1303,7 +1303,7 @@ export const EnquetePage: React.FC = () => {
                                   onClick={() => setLightboxUrl(cUrl)}
                                 >
                                   <div className="oid-enq-photo-img-wrap">
-                                    <img src={cUrl} alt={`Photo citoyenne #${idx + 1}`} />
+                                    <img src={apiUrl(cUrl)} alt={`Photo citoyenne #${idx + 1}`} />
                                     <div className="oid-enq-photo-geotag">
                                       SOURCE: ALERTE CITOYENNE
                                     </div>
@@ -1408,7 +1408,7 @@ export const EnquetePage: React.FC = () => {
               <span className="material-symbols-outlined">close</span>
               <span>Fermer l'aperçu</span>
             </button>
-            <img src={lightboxUrl} alt="Preuve photographique terrain" />
+            <img src={apiUrl(lightboxUrl)} alt="Preuve photographique terrain" />
           </div>
         </div>
       )}

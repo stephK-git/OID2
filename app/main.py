@@ -32,7 +32,7 @@ app = FastAPI(
 # Configuration CORS pour le frontend React
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,8 +60,8 @@ app.include_router(rapports.router)
 app.include_router(analyses.router)
 
 # Service des uploads (photos de signalements)
-if UPLOADS_DIR.is_dir():
-    app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 
 @app.get("/", include_in_schema=False)

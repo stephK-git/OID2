@@ -302,7 +302,7 @@ export const LoginPage: React.FC = () => {
                 </span>
                 Vous êtes un citoyen ou témoin d'une inondation ?
               </p>
-              <small>Aucun compte n'est nécessaire pour déclarer ou suivre un sinistre.</small>
+              <small>Aucun compte n'est nécessaire pour déclarer un sinistre.</small>
             </div>
             <div className="auth-citizen-actions">
               <Link to="/signaler" className="auth-citizen-btn report">
@@ -310,12 +310,6 @@ export const LoginPage: React.FC = () => {
                   warning
                 </span>
                 Signaler
-              </Link>
-              <Link to="/suivi" className="auth-citizen-btn track">
-                <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--water)' }}>
-                  search
-                </span>
-                Suivre
               </Link>
             </div>
           </div>

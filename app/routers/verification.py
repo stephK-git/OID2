@@ -2,6 +2,7 @@
 
 import contextlib
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,15 +17,77 @@ from app.models.photo import Photo
 from app.models.signalement import Signalement
 from app.models.utilisateur import Utilisateur
 from app.models.zone import Zone
-from app.services.doublons import suggerer_doublons
+from app.services.doublons import haversine_distance_m, suggerer_doublons
+from app.services.photos import inspect_photo_metadata
 from app.services.priorite import score_priorite
 from app.services.statuts import transition_signalement
 
 router = APIRouter(prefix="/verification", tags=["verification"])
 
+PHOTO_UPLOAD_DIR = Path(__file__).resolve().parent.parent / "static" / "uploads"
+
 
 def _not_found():
     raise HTTPException(status_code=404, detail="Signalement introuvable")
+
+
+def _resolve_commune(db: Session | None, geom) -> tuple[str | None, str | None]:
+    """Résout le nom et le code administratif de la commune PostGIS contenant le point."""
+    if db is None or geom is None:
+        return None, None
+    with contextlib.suppress(Exception):
+        zone = db.scalar(
+            select(Zone)
+            .where(Zone.geom.is_not(None), func.ST_Intersects(Zone.geom, geom))
+            .limit(1)
+        )
+        if zone:
+            return zone.nom, zone.code_adm
+
+        nearest = db.execute(
+            select(Zone, func.ST_Distance(Zone.geom, geom).label("dist"))
+            .where(Zone.geom.is_not(None))
+            .order_by("dist")
+            .limit(1)
+        ).first()
+        if nearest and nearest.dist is not None and float(nearest.dist) <= 0.025:
+            z = nearest[0]
+            return z.nom, z.code_adm
+    return None, None
+
+
+def _serialize_doublon(db: Session | None, sig_coords: dict | None, inc: Incident) -> dict:
+    """Enrichit un incident doublon suggéré avec distance exacte (m), coordonnées et signalements liés."""
+    inc_coords = None
+    distance_m = None
+    if inc.geom is not None:
+        with contextlib.suppress(Exception):
+            pt = to_shape(inc.geom)
+            inc_coords = {"lat": pt.y, "lon": pt.x}
+            if sig_coords:
+                distance_m = round(
+                    haversine_distance_m(sig_coords["lat"], sig_coords["lon"], pt.y, pt.x)
+                )
+
+    nb_lies = 1
+    if db is not None:
+        with contextlib.suppress(Exception):
+            cnt = db.scalar(
+                select(func.count(Signalement.id)).where(Signalement.incident_id == inc.id)
+            )
+            if cnt is not None and int(cnt) > 0:
+                nb_lies = int(cnt)
+
+    return {
+        "id": inc.id,
+        "reference_publique": inc.reference_publique,
+        "statut": inc.statut,
+        "type": inc.type,
+        "score_priorite": inc.score_priorite,
+        "distance_m": distance_m,
+        "nb_signalements_lies": nb_lies,
+        "coords": inc_coords,
+    }
 
 
 def _signalement_to_dict(s: Signalement, suggestions: list, db: Session | None = None) -> dict:
@@ -37,6 +100,8 @@ def _signalement_to_dict(s: Signalement, suggestions: list, db: Session | None =
         except Exception:
             pass
 
+    commune, code_adm = _resolve_commune(db, s.geom)
+
     maintenant = datetime.now(UTC)
     en_retard = False
     if s.cree_le and s.statut == "recu":
@@ -48,8 +113,13 @@ def _signalement_to_dict(s: Signalement, suggestions: list, db: Session | None =
         en_retard = age_sec > seuil
 
     photos = []
+    photos_meta = []
     if db is not None:
         photos = [p.url for p in db.scalars(select(Photo).where(Photo.signalement_id == s.id)).all()]
+        photos_meta = [inspect_photo_metadata(url, PHOTO_UPLOAD_DIR) for url in photos]
+
+    doublons_enrichis = [_serialize_doublon(db, coords, i) for i in suggestions]
+    doublons_enrichis.sort(key=lambda d: d["distance_m"] if d["distance_m"] is not None else 999999)
 
     return {
         "id": s.id,
@@ -62,16 +132,16 @@ def _signalement_to_dict(s: Signalement, suggestions: list, db: Session | None =
         "danger_type": s.danger_type,
         "description": s.description,
         "coords": coords,
+        "commune": commune,
+        "code_adm": code_adm,
         "photos": photos,
+        "photos_meta": photos_meta,
         "cree_le": s.cree_le.isoformat() if s.cree_le else None,
         "score_priorite": score_priorite(
             s.danger_immediat, s.gravite, s.hauteur_eau_cm, danger_type=s.danger_type
         ),
         "en_retard": en_retard,
-        "doublons_suggeres": [
-            {"id": i.id, "reference_publique": i.reference_publique, "statut": i.statut}
-            for i in suggestions
-        ],
+        "doublons_suggeres": doublons_enrichis,
     }
 
 
@@ -88,6 +158,46 @@ def file_attente(
     result = [_signalement_to_dict(s, suggerer_doublons(db, s), db) for s in rows]
     result.sort(key=lambda x: x["score_priorite"], reverse=True)
     return result
+
+
+@router.get("/historique")
+def historique_traites(
+    db: Session = Depends(get_db),
+    _: Utilisateur = Depends(require_role("verificateur", "coordinateur")),
+):
+    """Retourne les 50 derniers signalements traités (validés, rejetés ou doublons)."""
+    rows = db.scalars(
+        select(Signalement)
+        .where(Signalement.statut.in_(["valide", "rejete", "doublon"]))
+        .order_by(Signalement.verifie_le.desc().nullslast(), Signalement.cree_le.desc())
+        .limit(50)
+    ).all()
+    out = []
+    for s in rows:
+        verif = db.get(Utilisateur, s.verifie_par) if s.verifie_par else None
+        coords = None
+        if s.geom is not None:
+            try:
+                pt = to_shape(s.geom)
+                coords = {"lat": pt.y, "lon": pt.x}
+            except Exception:
+                pass
+        commune, code_adm = _resolve_commune(db, s.geom)
+        out.append({
+            "id": s.id,
+            "reference_suivi": s.reference_suivi,
+            "type": s.type,
+            "statut": s.statut,
+            "motif_rejet": s.motif_rejet,
+            "incident_id": s.incident_id,
+            "verifie_par_nom": verif.nom if verif else None,
+            "verifie_le": s.verifie_le.isoformat() if s.verifie_le else None,
+            "cree_le": s.cree_le.isoformat() if s.cree_le else None,
+            "coords": coords,
+            "commune": commune,
+            "code_adm": code_adm,
+        })
+    return out
 
 
 @router.get("/{sid}")
@@ -108,7 +218,7 @@ def detail_signalement(
 def valider(
     sid: int,
     db: Session = Depends(get_db),
-    user: Utilisateur = Depends(require_role("verificateur")),
+    user: Utilisateur = Depends(require_role("verificateur", "coordinateur")),
 ):
     s = db.get(Signalement, sid)
     if s is None:
@@ -145,7 +255,7 @@ def fusionner(
     sid: int,
     incident_id: int,
     db: Session = Depends(get_db),
-    user: Utilisateur = Depends(require_role("verificateur")),
+    user: Utilisateur = Depends(require_role("verificateur", "coordinateur")),
 ):
     s = db.get(Signalement, sid)
     incident = db.get(Incident, incident_id)
@@ -171,49 +281,12 @@ def fusionner(
     return {"ok": True, "incident_id": incident.id}
 
 
-@router.get("/historique")
-def historique_traites(
-    db: Session = Depends(get_db),
-    _: Utilisateur = Depends(require_role("verificateur", "coordinateur")),
-):
-    """Retourne les 50 derniers signalements traités (validés, rejetés ou doublons)."""
-    rows = db.scalars(
-        select(Signalement)
-        .where(Signalement.statut.in_(["valide", "rejete", "doublon"]))
-        .order_by(Signalement.verifie_le.desc().nullslast(), Signalement.cree_le.desc())
-        .limit(50)
-    ).all()
-    out = []
-    for s in rows:
-        verif = db.get(Utilisateur, s.verifie_par) if s.verifie_par else None
-        coords = None
-        if s.geom is not None:
-            try:
-                pt = to_shape(s.geom)
-                coords = {"lat": pt.y, "lon": pt.x}
-            except Exception:
-                pass
-        out.append({
-            "id": s.id,
-            "reference_suivi": s.reference_suivi,
-            "type": s.type,
-            "statut": s.statut,
-            "motif_rejet": s.motif_rejet,
-            "incident_id": s.incident_id,
-            "verifie_par_nom": verif.nom if verif else None,
-            "verifie_le": s.verifie_le.isoformat() if s.verifie_le else None,
-            "cree_le": s.cree_le.isoformat() if s.cree_le else None,
-            "coords": coords,
-        })
-    return out
-
-
 @router.post("/{sid}/rejeter")
 def rejeter(
     sid: int,
     motif: str,
     db: Session = Depends(get_db),
-    user: Utilisateur = Depends(require_role("verificateur")),
+    user: Utilisateur = Depends(require_role("verificateur", "coordinateur")),
 ):
     s = db.get(Signalement, sid)
     if s is None:
@@ -236,13 +309,10 @@ def doublons(
     s = db.get(Signalement, sid)
     if s is None:
         _not_found()
-    return [
-        {
-            "id": i.id,
-            "reference_publique": i.reference_publique,
-            "type": i.type,
-            "statut": i.statut,
-            "score_priorite": i.score_priorite,
-        }
-        for i in suggerer_doublons(db, s)
-    ]
+    coords = None
+    if s.geom is not None:
+        with contextlib.suppress(Exception):
+            pt = to_shape(s.geom)
+            coords = {"lat": pt.y, "lon": pt.x}
+    return [_serialize_doublon(db, coords, i) for i in suggerer_doublons(db, s)]
+

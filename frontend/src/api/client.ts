@@ -2,7 +2,16 @@
  * Client API centralisé pour O.I.D.
  */
 
-const API_BASE = ''; // Passe par le proxy Vite en dev ou même domaine en prod
+const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+
+export function apiUrl(path: string): string {
+  if (!path) return path;
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:') || path.startsWith('blob:')) {
+    return path;
+  }
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE}${normalized}`;
+}
 
 export interface ApiError {
   detail: string;

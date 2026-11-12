@@ -1,6 +1,8 @@
+import contextlib
 import csv
 from datetime import UTC, datetime
 from io import StringIO
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from geoalchemy2.shape import to_shape
@@ -14,16 +16,150 @@ from app.db.session import get_db
 from app.models.audit_log import AuditLog
 from app.models.evaluation import Evaluation
 from app.models.incident import Incident
+from app.models.photo import Photo
+from app.models.signalement import Signalement
 from app.models.utilisateur import Utilisateur
 from app.models.zone import Zone
+from app.routers.verification import _resolve_commune
 from app.schemas.incident import IncidentAffecterIn as AffectationIn
 from app.schemas.incident import IncidentRouvrirIn as RouverturIn
 from app.schemas.utilisateur import UtilisateurCreateIn as UtilisateurIn
+from app.services.photos import inspect_photo_metadata
 from app.services.statuts import transition_incident
 
 router = APIRouter(prefix="/coordination", tags=["coordination"])
 
 ROLES_VALIDES = {"verificateur", "enqueteur", "coordinateur"}
+PHOTO_UPLOAD_DIR = Path(__file__).resolve().parent.parent / "static" / "uploads"
+
+
+def _serialize_incident(db: Session, inc: Incident, include_details: bool = True) -> dict:
+    """Sérialise un incident avec ses coordonnées, commune PostGIS, signalements liés et évaluation."""
+    coords = None
+    if inc.geom is not None:
+        with contextlib.suppress(Exception):
+            pt = to_shape(inc.geom)
+            coords = {"lat": pt.y, "lon": pt.x}
+
+    commune = None
+    code_adm = None
+    if inc.zone_id:
+        with contextlib.suppress(Exception):
+            z = db.get(Zone, inc.zone_id)
+            if z:
+                commune = z.nom
+                code_adm = z.code_adm
+    if not commune and inc.geom is not None:
+        commune, code_adm = _resolve_commune(db, inc.geom)
+
+    enqueteur = db.get(Utilisateur, inc.enqueteur_id) if inc.enqueteur_id else None
+
+    sigs = []
+    if include_details:
+        with contextlib.suppress(Exception):
+            sigs = list(
+                db.scalars(
+                    select(Signalement)
+                    .where(Signalement.incident_id == inc.id)
+                    .order_by(Signalement.cree_le.desc())
+                ).all()
+            )
+
+    hauteur_max = None
+    gravite_max = "moyenne"
+    grav_rank = {"faible": 1, "moyenne": 2, "elevee": 3, "élevée": 3, "critique": 4}
+    best_rank = 0
+    description_synthese = None
+    signalements_lies = []
+
+    for s in sigs:
+        if s.hauteur_eau_cm is not None:
+            if hauteur_max is None or float(s.hauteur_eau_cm) > hauteur_max:
+                hauteur_max = float(s.hauteur_eau_cm)
+        rk = grav_rank.get((s.gravite or "").lower(), 2)
+        if rk > best_rank:
+            best_rank = rk
+            gravite_max = s.gravite or "moyenne"
+        if not description_synthese and s.description:
+            description_synthese = s.description
+
+        photos_urls = []
+        photos_meta = []
+        with contextlib.suppress(Exception):
+            photos = db.scalars(select(Photo).where(Photo.signalement_id == s.id)).all()
+            photos_urls = [p.url for p in photos]
+            photos_meta = [
+                inspect_photo_metadata(p.url, PHOTO_UPLOAD_DIR) for p in photos
+            ]
+
+        signalements_lies.append(
+            {
+                "id": s.id,
+                "reference_suivi": s.reference_suivi,
+                "type": s.type,
+                "hauteur_eau_cm": s.hauteur_eau_cm,
+                "gravite": s.gravite,
+                "danger_immediat": s.danger_immediat,
+                "danger_type": s.danger_type,
+                "description": s.description,
+                "statut": s.statut,
+                "cree_le": s.cree_le.isoformat() if s.cree_le else None,
+                "photos": photos_urls,
+                "photos_meta": photos_meta,
+            }
+        )
+
+    eval_data = None
+    if include_details:
+        with contextlib.suppress(Exception):
+            ev = db.scalar(
+                select(Evaluation)
+                .where(Evaluation.incident_id == inc.id)
+                .order_by(Evaluation.id.desc())
+                .limit(1)
+            )
+            if ev:
+                eval_data = {
+                    "id": ev.id,
+                    "statut": ev.statut,
+                    "menages_touches": ev.menages_touches,
+                    "personnes_affectees": ev.personnes_affectees,
+                    "blesses": ev.blesses,
+                    "deplaces": ev.deplaces,
+                    "deces": ev.deces,
+                    "disparus": ev.disparus,
+                    "degats": ev.degats,
+                    "routes_coupees": ev.routes_coupees,
+                    "risques_sanitaires": ev.risques_sanitaires,
+                    "besoins": ev.besoins,
+                    "recommandations": ev.recommandations,
+                    "soumise_le": ev.soumise_le.isoformat() if ev.soumise_le else None,
+                }
+
+    return {
+        "id": inc.id,
+        "reference_publique": inc.reference_publique,
+        "type": inc.type,
+        "statut": inc.statut,
+        "score_priorite": inc.score_priorite,
+        "niveau_fiabilite": inc.niveau_fiabilite,
+        "enqueteur_id": inc.enqueteur_id,
+        "enqueteur_nom": enqueteur.nom if enqueteur else None,
+        "danger_immediat": inc.danger_immediat,
+        "zone_id": inc.zone_id,
+        "commune": commune,
+        "code_adm": code_adm,
+        "coords": coords,
+        "nb_signalements": max(len(signalements_lies), 1),
+        "hauteur_eau_max_cm": hauteur_max,
+        "gravite_max": gravite_max,
+        "description_synthese": description_synthese,
+        "signalements_lies": signalements_lies,
+        "evaluation": eval_data,
+        "cree_le": inc.cree_le.isoformat() if inc.cree_le else None,
+        "maj_le": inc.maj_le.isoformat() if inc.maj_le else None,
+        "cloture_le": inc.cloture_le.isoformat() if inc.cloture_le else None,
+    }
 
 
 @router.get("/zones")
@@ -46,21 +182,7 @@ def liste_incidents(
     _: Utilisateur = Depends(require_role("coordinateur", "verificateur")),
 ):
     rows = db.scalars(select(Incident).order_by(Incident.score_priorite.desc(), Incident.cree_le.desc())).all()
-    return [
-        {
-            "id": i.id,
-            "reference_publique": i.reference_publique,
-            "type": i.type,
-            "statut": i.statut,
-            "score_priorite": i.score_priorite,
-            "niveau_fiabilite": i.niveau_fiabilite,
-            "enqueteur_id": i.enqueteur_id,
-            "danger_immediat": i.danger_immediat,
-            "cree_le": i.cree_le.isoformat() if i.cree_le else None,
-            "maj_le": i.maj_le.isoformat() if i.maj_le else None,
-        }
-        for i in rows
-    ]
+    return [_serialize_incident(db, i, include_details=True) for i in rows]
 
 
 @router.get("/incidents/{iid}")
@@ -72,21 +194,7 @@ def detail_incident(
     inc = db.get(Incident, iid)
     if inc is None:
         raise HTTPException(404, "Incident introuvable.")
-    enqueteur = db.get(Utilisateur, inc.enqueteur_id) if inc.enqueteur_id else None
-    return {
-        "id": inc.id,
-        "reference_publique": inc.reference_publique,
-        "type": inc.type,
-        "statut": inc.statut,
-        "score_priorite": inc.score_priorite,
-        "niveau_fiabilite": inc.niveau_fiabilite,
-        "danger_immediat": inc.danger_immediat,
-        "enqueteur_id": inc.enqueteur_id,
-        "enqueteur_nom": enqueteur.nom if enqueteur else None,
-        "cree_le": inc.cree_le.isoformat() if inc.cree_le else None,
-        "maj_le": inc.maj_le.isoformat() if inc.maj_le else None,
-        "cloture_le": inc.cloture_le.isoformat() if inc.cloture_le else None,
-    }
+    return _serialize_incident(db, inc, include_details=True)
 
 
 @router.get("/carte")
@@ -110,6 +218,7 @@ def carte_incidents(
                 "score_priorite": i.score_priorite,
                 "danger_immediat": i.danger_immediat,
                 "reference_publique": i.reference_publique,
+                "zone_id": i.zone_id,
             },
         })
     return {"type": "FeatureCollection", "features": features}

@@ -1,39 +1,45 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, MapPin, Plus, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { apiFetch } from '../api/client';
+import { apiFetch, apiUrl } from '../api/client';
 import { PublicHeader } from '../components/shell';
+import { PublicIncidentCard, type PublicIncident } from '../components/PublicIncidentCard';
 import './LandingPage.css';
 
-interface PublicStats {
-  signalements_traites: number;
-  incidents_actifs: number;
-  delai_moyen_min: number;
-  communes_raccordees: number;
+interface CommuneOption {
+  id: number;
+  nom: string;
+  code_adm: string | null;
+  incidents_jour: number;
+}
+
+interface LightboxState {
+  photos: string[];
+  index: number;
+  title: string;
 }
 
 export const LandingPage: React.FC = () => {
-  const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-
-  // État du formulaire de suivi citoyen
-  const [refValue, setRefValue] = useState('');
-  const [refError, setRefError] = useState('');
-  const refInputRef = useRef<HTMLInputElement>(null);
 
   // Section active pour la barre de navigation (IntersectionObserver)
   const [activeSection, setActiveSection] = useState<string>('');
 
-  // Zoom interactif sur la carte de situation en direct
-  const [mapZoom, setMapZoom] = useState<number>(1);
+  // 3 derniers incidents actifs remontés sur la plateforme
+  const [recentIncidents, setRecentIncidents] = useState<PublicIncident[]>([]);
+  const [loadingRecents, setLoadingRecents] = useState<boolean>(true);
 
-  // Statistiques publiques dynamiques (avec valeurs de référence par défaut)
-  const [stats, setStats] = useState<PublicStats>({
-    signalements_traites: 142,
-    incidents_actifs: 12,
-    delai_moyen_min: 14,
-    communes_raccordees: 86,
-  });
+  // Zone extensible "Consulter +" -> sélection de commune et incidents du jour
+  const [showCommuneExplorer, setShowCommuneExplorer] = useState<boolean>(false);
+  const [communes, setCommunes] = useState<CommuneOption[]>([]);
+  const [loadingCommunes, setLoadingCommunes] = useState<boolean>(false);
+  const [selectedCommune, setSelectedCommune] = useState<CommuneOption | null>(null);
+  const [communeIncidents, setCommuneIncidents] = useState<PublicIncident[]>([]);
+  const [loadingCommuneIncidents, setLoadingCommuneIncidents] = useState<boolean>(false);
+
+  // Visionneuse photo plein écran
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null);
 
   // Destination du bouton "Espace Agent" selon l'état d'authentification
   const agentPath =
@@ -45,27 +51,88 @@ export const LandingPage: React.FC = () => {
         : '/enquete'
       : '/login';
 
-  // Chargement des statistiques publiques depuis l'API
+  // Chargement des 3 derniers incidents actifs depuis l'API
   useEffect(() => {
     let mounted = true;
-    apiFetch<PublicStats>('/signalements/stats-publiques')
+    apiFetch<{ items: PublicIncident[]; total: number }>('/signalements/recents?limit=3')
       .then((res) => {
-        if (mounted && res) {
-          setStats({
-            signalements_traites: res.signalements_traites || 142,
-            incidents_actifs: res.incidents_actifs ?? 12,
-            delai_moyen_min: res.delai_moyen_min || 14,
-            communes_raccordees: res.communes_raccordees || 86,
-          });
+        if (mounted && Array.isArray(res?.items)) {
+          setRecentIncidents(res.items);
         }
       })
       .catch(() => {
-        // Conserve les valeurs de référence en mode hors-ligne
+        // Garde une liste vide en cas d'indisponibilité réseau
+      })
+      .finally(() => {
+        if (mounted) setLoadingRecents(false);
       });
     return () => {
       mounted = false;
     };
   }, []);
+
+  // Fermeture de la visionneuse photo au clavier (Échap / flèches)
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setLightbox(null);
+      } else if (e.key === 'ArrowRight' && lightbox.photos.length > 1) {
+        setLightbox((prev) =>
+          prev ? { ...prev, index: (prev.index + 1) % prev.photos.length } : null
+        );
+      } else if (e.key === 'ArrowLeft' && lightbox.photos.length > 1) {
+        setLightbox((prev) =>
+          prev
+            ? { ...prev, index: (prev.index - 1 + prev.photos.length) % prev.photos.length }
+            : null
+        );
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [lightbox]);
+
+  const handleToggleCommuneExplorer = () => {
+    const nextOpen = !showCommuneExplorer;
+    setShowCommuneExplorer(nextOpen);
+    if (nextOpen && communes.length === 0 && !loadingCommunes) {
+      setLoadingCommunes(true);
+      apiFetch<{ communes: CommuneOption[] }>('/signalements/communes-actives')
+        .then((res) => {
+          if (Array.isArray(res?.communes)) {
+            setCommunes(res.communes);
+          }
+        })
+        .catch(() => {
+          setCommunes([]);
+        })
+        .finally(() => {
+          setLoadingCommunes(false);
+        });
+    }
+  };
+
+  const handleSelectCommune = (commune: CommuneOption) => {
+    setSelectedCommune(commune);
+    setLoadingCommuneIncidents(true);
+    apiFetch<{ items: PublicIncident[]; total: number }>(
+      `/signalements/recents?zone_id=${commune.id}&today_only=true&limit=30`
+    )
+      .then((res) => {
+        setCommuneIncidents(Array.isArray(res?.items) ? res.items : []);
+      })
+      .catch(() => {
+        setCommuneIncidents([]);
+      })
+      .finally(() => {
+        setLoadingCommuneIncidents(false);
+      });
+  };
+
+  const handleOpenPhoto = (photos: string[], index: number, title: string) => {
+    setLightbox({ photos, index, title });
+  };
 
 
 
@@ -92,31 +159,6 @@ export const LandingPage: React.FC = () => {
     return () => io.disconnect();
   }, []);
 
-  // Validation et soumission du formulaire de suivi de dossier
-  const handleSuiviSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const val = refValue.trim().toUpperCase();
-    // Accepte le format officiel OID-YYYY-XXXX ainsi que les identifiants hexadécimaux de suivi
-    const pattern = /^(OID-\d{4}-[A-Z0-9]{4,}|[A-Z0-9_-]{6,64})$/;
-
-    if (!val) {
-      setRefError('Veuillez saisir votre référence de suivi.');
-      refInputRef.current?.focus();
-      return;
-    }
-    if (!pattern.test(val)) {
-      setRefError('Format invalide. Exemple attendu : OID-2026-X892');
-      refInputRef.current?.focus();
-      return;
-    }
-
-    setRefError('');
-    navigate(`/suivi?ref=${encodeURIComponent(val)}`);
-  };
-
-  const handleZoomIn = () => setMapZoom((z) => Math.min(1.75, Number((z + 0.25).toFixed(2))));
-  const handleZoomOut = () => setMapZoom((z) => Math.max(1, Number((z - 0.25).toFixed(2))));
-
   const currentYear = new Date().getFullYear();
 
   return (
@@ -134,7 +176,7 @@ export const LandingPage: React.FC = () => {
 
       <main id="contenu">
         {/* HERO AVEC FOND PHOTO (ABIDJAN / LAGUNE ÉBRIÉ) */}
-        <section className="relative bg-slate-950 text-white pt-12 pb-36 sm:pt-20 sm:pb-44 overflow-hidden">
+        <section className="relative bg-slate-950 text-white pt-12 pb-16 sm:pt-20 sm:pb-24 overflow-hidden">
           {/* Photo d'arrière-plan */}
           <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
             <img
@@ -158,7 +200,7 @@ export const LandingPage: React.FC = () => {
               {/* Colonne gauche */}
               <div className="lg:col-span-7 space-y-6">
                 <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl xl:text-[64px] leading-[1.08] tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
-                  Alertez, suivez et<br />
+                  Signalez, alertez et<br />
                   protégez face aux<br />
                   <span className="text-[#58a6ff]">montées des eaux</span>.
                 </h1>
@@ -201,13 +243,13 @@ export const LandingPage: React.FC = () => {
                       aria-hidden="true"
                     >
                       <path
-                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                        d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth="2"
                       />
                     </svg>
-                    <span>Voir la carte interactive</span>
+                    <span>Consulter les incidents en direct</span>
                   </a>
                 </div>
 
@@ -404,352 +446,269 @@ export const LandingPage: React.FC = () => {
           </div>
         </section>
 
-        {/* Suivi de dossier (chevauche le hero, marge de sécurité en dessous) */}
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 -mt-24 sm:-mt-28 relative z-30" id="suivi">
-          <div className="bg-surface rounded-3xl p-5 sm:p-10 shadow-2xl shadow-slate-900/10 border border-line">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 items-center">
-              <div className="md:col-span-5 space-y-2">
-                <h2 className="font-display font-bold text-xl sm:text-2xl text-ink">
-                  Suivre votre signalement
-                </h2>
-                <p className="text-sm text-ink2">
-                  Saisissez la référence reçue lors de votre dépôt pour suivre l&apos;intervention des équipes.
-                </p>
-              </div>
-              <div className="md:col-span-7">
-                <form className="space-y-2" id="suivi-form" onSubmit={handleSuiviSubmit} noValidate>
-                  <label className="block text-xs font-bold text-ink uppercase tracking-wider" htmlFor="ref">
-                    Référence unique
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="relative flex-1">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-ink2">
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                        >
-                          <path
-                            d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                          />
-                        </svg>
-                      </div>
-                      <input
-                        ref={refInputRef}
-                        autoCapitalize="characters"
-                        autoComplete="off"
-                        aria-describedby="ref-err"
-                        value={refValue}
-                        onChange={(e) => {
-                          setRefValue(e.target.value);
-                          if (refError) setRefError('');
-                        }}
-                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border-2 border-line bg-surface focus:border-accent focus:ring-4 focus:ring-[var(--water-dim)] font-mono font-bold text-ink uppercase tracking-wide text-base outline-none transition"
-                        id="ref"
-                        name="reference_suivi"
-                        placeholder="Ex : OID-2026-X892"
-                        spellCheck={false}
-                        type="text"
-                      />
-                    </div>
-                    <button
-                      className="px-7 py-3.5 bg-accent hover:bg-[var(--water-hi)] active:bg-[var(--water-hi)] text-[var(--water-ink)] font-bold text-sm rounded-xl shadow-lg shadow-[var(--water-dim)] transition"
-                      type="submit"
-                    >
-                      Consulter
-                    </button>
-                  </div>
-                  <p
-                    className="text-xs text-red-600 font-medium min-h-[1.25rem] mt-1"
-                    id="ref-err"
-                    role="alert"
-                    aria-live="polite"
-                  >
-                    {refError}
-                  </p>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Situation en direct */}
+        {/* Situation en direct : 3 derniers incidents actifs + exploration par commune */}
         <section className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="situation">
-          <div className="mb-8 sm:mb-12 space-y-3 max-w-2xl">
-            <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-ink tracking-tight">
-              Situation hydrologique en direct
-            </h2>
-            <p className="text-ink2 text-[15px] sm:text-base">
-              Consultez en temps réel les signalements confirmés par les autorités locales et les usagers pour
-              anticiper vos déplacements.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start">
-            {/* Carte */}
-            <div className="lg:col-span-8 bg-slate-900 rounded-3xl overflow-hidden shadow-xl border border-slate-800">
-              <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] bg-[#0c1834] overflow-hidden">
-                <svg
-                  className="w-full h-full select-none transition-transform duration-300"
-                  style={{ transform: `scale(${mapZoom})`, transformOrigin: 'center center' }}
-                  viewBox="0 0 800 500"
-                  preserveAspectRatio="xMidYMid slice"
-                  role="img"
-                  aria-label="Carte schématique : une zone inondée critique, un secteur sous vigilance et une route coupée"
-                >
-                  <defs>
-                    <pattern height="40" id="grid" patternUnits="userSpaceOnUse" width="40">
-                      <path
-                        d="M 40 0 L 0 0 0 40"
-                        fill="none"
-                        stroke="rgba(255,255,255,0.05)"
-                        strokeWidth="1"
-                      />
-                    </pattern>
-                    <linearGradient id="waterFlow" x1="0%" x2="100%" y1="0%" y2="100%">
-                      <stop offset="0%" stopColor="#1e3a8a" />
-                      <stop offset="50%" stopColor="#2563eb" />
-                      <stop offset="100%" stopColor="#1d4ed8" />
-                    </linearGradient>
-                  </defs>
-                  <rect fill="#081026" height="500" width="800" />
-                  <rect fill="url(#grid)" height="500" width="800" />
-                  <path
-                    d="M -20 280 Q 200 240, 360 320 T 700 260 T 840 280 L 840 370 Q 700 340, 520 400 T 160 360 T -20 370 Z"
-                    fill="url(#waterFlow)"
-                    opacity="0.45"
-                  />
-                  <path
-                    d="M -20 280 Q 200 240, 360 320 T 700 260 T 840 280"
-                    fill="none"
-                    opacity="0.6"
-                    stroke="#60a5fa"
-                    strokeWidth="3"
-                  />
-                  <g fill="none" stroke="rgba(255,255,255,0.18)" strokeLinecap="round" strokeWidth="4">
-                    <path d="M 120 0 L 170 500" />
-                    <path d="M 0 150 L 800 120" />
-                    <path d="M 520 0 L 560 500" />
-                    <path d="M 0 410 Q 400 370, 800 440" />
-                  </g>
-                  <g transform="translate(280, 310)">
-                    <circle className="animate-pulse-slow" r="32" fill="#ef4444" fillOpacity="0.25" />
-                    <circle r="14" fill="#ef4444" fillOpacity="0.6" />
-                    <circle r="7" fill="#fff" />
-                  </g>
-                  <g transform="translate(620, 275)">
-                    <circle className="animate-pulse-slow" r="26" fill="#f97316" fillOpacity="0.3" />
-                    <circle r="11" fill="#f97316" fillOpacity="0.7" />
-                    <circle r="6" fill="#fff" />
-                  </g>
-                  <g transform="translate(145, 145)">
-                    <rect
-                      fill="#fff"
-                      height="8"
-                      rx="3"
-                      stroke="#ef4444"
-                      strokeWidth="2.5"
-                      transform="rotate(-15)"
-                      width="28"
-                      x="-14"
-                      y="-4"
-                    />
-                    <line
-                      stroke="#ef4444"
-                      strokeWidth="3"
-                      transform="rotate(-15)"
-                      x1="-10"
-                      x2="10"
-                      y1="0"
-                      y2="0"
-                    />
-                  </g>
-                </svg>
-
-                {/* Légende flottante : tablette / desktop */}
-                <div className="hidden sm:block absolute top-4 left-4 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 text-xs space-y-2.5 shadow-xl text-white">
-                  <span className="font-bold text-[11px] uppercase tracking-wider text-slate-300 block mb-1">
-                    Repères cartographiques
-                  </span>
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                    <span>Zone inondée critique</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-3 h-3 rounded-full bg-orange-500"></span>
-                    <span>Secteur sous vigilance / ralenti</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-4 h-1.5 rounded-full bg-white border border-red-500"></span>
-                    <span>Route coupée à la circulation</span>
-                  </div>
-                </div>
-
-                <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 flex flex-col gap-1.5">
-                  <button
-                    type="button"
-                    onClick={handleZoomIn}
-                    aria-label="Zoom avant"
-                    className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white font-bold text-lg flex items-center justify-center border border-slate-700 shadow-lg"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleZoomOut}
-                    aria-label="Zoom arrière"
-                    className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white font-bold text-lg flex items-center justify-center border border-slate-700 shadow-lg"
-                  >
-                    −
-                  </button>
-                </div>
-              </div>
-
-              {/* Légende mobile (sous la carte, ne masque pas la carte) */}
-              <div className="sm:hidden px-4 py-3 bg-slate-900 border-t border-slate-800 grid gap-2 text-xs text-slate-200">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-3 h-3 rounded-full bg-red-500 shrink-0"></span>Zone inondée critique
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-3 h-3 rounded-full bg-orange-500 shrink-0"></span>Secteur sous vigilance /
-                  ralenti
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-4 h-1.5 rounded-full bg-white border border-red-500 shrink-0"></span>Route
-                  coupée à la circulation
-                </div>
-              </div>
-
-              <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-300 gap-2 sm:gap-4">
-                <span className="flex items-start gap-2">
-                  <svg
-                    className="w-4 h-4 text-blue-400 shrink-0 mt-px"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                  Données croisées : Météo-France, Vigicrues et rapports usagers validés.
-                </span>
-                <a className="text-blue-300 hover:text-blue-200 font-semibold shrink-0" href="#etapes">
-                  Comment valider un point ? →
-                </a>
-              </div>
+          <div className="mb-8 sm:mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div className="space-y-2.5 max-w-2xl">
+              <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent">
+                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" aria-hidden="true" />
+                Situation terrain en direct
+              </span>
+              <h2 className="font-display font-extrabold text-[1.65rem] sm:text-4xl text-ink tracking-tight">
+                Les 3 derniers incidents actifs
+              </h2>
+              <p className="text-ink2 text-[15px] sm:text-base">
+                Dépliez un incident pour consulter les constatations terrain et agrandir les photos prises sur place.
+              </p>
             </div>
 
-            {/* Statistiques : 3 colonnes compactes sur mobile, pile sur desktop */}
-            <div className="lg:col-span-4 grid grid-cols-3 lg:grid-cols-1 gap-3 lg:gap-4">
-              <div className="p-3.5 sm:p-5 lg:p-6 rounded-2xl lg:rounded-3xl bg-surface border border-line shadow-sm">
-                <div className="flex items-center justify-between mb-1.5 lg:mb-2">
-                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-ink2 leading-tight">
-                    Activité du jour
-                  </span>
-                  <span className="hidden lg:inline-flex p-2 rounded-xl bg-[var(--water-dim)] text-accent">
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                  </span>
-                </div>
-                <div
-                  className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-ink tracking-tight"
-                  id="stat-traites"
-                >
-                  {stats.signalements_traites}
-                </div>
-                <p className="text-[11px] sm:text-sm text-ink2 mt-1 leading-snug">
-                  Signalements traités &amp; coordonnés
-                </p>
-              </div>
-              <div className="p-3.5 sm:p-5 lg:p-6 rounded-2xl lg:rounded-3xl bg-surface border border-line shadow-sm">
-                <div className="flex items-center justify-between mb-1.5 lg:mb-2">
-                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-ink2 leading-tight">
-                    Réactivité moyenne
-                  </span>
-                  <span className="hidden lg:inline-flex p-2 rounded-xl bg-[var(--ok-dim)] text-[var(--ok)]">
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                  </span>
-                </div>
-                <div
-                  className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-[var(--ok)] tracking-tight"
-                  id="stat-delai"
-                >
-                  {stats.delai_moyen_min} min
-                </div>
-                <p className="text-[11px] sm:text-sm text-ink2 mt-1 leading-snug">
-                  Délai d&apos;évaluation par les services locaux
-                </p>
-              </div>
-              <div className="p-3.5 sm:p-5 lg:p-6 rounded-2xl lg:rounded-3xl bg-surface border border-line shadow-sm">
-                <div className="flex items-center justify-between mb-1.5 lg:mb-2">
-                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-ink2 leading-tight">
-                    Périmètre d&apos;action
-                  </span>
-                  <span className="hidden lg:inline-flex p-2 rounded-xl bg-[var(--water-dim)] text-accent">
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                  </span>
-                </div>
-                <div
-                  className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-ink tracking-tight"
-                  id="stat-communes"
-                >
-                  {stats.communes_raccordees}
-                </div>
-                <p className="text-[11px] sm:text-sm text-ink2 mt-1 leading-snug">
-                  Communes raccordées au dispositif OID
-                </p>
-              </div>
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={handleToggleCommuneExplorer}
+                aria-expanded={showCommuneExplorer}
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-line bg-surface hover:bg-surface2 text-ink font-bold text-sm shadow-sm transition"
+              >
+                <Plus
+                  size={16}
+                  className={`text-accent transition-transform duration-200 ${showCommuneExplorer ? 'rotate-45' : ''}`}
+                  aria-hidden="true"
+                />
+                <span>{showCommuneExplorer ? 'Masquer les communes' : 'Consulter +'}</span>
+              </button>
+              <Link
+                to="/signaler"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-accent hover:bg-[var(--water-hi)] text-[var(--water-ink)] font-bold text-sm shadow-sm transition"
+              >
+                <span>Déclarer un incident</span>
+                <span aria-hidden="true">→</span>
+              </Link>
             </div>
           </div>
+
+          {loadingRecents ? (
+            <div className="space-y-3" aria-label="Chargement des derniers incidents">
+              {[1, 2, 3].map((item) => (
+                <div
+                  key={item}
+                  className="p-5 rounded-2xl bg-surface border border-line animate-pulse space-y-2.5"
+                >
+                  <div className="h-5 w-1/3 bg-slate-200 rounded" />
+                  <div className="h-3.5 w-1/2 bg-slate-200 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : recentIncidents.length === 0 ? (
+            <div className="p-8 rounded-3xl bg-surface border border-line text-center space-y-2 shadow-sm">
+              <p className="text-base font-bold text-ink">Aucun incident actif pour le moment</p>
+              <p className="text-sm text-ink2">
+                Les incidents validés et en cours de prise en charge apparaîtront ici dès qu&apos;ils sont ouverts.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3.5">
+              {recentIncidents.map((inc, idx) => (
+                <PublicIncidentCard
+                  key={inc.id}
+                  incident={inc}
+                  defaultExpanded={idx === 0}
+                  onOpenPhoto={handleOpenPhoto}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Zone extensible au clic sur "Consulter +" */}
+          {showCommuneExplorer && (
+            <div className="mt-8 p-5 sm:p-8 rounded-3xl bg-surface2/70 border border-line shadow-sm space-y-6">
+              <div className="flex items-start justify-between gap-4 border-b border-line pb-4">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-accent block mb-1">
+                    Exploration par secteur
+                  </span>
+                  <h3 className="font-display font-bold text-xl sm:text-2xl text-ink">
+                    Sélectionner votre commune
+                  </h3>
+                  <p className="text-xs sm:text-sm text-ink2 mt-1">
+                    Choisissez une commune pour consulter la liste des incidents actifs enregistrés aujourd&apos;hui.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCommuneExplorer(false)}
+                  className="p-2 rounded-xl bg-surface border border-line hover:bg-surface2 text-ink2 hover:text-ink transition"
+                  aria-label="Fermer la sélection de commune"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {loadingCommunes ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="h-12 rounded-xl bg-surface border border-line animate-pulse" />
+                  ))}
+                </div>
+              ) : communes.length === 0 ? (
+                <p className="text-sm text-ink2">Aucune commune disponible pour le moment.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                  {communes.map((commune) => {
+                    const isSelected = selectedCommune?.id === commune.id;
+                    return (
+                      <button
+                        key={commune.id}
+                        type="button"
+                        onClick={() => handleSelectCommune(commune)}
+                        className={`p-3 rounded-xl border text-left transition flex items-center justify-between gap-2 ${
+                          isSelected
+                            ? 'bg-accent text-[var(--water-ink)] border-accent shadow-md'
+                            : 'bg-surface hover:bg-surface2 text-ink border-line'
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-xs sm:text-sm truncate">
+                          <MapPin
+                            size={14}
+                            className={isSelected ? 'text-white shrink-0' : 'text-accent shrink-0'}
+                            aria-hidden="true"
+                          />
+                          <span className="truncate">{commune.nom}</span>
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${
+                            isSelected
+                              ? 'bg-white/20 text-white'
+                              : commune.incidents_jour > 0
+                              ? 'bg-red-50 text-red-700 border border-red-200'
+                              : 'bg-surface2 text-ink2 border border-line'
+                          }`}
+                        >
+                          {commune.incidents_jour}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {selectedCommune && (
+                <div className="pt-4 border-t border-line space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="font-display font-bold text-lg text-ink">
+                      Incidents actifs du jour — {selectedCommune.nom}
+                    </h4>
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-surface border border-line text-ink2">
+                      {loadingCommuneIncidents
+                        ? 'Chargement…'
+                        : `${communeIncidents.length} incident${communeIncidents.length > 1 ? 's' : ''} actif${communeIncidents.length > 1 ? 's' : ''}`}
+                    </span>
+                  </div>
+
+                  {loadingCommuneIncidents ? (
+                    <div className="space-y-3">
+                      {[1, 2].map((item) => (
+                        <div
+                          key={item}
+                          className="p-4 rounded-2xl bg-surface border border-line animate-pulse h-20"
+                        />
+                      ))}
+                    </div>
+                  ) : communeIncidents.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-surface border border-line text-center text-sm text-ink2">
+                      Aucun incident actif signalé aujourd&apos;hui à <strong>{selectedCommune.nom}</strong>.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {communeIncidents.map((inc) => (
+                        <PublicIncidentCard
+                          key={`commune-${selectedCommune.id}-${inc.id}`}
+                          incident={inc}
+                          onOpenPhoto={handleOpenPhoto}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </section>
+
+        {/* Visionneuse photo plein écran */}
+        {lightbox && (
+          <div
+            className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label={lightbox.title}
+            onClick={() => setLightbox(null)}
+          >
+            <div
+              className="relative max-w-4xl w-full flex flex-col items-center gap-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-full flex items-center justify-between text-white text-sm px-1">
+                <span className="font-semibold truncate">{lightbox.title}</span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-xs text-slate-300 font-mono">
+                    {lightbox.index + 1} / {lightbox.photos.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLightbox(null)}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
+                    aria-label="Fermer la photo"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative w-full flex items-center justify-center">
+                {lightbox.photos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLightbox((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              index: (prev.index - 1 + prev.photos.length) % prev.photos.length,
+                            }
+                          : null
+                      )
+                    }
+                    className="absolute left-2 sm:left-4 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-white/15 transition"
+                    aria-label="Photo précédente"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                )}
+
+                <img
+                  src={apiUrl(lightbox.photos[lightbox.index])}
+                  alt={`${lightbox.title} — photo ${lightbox.index + 1}`}
+                  className="max-h-[78vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
+                />
+
+                {lightbox.photos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLightbox((prev) =>
+                        prev ? { ...prev, index: (prev.index + 1) % prev.photos.length } : null
+                      )
+                    }
+                    className="absolute right-2 sm:right-4 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-white/15 transition"
+                    aria-label="Photo suivante"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Que signaler */}
         <section className="py-16 sm:py-20 bg-surface2 border-y border-line" id="quoi">
@@ -1020,14 +979,11 @@ export const LandingPage: React.FC = () => {
               </div>
               <div>
                 <h3 className="font-display font-bold text-lg sm:text-xl text-ink mb-2">
-                  Prise en charge &amp; Suivi
+                  Prise en charge &amp; Coordination
                 </h3>
                 <p className="text-ink2 text-sm leading-relaxed">
-                  L&apos;alerte est transmise aux agents municipaux et secours. Vous recevez un code unique{' '}
-                  <code className="text-xs bg-surface2 px-1.5 py-0.5 rounded text-accent font-mono">
-                    OID-2026-XXXX
-                  </code>{' '}
-                  pour suivre les opérations.
+                  L&apos;alerte est immédiatement transmise aux agents municipaux et équipes de secours pour
+                  vérification et déploiement sur le terrain.
                 </p>
               </div>
             </li>
@@ -1256,7 +1212,7 @@ export const LandingPage: React.FC = () => {
               <ul className="space-y-2.5">
                 <li>
                   <a className="hover:text-white transition" href="#situation">
-                    Carte en direct
+                    Incidents en direct
                   </a>
                 </li>
                 <li>
@@ -1272,11 +1228,6 @@ export const LandingPage: React.FC = () => {
                 <li>
                   <a className="hover:text-white transition" href="#securite">
                     Consignes de sécurité
-                  </a>
-                </li>
-                <li>
-                  <a className="hover:text-white transition" href="#suivi">
-                    Suivre un dossier
                   </a>
                 </li>
               </ul>
@@ -1301,8 +1252,8 @@ export const LandingPage: React.FC = () => {
                   </a>
                 </li>
                 <li>
-                  <a className="hover:text-white transition" href="#suivi">
-                    Nous contacter
+                  <a className="hover:text-white transition" href="#securite">
+                    Urgences &amp; Contacts
                   </a>
                 </li>
                 <li>

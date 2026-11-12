@@ -8,7 +8,7 @@ export const THEME_STORAGE_KEY = 'oid-theme';
 /**
  * Constante modifiable définissant les zones et leurs thèmes par défaut
  * - Zone agent (/login, /verification, /coordination, /enquete) -> sombre
- * - Zone publique (/, /signaler, /suivi) -> clair
+ * - Zone publique (/, /signaler) -> clair
  */
 export const AGENT_ROUTE_PREFIXES = ['/login', '/verification', '/coordination', '/enquete', '/agent'];
 

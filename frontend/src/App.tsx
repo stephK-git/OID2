@@ -7,7 +7,6 @@ import { ProtectedRoute, CitizenOnlyRoute } from './components/ProtectedRoute';
 
 import { LandingPage } from './pages/LandingPage';
 import { PublicReportPage } from './pages/PublicReportPage';
-import { TrackingPage } from './pages/TrackingPage';
 import { LoginPage } from './pages/LoginPage';
 import { VerificationPage } from './pages/VerificationPage';
 import { CoordinationPage } from './pages/CoordinationPage';
@@ -39,7 +38,6 @@ const AppShell: React.FC = () => {
             }
           />
           <Route path="/signalement" element={<Navigate to="/signaler" replace />} />
-          <Route path="/suivi" element={<TrackingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/agent/connexion" element={<Navigate to="/login" replace />} />
 

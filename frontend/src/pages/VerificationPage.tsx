@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { apiFetch } from '../api/client';
+import { apiFetch, apiUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
 
@@ -1144,7 +1144,7 @@ export const VerificationPage: React.FC = () => {
                               >
                                 {pMeta.url ? (
                                   <img
-                                    src={pMeta.url}
+                                    src={apiUrl(pMeta.url)}
                                     alt={pMeta.filename}
                                     style={{
                                       width: '100%',
@@ -1397,7 +1397,7 @@ export const VerificationPage: React.FC = () => {
             <div className="img">
               {lightboxItem.url ? (
                 <img
-                  src={lightboxItem.url}
+                  src={apiUrl(lightboxItem.url)}
                   alt={lightboxItem.name}
                   style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 />

@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { BrandMark } from './BrandMark';
 import { ThemeToggle } from './ThemeToggle';
-import { MapPin, Search, LogOut, LogIn, ArrowLeft } from 'lucide-react';
+import { MapPin, LogOut, LogIn, ArrowLeft } from 'lucide-react';
 
 export interface PublicHeaderProps {
   isLanding?: boolean;
@@ -98,7 +98,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
                   textDecoration: 'none',
                 }}
               >
-                Carte en direct
+                Incidents en direct
               </a>
               <a
                 href="#quoi"
@@ -164,23 +164,6 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
               >
                 <MapPin size={16} />
                 <span>Signaler</span>
-              </Link>
-              <Link
-                to="/suivi"
-                className={`btn btn-ghost ${isActive('/suivi') ? 'active' : ''}`}
-                style={{
-                  color: isActive('/suivi') ? 'var(--water)' : 'var(--tx)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  textDecoration: 'none',
-                  padding: '6px 14px',
-                  borderRadius: 'var(--r-md)',
-                  backgroundColor: isActive('/suivi') ? 'var(--water-dim)' : 'transparent',
-                }}
-              >
-                <Search size={16} />
-                <span>Suivi</span>
               </Link>
             </nav>
           ) : (
@@ -285,7 +268,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
         </div>
       </header>
 
-      {/* Barre de navigation mobile du bas (Signaler & Suivi) */}
+      {/* Barre de navigation mobile du bas (Signaler) */}
       {!isLanding && !isAuth && (
         <nav className="oid-mobile-bottom-nav" aria-label="Navigation mobile">
           <Link to="/" className={`oid-mob-nav-item ${isActive('/') ? 'active' : ''}`}>
@@ -298,13 +281,6 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
           >
             <span className="material-symbols-outlined">add_location_alt</span>
             <span>Signaler</span>
-          </Link>
-          <Link
-            to="/suivi"
-            className={`oid-mob-nav-item ${isActive('/suivi') ? 'active' : ''}`}
-          >
-            <span className="material-symbols-outlined">search</span>
-            <span>Suivi</span>
           </Link>
           <Link
             to={isAuthenticated && user ? agentDest : '/login'}

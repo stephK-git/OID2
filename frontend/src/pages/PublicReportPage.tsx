@@ -486,23 +486,23 @@ export const PublicReportPage: React.FC = () => {
             </p>
 
             <div className="oid-ref-card">
-              <span className="oid-ref-label">VOTRE CODE DE SUIVI PERSONNEL</span>
+              <span className="oid-ref-label">RÉFÉRENCE DE VOTRE SIGNALEMENT</span>
               <div className="oid-ref-code">{result.reference_suivi}</div>
               <button type="button" onClick={handleCopyRef} className="oid-copy-btn">
                 <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
                   {copiedRef ? 'check' : 'content_copy'}
                 </span>
-                <span>{copiedRef ? 'Code copié !' : 'Copier la référence'}</span>
+                <span>{copiedRef ? 'Référence copiée !' : 'Copier la référence'}</span>
               </button>
               <p className="oid-ref-hint">
-                Conservez précieusement ce code pour suivre l'avancement des équipes ou déclarer une aggravation.
+                Conservez cette référence en cas de contact avec les équipes de coordination municipale.
               </p>
             </div>
 
             <div className="oid-confirm-actions">
-              <Link to={`/suivi?ref=${result.reference_suivi}`} className="oid-submit-btn">
-                <span className="material-symbols-outlined">radar</span>
-                <span>Suivre mon dossier en direct</span>
+              <Link to="/" className="oid-submit-btn">
+                <span className="material-symbols-outlined">home</span>
+                <span>Retour à l'accueil</span>
               </Link>
               <button
                 type="button"

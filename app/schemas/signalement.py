@@ -6,13 +6,28 @@ from pydantic import BaseModel, Field
 
 
 class SignalementIn(BaseModel):
-    type: Literal["rue", "habitation", "route", "cours_eau", "infrastructure", "autre"]
+    type: Literal[
+        "rue",
+        "habitation",
+        "route",
+        "cours_eau",
+        "infrastructure",
+        "ruissellement",
+        "cours-d-eau",
+        "crue",
+        "refoulement",
+        "reseau",
+        "lagunaire",
+        "submersion",
+        "nappe",
+        "autre",
+    ]
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
     hauteur_eau_cm: float | None = Field(default=None, ge=0, le=10000)
-    gravite: Literal["faible", "moyenne", "elevee"] = "moyenne"
+    gravite: Literal["faible", "moyenne", "moderee", "elevee", "critique"] = "moyenne"
     danger_immediat: bool = False
-    danger_type: Literal["trapped", "electric", "effondrement", "autre"] | None = None
+    danger_type: Literal["trapped", "electric", "effondrement", "personnes_en_danger", "autre"] | None = None
     description: str | None = Field(default=None, max_length=1000)
     photo_data_url: str | None = Field(default=None, max_length=14_000_000)
 

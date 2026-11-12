@@ -7,8 +7,10 @@ un stockage objet (Supabase Storage ou Cloudflare R2).
 
 import base64
 import binascii
+import hashlib
 import re
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 PHOTO_MAX_BYTES = 10 * 1024 * 1024
@@ -59,3 +61,78 @@ def _signature_matches(mime: str, raw: bytes) -> bool:
     if mime == "webp":
         return raw[:4] == b"RIFF" and raw[8:12] == b"WEBP"
     return False
+
+
+def _format_bytes(size: int) -> str:
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.1f} MB"
+    if size >= 1024:
+        return f"{max(1, round(size / 1024))} KB"
+    return f"{size} B"
+
+
+def _detect_exif_and_gps(raw: bytes) -> tuple[bool, bool]:
+    """Détecte la présence d'un segment EXIF APP1 et du tag GPSInfo (0x8825) dans un binaire image."""
+    has_exif = b"Exif\x00\x00" in raw
+    if not has_exif:
+        return False, False
+    # Recherche du tag TIFF GPSInfo (0x8825 en big-endian ou little-endian dans le bloc EXIF)
+    idx = raw.find(b"Exif\x00\x00")
+    exif_slice = raw[idx : idx + 65536]
+    has_gps = (b"\x88\x25" in exif_slice) or (b"\x25\x88" in exif_slice)
+    return True, has_gps
+
+
+def inspect_photo_metadata(photo_url: str, upload_dir: Path) -> dict:
+    """Extrait les métadonnées réelles (taille, format, SHA-256, présence EXIF/GPS) d'une photo stockée."""
+    filename = photo_url.rsplit("/", 1)[-1] if "/" in photo_url else photo_url
+    ext = filename.rsplit(".", 1)[-1].upper() if "." in filename else "JPG"
+    file_path = upload_dir / filename
+
+    if not file_path.is_file():
+        digest_fallback = hashlib.sha256(photo_url.encode("utf-8")).hexdigest()
+        return {
+            "url": photo_url,
+            "filename": filename,
+            "format": ext,
+            "taille_octets": None,
+            "taille_formatee": "DISTANT",
+            "exif_present": False,
+            "exif_gps": False,
+            "sha256": digest_fallback,
+            "sha256_short": digest_fallback[:8].upper(),
+            "horodatage_utc": None,
+        }
+
+    try:
+        raw = file_path.read_bytes()
+        size = len(raw)
+        exif_present, exif_gps = _detect_exif_and_gps(raw)
+        digest = hashlib.sha256(raw).hexdigest()
+        mtime = datetime.fromtimestamp(file_path.stat().st_mtime, tz=UTC).strftime("%H:%M:%S UTC")
+        return {
+            "url": photo_url,
+            "filename": filename,
+            "format": ext,
+            "taille_octets": size,
+            "taille_formatee": _format_bytes(size),
+            "exif_present": exif_present,
+            "exif_gps": exif_gps,
+            "sha256": digest,
+            "sha256_short": digest[:8].upper(),
+            "horodatage_utc": mtime,
+        }
+    except Exception:
+        return {
+            "url": photo_url,
+            "filename": filename,
+            "format": ext,
+            "taille_octets": None,
+            "taille_formatee": "N/D",
+            "exif_present": False,
+            "exif_gps": False,
+            "sha256": None,
+            "sha256_short": None,
+            "horodatage_utc": None,
+        }
+

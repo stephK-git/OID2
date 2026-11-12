@@ -17,4 +17,5 @@ COPY . .
 EXPOSE 8000
 
 # Rendu des migrations optionnel via : docker run --rm <image> alembic upgrade head
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Utilise $PORT fourni par Render en production (8000 par défaut en local).
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
