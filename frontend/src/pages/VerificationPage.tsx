@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiFetch, apiUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
+import { BrandMark, VigilancePill } from '../components/shell';
 
 interface DoublonItem {
   id: number;
@@ -15,6 +15,9 @@ interface DoublonItem {
   distance_m?: number | null;
   nb_signalements_lies?: number;
   coords?: { lat: number; lon: number } | null;
+  commune?: string | null;
+  cree_le?: string | null;
+  description?: string | null;
 }
 
 interface PhotoMetaItem {
@@ -222,6 +225,13 @@ const formatUtcFull = (iso: string | null | undefined): string => {
   }
 };
 
+/** Lit une variable CSS du thème courant (les couches Leaflet n'acceptent pas var()). */
+const readToken = (name: string, fallback: string): string => {
+  if (typeof window === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+};
+
 const WaterGaugeBar: React.FC<{ cm: number }> = ({ cm }) => {
   const val = Math.max(0, cm || 0);
   const pct = Math.min(100, (val / 200) * 100);
@@ -269,7 +279,8 @@ const VerificationMiniMap: React.FC<{
   signalement: SignalementItem;
   communeLabel: string;
   basemap: VerifBasemap;
-}> = ({ signalement, communeLabel, basemap }) => {
+  focusCoords?: { lat: number; lon: number; label?: string } | null;
+}> = ({ signalement, communeLabel, basemap, focusCoords }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
@@ -327,13 +338,18 @@ const VerificationMiniMap: React.FC<{
     const { lat, lon } = signalement.coords;
     map.setView([lat, lon], 16, { animate: true });
 
+    const water = readToken('--water', '#58a6ff');
+    const warn = readToken('--warn', '#f2b24a');
+    const crit = readToken('--crit', '#ff6b5e');
+    const bg = readToken('--bg', '#04101c');
+
     // Cercle de corroboration spatiale PostGIS (400 m)
     L.circle([lat, lon], {
       radius: 400,
-      color: '#3fd0f0',
+      color: water,
       weight: 1.5,
       dashArray: '5, 5',
-      fillColor: '#3fd0f0',
+      fillColor: water,
       fillOpacity: 0.12,
     }).addTo(lg);
 
@@ -342,8 +358,8 @@ const VerificationMiniMap: React.FC<{
       if (dup.coords) {
         L.circleMarker([dup.coords.lat, dup.coords.lon], {
           radius: 8,
-          color: '#091b2c',
-          fillColor: '#f5a524',
+          color: bg,
+          fillColor: warn,
           fillOpacity: 1,
           weight: 2,
         })
@@ -361,13 +377,25 @@ const VerificationMiniMap: React.FC<{
     L.circleMarker([lat, lon], {
       radius: 9,
       color: '#ffffff',
-      fillColor: signalement.danger_immediat || signalement.en_retard ? '#f05252' : '#3fd0f0',
+      fillColor: signalement.danger_immediat || signalement.en_retard ? crit : water,
       fillOpacity: 1,
       weight: 2.5,
     })
       .bindPopup(`<strong>Signalement #${signalement.id}</strong><br/>${communeLabel}`)
       .addTo(lg);
   }, [signalement, communeLabel]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusCoords) return;
+    map.flyTo([focusCoords.lat, focusCoords.lon], 17, { duration: 0.6 });
+    if (focusCoords.label) {
+      L.popup({ closeButton: true, autoClose: true })
+        .setLatLng([focusCoords.lat, focusCoords.lon])
+        .setContent(focusCoords.label)
+        .openOn(map);
+    }
+  }, [focusCoords]);
 
   useEffect(() => {
     return () => {
@@ -424,10 +452,28 @@ export const VerificationPage: React.FC = () => {
   const [selectedSignalement, setSelectedSignalement] = useState<SignalementItem | null>(null);
   const [rejectMotif, setRejectMotif] = useState('');
   const [rejectErr, setRejectErr] = useState('');
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Basemap pour le contrôle spatial de vérification
-  const [basemap, setBasemap] = useState<VerifBasemap>('dark');
+  const [basemap, setBasemap] = useState<VerifBasemap>('osm');
+
+  // Requalification avant validation (Type, Gravité, Danger immédiat)
+  const [qualType, setQualType] = useState<string>('ruissellement');
+  const [qualGravite, setQualGravite] = useState<string>('moyenne');
+  const [qualDanger, setQualDanger] = useState<boolean>(false);
+
+  // Filtres de la file d'attente
+  const [queueSearch, setQueueSearch] = useState('');
+  const [queueCommune, setQueueCommune] = useState('all');
+  const [queueFilter, setQueueFilter] = useState<'all' | 'crit' | 'sla' | 'doublon'>('all');
+
+  // Filtres et fiche détaillée de l'historique
+  const [histSearch, setHistSearch] = useState('');
+  const [histStatus, setHistStatus] = useState<'all' | 'valide' | 'doublon' | 'rejete'>('all');
+  const [selectedHistorique, setSelectedHistorique] = useState<HistoriqueItem | null>(null);
+  const [historiqueDetail, setHistoriqueDetail] = useState<SignalementItem | null>(null);
+  const [historiqueDetailLoading, setHistoriqueDetailLoading] = useState(false);
 
   // Toasts empilés (#toasts)
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string; type: 'info' | 'success' | 'error' }>>([]);
@@ -443,6 +489,58 @@ export const VerificationPage: React.FC = () => {
   const detailScrollRef = useRef<HTMLDivElement>(null);
   const dossierRef = useRef<HTMLElement>(null);
   const queueListRef = useRef<HTMLDivElement>(null);
+  const [mapFocus, setMapFocus] = useState<{ lat: number; lon: number; label?: string } | null>(null);
+
+  useEffect(() => {
+    if (selectedSignalement) {
+      setQualType(selectedSignalement.type || 'ruissellement');
+      setQualGravite((selectedSignalement.gravite || 'moyenne').toLowerCase());
+      setQualDanger(Boolean(selectedSignalement.danger_immediat));
+    }
+  }, [selectedSignalement]);
+
+  const queueCommunes = useMemo(() => {
+    const set = new Set<string>();
+    fileItems.forEach((item) => {
+      set.add(resolveCommuneLabel(item.commune, item.coords));
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [fileItems]);
+
+  const filteredFileItems = useMemo(() => {
+    const q = queueSearch.trim().toLowerCase();
+    return fileItems.filter((item) => {
+      const communeName = resolveCommuneLabel(item.commune, item.coords);
+      if (queueCommune !== 'all' && communeName !== queueCommune) return false;
+      if (
+        queueFilter === 'crit' &&
+        !item.danger_immediat &&
+        (item.gravite || '').toLowerCase() !== 'critique'
+      ) {
+        return false;
+      }
+      if (queueFilter === 'sla' && !item.en_retard) return false;
+      if (queueFilter === 'doublon' && item.doublons_suggeres.length === 0) return false;
+      if (q) {
+        const hay = `${item.reference_suivi} ${communeName} ${item.type} ${item.description || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [fileItems, queueCommune, queueFilter, queueSearch]);
+
+  const filteredHistoriqueItems = useMemo(() => {
+    const q = histSearch.trim().toLowerCase();
+    return historiqueItems.filter((h) => {
+      if (histStatus !== 'all' && h.statut !== histStatus) return false;
+      if (q) {
+        const communeName = resolveCommuneLabel(h.commune, h.coords);
+        const hay = `${h.reference_suivi} ${h.type} ${communeName} ${h.verifie_par_nom || ''} ${h.motif_rejet || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [historiqueItems, histStatus, histSearch]);
 
   const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info') => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -454,7 +552,9 @@ export const VerificationPage: React.FC = () => {
 
   const handleSelectSignalement = useCallback((item: SignalementItem, scrollCardIntoView = false) => {
     setSelectedSignalement(item);
+    setMapFocus(null);
     setRejectErr('');
+    setRejectOpen(false);
     if (detailScrollRef.current) {
       detailScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -466,6 +566,23 @@ export const VerificationPage: React.FC = () => {
       dossierRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, []);
+
+  const handleOpenHistoriqueDetail = useCallback(
+    async (item: HistoriqueItem) => {
+      setSelectedHistorique(item);
+      setHistoriqueDetail(null);
+      setHistoriqueDetailLoading(true);
+      try {
+        const detail = await apiFetch<SignalementItem>(`/verification/${item.id}`);
+        setHistoriqueDetail(detail);
+      } catch (err: any) {
+        showToast(err.message || 'Impossible de charger les détails du signalement.', 'error');
+      } finally {
+        setHistoriqueDetailLoading(false);
+      }
+    },
+    [showToast]
+  );
 
   const loadFile = useCallback(
     async (silent = false) => {
@@ -526,49 +643,79 @@ export const VerificationPage: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [syncOn, loadFile, loadHistorique]);
 
-  // Navigation clavier ↑ / ↓ et Escape pour fermer la lightbox
+  const handleValider = useCallback(
+    async (sid: number) => {
+      setActionLoading(true);
+      try {
+        await apiFetch(`/verification/${sid}/valider`, {
+          method: 'POST',
+          body: JSON.stringify({
+            type: qualType,
+            gravite: qualGravite,
+            danger_immediat: qualDanger,
+          }),
+        });
+        setTally((prev) => ({ ...prev, val: prev.val + 1 }));
+        showToast(
+          `Signalement #${sid} promu en incident. Il est disponible pour affectation par le coordinateur.`,
+          'success'
+        );
+        await loadFile(false);
+        loadHistorique();
+      } catch (err: any) {
+        showToast(err.message || 'Erreur lors de la validation.', 'error');
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [qualType, qualGravite, qualDanger, loadFile, loadHistorique, showToast]
+  );
+
+  // Navigation clavier ↑ / ↓, V (valider), R (motif rejet), Escape (fermer lightbox)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && lightboxItem) {
         setLightboxItem(null);
         return;
       }
-      if (fileItems.length === 0) return;
+      if (activeTab !== 'file' || filteredFileItems.length === 0) return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        setRejectOpen(true);
+        window.setTimeout(() => rejectInputRef.current?.focus(), 0);
+        return;
+      }
+      if ((e.key === 'v' || e.key === 'V') && selectedSignalement && !actionLoading) {
+        e.preventDefault();
+        handleValider(selectedSignalement.id);
+        return;
+      }
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
       e.preventDefault();
-      const currentIdx = fileItems.findIndex((i) => i.id === selectedSignalement?.id);
+      const currentIdx = filteredFileItems.findIndex((i) => i.id === selectedSignalement?.id);
       const nextIdx =
         e.key === 'ArrowDown'
-          ? Math.min(fileItems.length - 1, currentIdx + 1)
+          ? Math.min(filteredFileItems.length - 1, currentIdx + 1)
           : Math.max(0, currentIdx <= 0 ? 0 : currentIdx - 1);
-      const nextItem = fileItems[nextIdx];
+      const nextItem = filteredFileItems[nextIdx];
       if (nextItem && nextItem.id !== selectedSignalement?.id) {
         handleSelectSignalement(nextItem, true);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [fileItems, selectedSignalement, handleSelectSignalement, lightboxItem]);
-
-  const handleValider = async (sid: number) => {
-    setActionLoading(true);
-    try {
-      await apiFetch(`/verification/${sid}/valider`, { method: 'POST' });
-      setTally((prev) => ({ ...prev, val: prev.val + 1 }));
-      showToast(
-        `Signalement #${sid} promu en incident. Il est disponible pour affectation par le coordinateur.`,
-        'success'
-      );
-      await loadFile(false);
-      loadHistorique();
-    } catch (err: any) {
-      showToast(err.message || 'Erreur lors de la validation.', 'error');
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  }, [
+    activeTab,
+    filteredFileItems,
+    selectedSignalement,
+    handleSelectSignalement,
+    lightboxItem,
+    actionLoading,
+    handleValider,
+  ]);
 
   const handleRejeter = async (sid: number) => {
     const m = rejectMotif.trim();
@@ -584,6 +731,7 @@ export const VerificationPage: React.FC = () => {
       });
       setRejectMotif('');
       setRejectErr('');
+      setRejectOpen(false);
       setTally((prev) => ({ ...prev, rej: prev.rej + 1 }));
       showToast(`Signalement #${sid} rejeté. Motif consigné : ${m}`, 'error');
       await loadFile(false);
@@ -755,7 +903,7 @@ export const VerificationPage: React.FC = () => {
             >
               <span className="material-symbols-outlined">rate_review</span>
               <span>Alertes à vérifier</span>
-              <span className="nav-badge" style={{ backgroundColor: 'var(--crit)', color: 'var(--water-ink)' }}>{fileItems.length}</span>
+              <span className="nav-badge" style={{ backgroundColor: 'var(--crit)', color: 'var(--crit-ink)' }}>{fileItems.length}</span>
             </button>
             <button
               type="button"
@@ -773,19 +921,19 @@ export const VerificationPage: React.FC = () => {
             <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                 <span style={{ color: 'var(--tx2)' }}>Validés :</span>
-                <span className="chip ok" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                <span className="chip ok">
                   <b className="up-ok">{tally.val}</b>
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                 <span style={{ color: 'var(--tx2)' }}>Fusionnés :</span>
-                <span className="chip" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                <span className="chip">
                   <b>{tally.mer}</b>
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                 <span style={{ color: 'var(--tx2)' }}>Rejetés :</span>
-                <span className="chip crit" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                <span className="chip crit">
                   <b className="up-crit">{tally.rej}</b>
                 </span>
               </div>
@@ -852,7 +1000,6 @@ export const VerificationPage: React.FC = () => {
 
             {/* Statut Vigilance & Thème */}
             <VigilancePill />
-            <ThemeToggle />
           </div>
         </header>
 
@@ -864,13 +1011,73 @@ export const VerificationPage: React.FC = () => {
           <div className="col-h">
             <h2>Flux d'alertes citoyennes</h2>
             <span className="chip water" id="qCount">
-              {fileItems.length ? `${fileItems.length} en attente` : 'File vide'}
+              {fileItems.length
+                ? `${filteredFileItems.length}/${fileItems.length} en attente`
+                : 'File vide'}
             </span>
           </div>
 
+          <div className="oid-verif-qfilters">
+            <div className="oid-verif-qsearch">
+              <span className="material-symbols-outlined">search</span>
+              <input
+                type="text"
+                value={queueSearch}
+                onChange={(e) => setQueueSearch(e.target.value)}
+                placeholder="Réf., commune, mot-clé…"
+                aria-label="Rechercher dans la file"
+              />
+              {queueSearch && (
+                <button
+                  type="button"
+                  className="oid-verif-qclear"
+                  onClick={() => setQueueSearch('')}
+                  title="Effacer la recherche"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            <div className="oid-verif-qrow">
+              <select
+                value={queueCommune}
+                onChange={(e) => setQueueCommune(e.target.value)}
+                aria-label="Filtrer par commune"
+              >
+                <option value="all">Toutes communes ({fileItems.length})</option>
+                {queueCommunes.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="oid-verif-qchips">
+              {(
+                [
+                  ['all', 'Toutes'],
+                  ['crit', 'Critiques'],
+                  ['sla', 'SLA dépassé'],
+                  ['doublon', 'Doublons'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={queueFilter === key ? 'is-active' : ''}
+                  onClick={() => setQueueFilter(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div ref={queueListRef} className="scroll" id="qList">
-            {fileItems.length > 0 ? (
-              fileItems.map((item) => {
+            {filteredFileItems.length > 0 ? (
+              filteredFileItems.map((item) => {
                 const isSelected = selectedSignalement?.id === item.id;
                 const sev =
                   item.danger_immediat || item.en_retard || (item.gravite || '').toLowerCase() === 'critique'
@@ -943,15 +1150,17 @@ export const VerificationPage: React.FC = () => {
         <section ref={dossierRef} className="col col-d" id="dossier" aria-live="polite">
           {selectedSignalement ? (
             <>
-              <div className="d-top">
-                <div>
-                  <span className="eyebrow">Dossier de qualification</span>
+              <div className="d-top oid-verif-dtop-compact">
+                <div className="oid-verif-dtop-left">
                   <h2>
                     Signalement #{selectedSignalement.id} ·{' '}
                     {selectedSignalement.reference_suivi.slice(0, 14).toUpperCase()}
                   </h2>
+                  <span className="chip water">
+                    {resolveCommuneLabel(selectedSignalement.commune, selectedSignalement.coords)}
+                  </span>
                 </div>
-                <span className="mono" style={{ fontSize: '12px', color: 'var(--tx3)' }}>
+                <span className="mono oid-verif-dtop-time">
                   Reçu à {formatUtcShort(selectedSignalement.cree_le)} UTC ·{' '}
                   {formatRelativeTime(selectedSignalement.cree_le)}
                 </span>
@@ -1065,6 +1274,7 @@ export const VerificationPage: React.FC = () => {
                           selectedSignalement.coords
                         )}
                         basemap={basemap}
+                        focusCoords={mapFocus}
                       />
                     </div>
                   </div>
@@ -1201,97 +1411,208 @@ export const VerificationPage: React.FC = () => {
                       </div>
                       <div className="dups">
                         {selectedSignalement.doublons_suggeres.map((d) => (
-                          <div key={d.id} className="dup">
-                            <div>
+                          <div key={d.id} className="dup oid-verif-dup-card">
+                            <div style={{ flex: 1, minWidth: 0 }}>
                               <b>
                                 Incident #{d.id} · {d.reference_publique.slice(0, 14).toUpperCase()}
+                                {d.commune ? ` · ${d.commune}` : ''}
                               </b>
                               <small>
                                 {d.distance_m != null ? `À ${d.distance_m} m` : 'Rayon < 400 m'} ·{' '}
                                 statut {d.statut.toLowerCase()} · {d.nb_signalements_lies || 1}{' '}
                                 signalement{(d.nb_signalements_lies || 1) > 1 ? 's' : ''} lié
                                 {(d.nb_signalements_lies || 1) > 1 ? 's' : ''}
+                                {d.cree_le ? ` · ${formatRelativeTime(d.cree_le)}` : ''}
                               </small>
+                              {d.description && (
+                                <p className="oid-verif-dup-desc">« {d.description} »</p>
+                              )}
                             </div>
-                            <button
-                              id="btn-merge"
-                              type="button"
-                              className="btn btn-sm"
-                              disabled={actionLoading}
-                              onClick={() => handleFusionner(selectedSignalement.id, d.id)}
-                            >
-                              Fusionner
-                            </button>
+                            <div className="oid-verif-dup-actions">
+                              {d.coords && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  title="Centrer la carte sur cet incident"
+                                  onClick={() =>
+                                    setMapFocus({
+                                      lat: d.coords!.lat,
+                                      lon: d.coords!.lon,
+                                      label: `<strong>Incident #${d.id}</strong><br/>${
+                                        d.commune || 'Doublon suggéré'
+                                      } (${d.distance_m != null ? `${d.distance_m} m` : '< 400 m'})`,
+                                    })
+                                  }
+                                >
+                                  Localiser
+                                </button>
+                              )}
+                              <button
+                                id="btn-merge"
+                                type="button"
+                                className="btn btn-sm"
+                                disabled={actionLoading}
+                                onClick={() => handleFusionner(selectedSignalement.id, d.id)}
+                              >
+                                Fusionner
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
+
+                  {/* 7. Requalification avant validation */}
+                  <div className="oid-verif-requal">
+                    <div className="sec-head">
+                      <div>
+                        <h2>Requalification avant validation</h2>
+                        <p>Corrigez si besoin la nature ou la gravité déclarée par le citoyen.</p>
+                      </div>
+                    </div>
+                    <div className="oid-verif-requal-grid">
+                      <label className="oid-verif-field">
+                        <span>Type d'incident</span>
+                        <select
+                          value={qualType}
+                          onChange={(e) => setQualType(e.target.value)}
+                        >
+                          <option value="ruissellement">Ruissellement urbain</option>
+                          <option value="crue">Crue / Cours d'eau</option>
+                          <option value="refoulement">Refoulement de collecteur</option>
+                          <option value="lagunaire">Submersion lagunaire</option>
+                          <option value="nappe">Remontée de nappe</option>
+                          <option value="route">Coupure d'axe routier</option>
+                          <option value="habitation">Submersion d'habitation</option>
+                          <option value="glissement">Glissement de terrain</option>
+                        </select>
+                      </label>
+
+                      <label className="oid-verif-field">
+                        <span>Gravité estimée</span>
+                        <select
+                          value={qualGravite}
+                          onChange={(e) => setQualGravite(e.target.value)}
+                        >
+                          <option value="faible">Faible</option>
+                          <option value="moyenne">Moyenne</option>
+                          <option value="elevee">Élevée</option>
+                          <option value="critique">Critique</option>
+                        </select>
+                      </label>
+
+                      <label className="oid-verif-check">
+                        <input
+                          type="checkbox"
+                          checked={qualDanger}
+                          onChange={(e) => setQualDanger(e.target.checked)}
+                        />
+                        <span>Danger immédiat (péril vital)</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Barre de décision épinglée en bas (.foot) */}
-              <div className="foot">
-                <div className="rej">
-                  <input
-                    ref={rejectInputRef}
-                    id="reject-reason"
-                    type="text"
-                    value={rejectMotif}
-                    onChange={(e) => {
-                      setRejectMotif(e.target.value);
-                      if (rejectErr) setRejectErr('');
-                    }}
-                    className={`input ${rejectErr ? 'bad' : ''}`}
-                    placeholder="Motif de rejet obligatoire"
-                    aria-label="Motif de rejet"
-                  />
-                  <button
-                    id="btn-reject"
-                    type="button"
-                    className="btn btn-crit"
-                    disabled={actionLoading}
-                    onClick={() => handleRejeter(selectedSignalement.id)}
-                  >
-                    <svg className="icon">
-                      <use href="#i-x" />
-                    </svg>
-                    Rejeter
-                  </button>
-                </div>
+              {/* Barre de décision compacte épinglée en bas (.foot) */}
+              <div className="foot oid-verif-foot-compact">
+                {rejectOpen ? (
+                  <div className="oid-verif-reject-drawer">
+                    <div className="rej">
+                      <input
+                        ref={rejectInputRef}
+                        id="reject-reason"
+                        type="text"
+                        value={rejectMotif}
+                        onChange={(e) => {
+                          setRejectMotif(e.target.value);
+                          if (rejectErr) setRejectErr('');
+                        }}
+                        className={`input ${rejectErr ? 'bad' : ''}`}
+                        placeholder="Motif de rejet obligatoire"
+                        aria-label="Motif de rejet"
+                      />
+                      <button
+                        id="btn-reject"
+                        type="button"
+                        className="btn oid-verif-rej-btn"
+                        disabled={actionLoading}
+                        onClick={() => handleRejeter(selectedSignalement.id)}
+                      >
+                        <svg className="icon">
+                          <use href="#i-x" />
+                        </svg>
+                        Confirmer le rejet
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={actionLoading}
+                        onClick={() => {
+                          setRejectOpen(false);
+                          setRejectErr('');
+                        }}
+                      >
+                        Annuler
+                      </button>
+                    </div>
 
-                <div className="qs">
-                  {QUICK_REJECT_MOTIFS.map((m) => (
+                    <div className="qs">
+                      {QUICK_REJECT_MOTIFS.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => {
+                            setRejectMotif(m);
+                            setRejectErr('');
+                            rejectInputRef.current?.focus();
+                          }}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+
+                    {rejectErr && (
+                      <div className="err" id="rejErr" role="alert">
+                        {rejectErr}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="oid-verif-foot-bar">
                     <button
-                      key={m}
                       type="button"
+                      className="btn oid-verif-rej-btn"
+                      disabled={actionLoading}
                       onClick={() => {
-                        setRejectMotif(m);
-                        setRejectErr('');
-                        rejectInputRef.current?.focus();
+                        setRejectOpen(true);
+                        window.setTimeout(() => rejectInputRef.current?.focus(), 0);
                       }}
                     >
-                      {m}
+                      <svg className="icon">
+                        <use href="#i-x" />
+                      </svg>
+                      Rejeter…
                     </button>
-                  ))}
-                </div>
 
-                <div className="err" id="rejErr" role="alert">
-                  {rejectErr}
-                </div>
-
-                <button
-                  id="btn-validate"
-                  type="button"
-                  className="btn btn-pri btn-lg btn-block"
-                  disabled={actionLoading}
-                  onClick={() => handleValider(selectedSignalement.id)}
-                >
-                  <svg className="icon">
-                    <use href="#i-tick" />
-                  </svg>
-                  {actionLoading ? 'Qualification en cours…' : 'Valider et promouvoir en incident'}
-                </button>
+                    <button
+                      id="btn-validate"
+                      type="button"
+                      className="btn oid-verif-val-btn"
+                      disabled={actionLoading}
+                      onClick={() => handleValider(selectedSignalement.id)}
+                    >
+                      <svg className="icon">
+                        <use href="#i-tick" />
+                      </svg>
+                      {actionLoading
+                        ? 'Qualification en cours…'
+                        : 'Valider et promouvoir en incident'}
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -1310,82 +1631,325 @@ export const VerificationPage: React.FC = () => {
                   Rejetés <b className="up-crit">{tally.rej}</b>
                 </span>
               </div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ marginTop: '14px' }}
+                onClick={() => setActiveTab('historique')}
+              >
+                Consulter l'historique ({historiqueItems.length})
+              </button>
             </div>
           )}
         </section>
         </div>
       ) : (
         <div style={{ padding: '24px 32px' }}>
-          <div className="panel pad" style={{ border: '1px solid var(--line)', borderRadius: '16px', background: 'var(--s1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--tx)' }}>Historique des alertes traitées</h2>
-                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--tx2)' }}>
-                  Traçabilité complète des signalements vérifiés, fusionnés ou rejetés
-                </p>
+          {selectedHistorique ? (
+            <div
+              className="panel pad oid-verif-hist-detail"
+              style={{ border: '1px solid var(--line)', borderRadius: '16px', background: 'var(--s1)' }}
+            >
+              <div className="oid-verif-hist-detail-bar">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setSelectedHistorique(null);
+                    setHistoriqueDetail(null);
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                    arrow_back
+                  </span>
+                  <span>Retour à l'historique</span>
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span
+                    className={`chip ${
+                      selectedHistorique.statut === 'valide'
+                        ? 'ok'
+                        : selectedHistorique.statut === 'rejete'
+                        ? 'crit'
+                        : 'water'
+                    }`}
+                  >
+                    {selectedHistorique.statut.toUpperCase()}
+                  </span>
+                  <span className="mono" style={{ fontSize: '13px', color: 'var(--tx2)' }}>
+                    {selectedHistorique.reference_suivi}
+                  </span>
+                </div>
               </div>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => loadHistorique()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>refresh</span>
-                <span>Rafraîchir</span>
-              </button>
-            </div>
 
-            <div className="tbl-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Réf. Suivi</th>
-                    <th>Type d'incident</th>
-                    <th>Statut</th>
-                    <th>Vérifié par</th>
-                    <th>Date Traitement</th>
-                    <th>Détails &amp; Destination</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historiqueItems.length === 0 ? (
+              {historiqueDetailLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--tx2)' }}>
+                  Chargement de la fiche d'archive…
+                </div>
+              ) : (
+                <div className="oid-verif-hist-detail-body">
+                  <div className="oid-verif-hist-head">
+                    <div>
+                      <span className="eyebrow">FICHE DE DÉCISION · ARCHIVE VÉRIFICATION</span>
+                      <h2>
+                        {getTypeMeta(historiqueDetail?.type || selectedHistorique.type).title}
+                      </h2>
+                      <p>
+                        Secteur :{' '}
+                        <strong>
+                          {resolveCommuneLabel(
+                            historiqueDetail?.commune ?? selectedHistorique.commune,
+                            historiqueDetail?.coords ?? selectedHistorique.coords
+                          )}
+                        </strong>{' '}
+                        · Vérifié par{' '}
+                        <strong>{selectedHistorique.verifie_par_nom || 'Agent O.I.D'}</strong> le{' '}
+                        {selectedHistorique.verifie_le
+                          ? new Date(selectedHistorique.verifie_le).toLocaleString('fr-FR')
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="oid-verif-hist-decision">
+                    {selectedHistorique.statut === 'valide' && (
+                      <div className="oid-verif-hist-banner is-ok">
+                        <strong>Signalement validé et promu</strong>
+                        <span>
+                          Incident créé : #{selectedHistorique.incident_id || '—'}
+                        </span>
+                      </div>
+                    )}
+                    {selectedHistorique.statut === 'doublon' && (
+                      <div className="oid-verif-hist-banner is-merge">
+                        <strong>Signalement fusionné (doublon)</strong>
+                        <span>
+                          Rattaché à l'incident #{selectedHistorique.incident_id || '—'}
+                        </span>
+                      </div>
+                    )}
+                    {selectedHistorique.statut === 'rejete' && (
+                      <div className="oid-verif-hist-banner is-crit">
+                        <strong>Signalement rejeté</strong>
+                        <span>
+                          Motif : {selectedHistorique.motif_rejet || 'Non précisé'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="oid-verif-hist-grid">
+                    <div className="oid-verif-hist-card">
+                      <h4>Déclaration citoyenne</h4>
+                      <p>
+                        {historiqueDetail?.description
+                          ? `« ${historiqueDetail.description} »`
+                          : 'Aucune description textuelle enregistrée.'}
+                      </p>
+                      <div className="oid-verif-hist-meta">
+                        <span>
+                          Hauteur d'eau : <b>{historiqueDetail?.hauteur_eau_cm ?? 0} cm</b>
+                        </span>
+                        <span>
+                          Gravité : <b>{historiqueDetail?.gravite || '—'}</b>
+                        </span>
+                        <span>
+                          Score priorité : <b>{historiqueDetail?.score_priorite ?? '—'} pts</b>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="oid-verif-hist-card">
+                      <h4>Localisation GPS</h4>
+                      {(historiqueDetail?.coords || selectedHistorique.coords) ? (
+                        <>
+                          <p className="mono" style={{ fontSize: '13px' }}>
+                            {(historiqueDetail?.coords || selectedHistorique.coords)!.lat.toFixed(5)}° N,{' '}
+                            {(historiqueDetail?.coords || selectedHistorique.coords)!.lon.toFixed(5)}° W
+                          </p>
+                          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <a
+                              href={`https://maps.google.com/?q=${
+                                (historiqueDetail?.coords || selectedHistorique.coords)!.lat
+                              },${(historiqueDetail?.coords || selectedHistorique.coords)!.lon}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: 'var(--water)', fontSize: '13px', fontWeight: 600 }}
+                            >
+                              Ouvrir dans Google Maps
+                            </a>
+                            <a
+                              href={`https://www.openstreetmap.org/#map=17/${
+                                (historiqueDetail?.coords || selectedHistorique.coords)!.lat
+                              }/${(historiqueDetail?.coords || selectedHistorique.coords)!.lon}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: 'var(--water)', fontSize: '13px', fontWeight: 600 }}
+                            >
+                              OpenStreetMap
+                            </a>
+                          </div>
+                        </>
+                      ) : (
+                        <p>Coordonnées indisponibles.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="oid-verif-hist-card">
+                    <h4>Photographies jointes ({historiqueDetail?.photos_meta?.length || 0})</h4>
+                    {historiqueDetail?.photos_meta && historiqueDetail.photos_meta.length > 0 ? (
+                      <div className="oid-verif-hist-photos">
+                        {historiqueDetail.photos_meta.map((pMeta, idx) => (
+                          <div
+                            key={idx}
+                            className="oid-verif-hist-photo"
+                            onClick={() =>
+                              setLightboxItem({
+                                url: pMeta.url,
+                                name: pMeta.filename,
+                                meta: pMeta.taille_formatee || 'Photo archivée',
+                              })
+                            }
+                          >
+                            <img src={apiUrl(pMeta.url)} alt={pMeta.filename} />
+                            <span>{pMeta.filename}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ color: 'var(--tx3)' }}>Aucune photographie jointe.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="panel pad" style={{ border: '1px solid var(--line)', borderRadius: '16px', background: 'var(--s1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--tx)' }}>Historique des alertes traitées</h2>
+                  <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--tx2)' }}>
+                    Traçabilité complète des signalements vérifiés, fusionnés ou rejetés ({filteredHistoriqueItems.length}/{historiqueItems.length})
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => loadHistorique()}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>refresh</span>
+                  <span>Rafraîchir</span>
+                </button>
+              </div>
+
+              <div className="oid-verif-hfilters">
+                <div className="oid-verif-qsearch" style={{ flex: '1 1 240px' }}>
+                  <span className="material-symbols-outlined">search</span>
+                  <input
+                    type="text"
+                    value={histSearch}
+                    onChange={(e) => setHistSearch(e.target.value)}
+                    placeholder="Rechercher par réf., commune, agent, motif…"
+                    aria-label="Rechercher dans l'historique"
+                  />
+                </div>
+                <div className="oid-verif-qchips">
+                  {(
+                    [
+                      ['all', 'Tous'],
+                      ['valide', 'Validés'],
+                      ['doublon', 'Fusionnés'],
+                      ['rejete', 'Rejetés'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={histStatus === key ? 'is-active' : ''}
+                      onClick={() => setHistStatus(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="tbl-wrap">
+                <table>
+                  <thead>
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--tx3)' }}>
-                        Aucun signalement traité dans l'historique récent.
-                      </td>
+                      <th>Réf. Suivi</th>
+                      <th>Type &amp; Commune</th>
+                      <th>Statut</th>
+                      <th>Vérifié par</th>
+                      <th>Date Traitement</th>
+                      <th>Détails &amp; Destination</th>
+                      <th style={{ textAlign: 'right' }}>Fiche</th>
                     </tr>
-                  ) : (
-                    historiqueItems.map((h) => (
-                      <tr key={h.id}>
-                        <td><strong className="code">{h.reference_suivi}</strong></td>
-                        <td>{h.type}</td>
-                        <td>
-                          <span className={`chip ${h.statut === 'valide' ? 'ok' : h.statut === 'rejete' ? 'crit' : 'water'}`}>
-                            {h.statut}
-                          </span>
-                        </td>
-                        <td>{h.verifie_par_nom || '—'}</td>
-                        <td style={{ fontFamily: 'var(--mono)', fontSize: '12px' }}>
-                          {h.verifie_le ? new Date(h.verifie_le).toLocaleString('fr-FR') : '—'}
-                        </td>
-                        <td style={{ fontSize: '13px' }}>
-                          {h.statut === 'valide' && h.incident_id && (
-                            <span style={{ color: 'var(--water)', fontWeight: 600 }}>Incident #{h.incident_id}</span>
-                          )}
-                          {h.statut === 'rejete' && (
-                            <span style={{ color: 'var(--crit)' }}>Motif : {h.motif_rejet || 'Non précisé'}</span>
-                          )}
-                          {h.statut === 'doublon' && (
-                            <span style={{ color: 'var(--tx2)' }}>Fusionné dans incident #{h.incident_id}</span>
-                          )}
+                  </thead>
+                  <tbody>
+                    {filteredHistoriqueItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: 'var(--tx3)' }}>
+                          Aucun signalement ne correspond aux filtres sélectionnés.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      filteredHistoriqueItems.map((h) => (
+                        <tr
+                          key={h.id}
+                          className="oid-verif-hist-row"
+                          onClick={() => handleOpenHistoriqueDetail(h)}
+                        >
+                          <td><strong className="code">{h.reference_suivi}</strong></td>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{getTypeMeta(h.type).label}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--tx3)' }}>
+                              {resolveCommuneLabel(h.commune, h.coords)}
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`chip ${h.statut === 'valide' ? 'ok' : h.statut === 'rejete' ? 'crit' : 'water'}`}>
+                              {h.statut}
+                            </span>
+                          </td>
+                          <td>{h.verifie_par_nom || '—'}</td>
+                          <td style={{ fontFamily: 'var(--mono)', fontSize: '12px' }}>
+                            {h.verifie_le ? new Date(h.verifie_le).toLocaleString('fr-FR') : '—'}
+                          </td>
+                          <td style={{ fontSize: '13px' }}>
+                            {h.statut === 'valide' && h.incident_id && (
+                              <span style={{ color: 'var(--water)', fontWeight: 600 }}>Incident #{h.incident_id}</span>
+                            )}
+                            {h.statut === 'rejete' && (
+                              <span style={{ color: 'var(--crit)' }}>Motif : {h.motif_rejet || 'Non précisé'}</span>
+                            )}
+                            {h.statut === 'doublon' && (
+                              <span style={{ color: 'var(--tx2)' }}>Fusionné dans incident #{h.incident_id}</span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenHistoriqueDetail(h);
+                              }}
+                            >
+                              Consulter
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
       </main>

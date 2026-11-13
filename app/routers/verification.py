@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from geoalchemy2.shape import to_shape
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,12 @@ from app.services.statuts import transition_signalement
 router = APIRouter(prefix="/verification", tags=["verification"])
 
 PHOTO_UPLOAD_DIR = Path(__file__).resolve().parent.parent / "static" / "uploads"
+
+
+class ValiderPayload(BaseModel):
+    type: str | None = None
+    gravite: str | None = None
+    danger_immediat: bool | None = None
 
 
 def _not_found():
@@ -70,6 +77,7 @@ def _serialize_doublon(db: Session | None, sig_coords: dict | None, inc: Inciden
                 )
 
     nb_lies = 1
+    first_desc = None
     if db is not None:
         with contextlib.suppress(Exception):
             cnt = db.scalar(
@@ -77,6 +85,14 @@ def _serialize_doublon(db: Session | None, sig_coords: dict | None, inc: Inciden
             )
             if cnt is not None and int(cnt) > 0:
                 nb_lies = int(cnt)
+            first_desc = db.scalar(
+                select(Signalement.description)
+                .where(Signalement.incident_id == inc.id, Signalement.description.is_not(None))
+                .order_by(Signalement.cree_le.asc())
+                .limit(1)
+            )
+
+    commune, _ = _resolve_commune(db, inc.geom)
 
     return {
         "id": inc.id,
@@ -87,6 +103,9 @@ def _serialize_doublon(db: Session | None, sig_coords: dict | None, inc: Inciden
         "distance_m": distance_m,
         "nb_signalements_lies": nb_lies,
         "coords": inc_coords,
+        "commune": commune,
+        "cree_le": inc.cree_le.isoformat() if inc.cree_le else None,
+        "description": first_desc,
     }
 
 
@@ -217,6 +236,7 @@ def detail_signalement(
 @router.post("/{sid}/valider")
 def valider(
     sid: int,
+    payload: ValiderPayload | None = Body(default=None),
     db: Session = Depends(get_db),
     user: Utilisateur = Depends(require_role("verificateur", "coordinateur")),
 ):
@@ -225,6 +245,14 @@ def valider(
         _not_found()
     if s.statut != "recu":
         raise HTTPException(409, "Ce signalement a déjà été traité.")
+
+    if payload is not None:
+        if payload.type and payload.type.strip():
+            s.type = payload.type.strip()
+        if payload.gravite and payload.gravite.strip():
+            s.gravite = payload.gravite.strip()
+        if payload.danger_immediat is not None:
+            s.danger_immediat = payload.danger_immediat
 
     zone_id = None
     if s.geom is not None:
