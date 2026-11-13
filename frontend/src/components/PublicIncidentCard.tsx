@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Camera, MapPin, Droplets, AlertTriangle, Route } from 'lucide-react';
+import { ChevronDown, Camera, MapPin, Droplets, AlertTriangle, Route, LocateFixed } from 'lucide-react';
 import { apiUrl } from '../api/client';
 import {
   INCIDENT_FIABILITE_LABELS,
@@ -23,6 +23,8 @@ export interface PublicIncident {
   degats: string | null;
   risques_sanitaires: string | null;
   photos: string[];
+  lat?: number | null;
+  lon?: number | null;
   cree_le: string | null;
   maj_le: string | null;
 }
@@ -68,12 +70,14 @@ interface PublicIncidentCardProps {
   incident: PublicIncident;
   defaultExpanded?: boolean;
   onOpenPhoto: (photos: string[], index: number, title: string) => void;
+  onLocate?: (incident: PublicIncident) => void;
 }
 
 export const PublicIncidentCard: React.FC<PublicIncidentCardProps> = ({
   incident,
   defaultExpanded = false,
   onOpenPhoto,
+  onLocate,
 }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const typeLabel = INCIDENT_TYPE_LABELS[incident.type] || incident.type;
@@ -250,6 +254,19 @@ export const PublicIncidentCard: React.FC<PublicIncidentCardProps> = ({
               <p className="text-xs text-ink2 italic">Aucune photo publiée pour cet incident.</p>
             )}
           </div>
+
+          {onLocate && (
+            <div className="flex items-center justify-end pt-2 border-t border-line">
+              <button
+                type="button"
+                onClick={() => onLocate(incident)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold border border-[var(--water)] bg-surface text-[var(--water)] hover:bg-[var(--water)] hover:text-white transition"
+              >
+                <LocateFixed size={15} aria-hidden="true" />
+                <span>Localiser</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </article>

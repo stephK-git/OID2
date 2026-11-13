@@ -8,7 +8,6 @@ import {
   ChevronRight,
   List,
   Map as MapIcon,
-  MapPin,
   PlusCircle,
   RefreshCw,
   RotateCcw,
@@ -43,6 +42,7 @@ interface PublicMapFeature {
     coordinates: [number, number];
   };
   properties: {
+    id?: number;
     type: string;
     statut: string;
     danger_immediat: boolean;
@@ -132,12 +132,30 @@ export const PublicIncidentsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialCommune = searchParams.get('commune') || 'all';
   const initialPeriod = searchParams.get('periode') !== 'tous';
+  const initialVue = searchParams.get('vue');
+  const incidentParam = searchParams.get('incident');
+  const parsedIncidentId = incidentParam ? Number(incidentParam) : NaN;
+  const initialIncidentId =
+    Number.isFinite(parsedIncidentId) && parsedIncidentId > 0 ? parsedIncidentId : null;
 
   const [todayOnly, setTodayOnly] = useState<boolean>(initialPeriod);
   const [communeFilter, setCommuneFilter] = useState<string>(initialCommune);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [viewMode, setViewMode] = useState<ViewMode>('split');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (
+      initialVue === 'carte' &&
+      typeof window !== 'undefined' &&
+      window.innerWidth < 960
+    ) {
+      return 'map';
+    }
+    return 'split';
+  });
+  const [focusedIncidentId, setFocusedIncidentId] = useState<number | null>(initialIncidentId);
+  const [focusTick, setFocusTick] = useState<number>(
+    initialVue === 'carte' || initialIncidentId !== null ? 1 : 0
+  );
   const [refreshTick, setRefreshTick] = useState<number>(0);
 
   const [incidents, setIncidents] = useState<PublicIncident[]>([]);
@@ -152,6 +170,7 @@ export const PublicIncidentsPage: React.FC = () => {
 
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
 
+  const mapCardRef = useRef<HTMLDivElement | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const communesLayerRef = useRef<L.GeoJSON | null>(null);
@@ -341,10 +360,22 @@ export const PublicIncidentsPage: React.FC = () => {
   }, [incidents, communeFilter, severityFilter, matchesSearch]);
 
   const todayUtcStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const isMapVisible = viewMode !== 'list';
+
+  const focusedIncident = useMemo(
+    () =>
+      focusedIncidentId != null
+        ? incidents.find((incident) => incident.id === focusedIncidentId) ?? null
+        : null,
+    [incidents, focusedIncidentId]
+  );
 
   const filteredMapFeatures = useMemo(() => {
-    return mapFeatures.filter((feature) => {
+    const filtered = mapFeatures.filter((feature) => {
       const props = feature.properties;
+      if (focusedIncidentId != null && props.id === focusedIncidentId) {
+        return true;
+      }
       if (communeFilter !== 'all' && props.commune !== communeFilter) return false;
       const sev = featureSeverity(props);
       if (severityFilter !== 'all' && sev !== severityFilter) return false;
@@ -367,11 +398,50 @@ export const PublicIncidentsPage: React.FC = () => {
       }
       return true;
     });
-  }, [mapFeatures, communeFilter, severityFilter, todayOnly, todayUtcStr, normalizedQuery]);
 
-  // Initialisation / destruction de la carte Leaflet selon viewMode
+    if (
+      focusedIncident &&
+      focusedIncident.lat != null &&
+      focusedIncident.lon != null &&
+      !filtered.some((feature) => feature.properties.id === focusedIncident.id)
+    ) {
+      return [
+        ...filtered,
+        {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'Point',
+            coordinates: [focusedIncident.lon, focusedIncident.lat] as [number, number],
+          },
+          properties: {
+            id: focusedIncident.id,
+            type: focusedIncident.type,
+            statut: focusedIncident.statut,
+            danger_immediat: focusedIncident.danger_immediat,
+            categorie: focusedIncident.categorie,
+            commune: focusedIncident.commune,
+            niveau_fiabilite: focusedIncident.niveau_fiabilite,
+            cree_le: focusedIncident.cree_le,
+          },
+        },
+      ];
+    }
+
+    return filtered;
+  }, [
+    mapFeatures,
+    communeFilter,
+    severityFilter,
+    todayOnly,
+    todayUtcStr,
+    normalizedQuery,
+    focusedIncidentId,
+    focusedIncident,
+  ]);
+
+  // Initialisation / destruction de la carte Leaflet selon la visibilité de la carte
   useEffect(() => {
-    if (viewMode === 'list' || !mapContainerRef.current) return;
+    if (!isMapVisible || !mapContainerRef.current) return;
 
     const map = L.map(mapContainerRef.current, {
       center: ABIDJAN_CENTER,
@@ -397,16 +467,16 @@ export const PublicIncidentsPage: React.FC = () => {
       communesLayerRef.current = null;
       markersLayerRef.current = null;
     };
-  }, [viewMode]);
+  }, [isMapVisible]);
 
   // Recalcule la taille Leaflet quand la disposition change (split <-> map)
   useEffect(() => {
-    if (viewMode === 'list' || !mapRef.current) return;
+    if (!isMapVisible || !mapRef.current) return;
     const timer = window.setTimeout(() => {
-      mapRef.current?.invalidateSize();
+      mapRef.current?.invalidateSize({ animate: false });
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [viewMode]);
+  }, [viewMode, isMapVisible]);
 
   // Mise à jour des polygones de communes + marqueurs filtrés sur la carte
   useEffect(() => {
@@ -456,6 +526,8 @@ export const PublicIncidentsPage: React.FC = () => {
 
     markersLayer.clearLayers();
     const pointBounds = L.latLngBounds([]);
+    let focusedMarker: L.CircleMarker | null = null;
+    let focusedCoords: [number, number] | null = null;
 
     for (const feature of filteredMapFeatures) {
       const coords = feature.geometry?.coordinates;
@@ -466,7 +538,18 @@ export const PublicIncidentsPage: React.FC = () => {
       const props = feature.properties;
       const sev = featureSeverity(props);
       const color = MARKER_COLORS[sev];
-      const radius = sev === 'critique' ? 9 : sev === 'route_coupee' ? 8 : 7;
+      const matchesById = focusedIncidentId != null && props.id === focusedIncidentId;
+      const matchesByFallback =
+        props.id == null &&
+        focusedIncident != null &&
+        props.commune === focusedIncident.commune &&
+        props.type === focusedIncident.type &&
+        (!props.cree_le ||
+          !focusedIncident.cree_le ||
+          props.cree_le === focusedIncident.cree_le);
+      const isFocused = matchesById || matchesByFallback;
+      const baseRadius = sev === 'critique' ? 9 : sev === 'route_coupee' ? 8 : 7;
+      const radius = isFocused ? baseRadius + 4 : baseRadius;
 
       const typeLabel = INCIDENT_TYPE_LABELS[props.type] || props.type;
       const statutLabel = INCIDENT_STATUT_LABELS[props.statut]?.label || props.statut;
@@ -492,51 +575,120 @@ export const PublicIncidentsPage: React.FC = () => {
         </div>
       `;
 
+      if (isFocused) {
+        L.circleMarker([lat, lon], {
+          radius: radius + 7,
+          color: '#0b5fc4',
+          weight: 2.5,
+          opacity: 0.9,
+          fillColor: '#0b5fc4',
+          fillOpacity: 0.16,
+          interactive: false,
+        }).addTo(markersLayer);
+      }
+
       const marker = L.circleMarker([lat, lon], {
         radius,
-        color: '#ffffff',
-        weight: 2,
+        color: isFocused ? '#0b1f33' : '#ffffff',
+        weight: isFocused ? 3 : 2,
         fillColor: color,
-        fillOpacity: 0.92,
+        fillOpacity: 0.95,
       });
 
       marker.bindPopup(popupHtml);
       marker.addTo(markersLayer);
       pointBounds.extend([lat, lon]);
+
+      if (isFocused) {
+        focusedMarker = marker;
+        focusedCoords = [lat, lon];
+      }
     }
 
-    if (selectedCommuneBounds && (selectedCommuneBounds as L.LatLngBounds).isValid()) {
+    let rafId: number | null = null;
+    let popupTimer: number | null = null;
+
+    if (focusedMarker && focusedCoords) {
+      const targetMarker = focusedMarker;
+      const targetCoords = focusedCoords;
+      rafId = window.requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false });
+        map.setView(targetCoords, 16, { animate: true });
+        popupTimer = window.setTimeout(() => {
+          targetMarker.openPopup();
+        }, 240);
+      });
+    } else if (selectedCommuneBounds && (selectedCommuneBounds as L.LatLngBounds).isValid()) {
       map.fitBounds(selectedCommuneBounds, { padding: [24, 24], maxZoom: 14 });
     } else if (pointBounds.isValid()) {
       map.fitBounds(pointBounds, { padding: [32, 32], maxZoom: 14 });
     } else {
       map.setView(ABIDJAN_CENTER, 12);
     }
+
+    return () => {
+      if (rafId != null) window.cancelAnimationFrame(rafId);
+      if (popupTimer != null) window.clearTimeout(popupTimer);
+    };
   }, [
     communesGeoJson,
     filteredMapFeatures,
     communeFilter,
     viewMode,
+    isMapVisible,
     todayOnly,
     syncUrlParams,
+    focusedIncidentId,
+    focusedIncident,
+    focusTick,
   ]);
 
+  // Fait défiler jusqu'à la carte lorsque l'utilisateur demande à localiser un incident
+  useEffect(() => {
+    if (focusTick === 0 || viewMode === 'list') return;
+    const timer = window.setTimeout(() => {
+      mapCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 140);
+    return () => window.clearTimeout(timer);
+  }, [focusTick, viewMode]);
+
   const handleCommuneSelect = (commune: string) => {
+    setFocusedIncidentId(null);
     setCommuneFilter(commune);
     syncUrlParams(commune, todayOnly);
   };
 
   const handlePeriodChange = (nextTodayOnly: boolean) => {
+    setFocusedIncidentId(null);
     setTodayOnly(nextTodayOnly);
     syncUrlParams(communeFilter, nextTodayOnly);
   };
 
   const handleResetFilters = () => {
+    setFocusedIncidentId(null);
     setCommuneFilter('all');
     setSeverityFilter('all');
     setSearchQuery('');
     syncUrlParams('all', todayOnly);
   };
+
+  const handleLocateIncident = useCallback(
+    (incident: PublicIncident) => {
+      setFocusedIncidentId(incident.id);
+      setFocusTick((t) => t + 1);
+      if (viewMode === 'list') {
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 960;
+        setViewMode(isMobile ? 'map' : 'split');
+      } else if (
+        typeof window !== 'undefined' &&
+        window.innerWidth < 960 &&
+        viewMode !== 'map'
+      ) {
+        setViewMode('map');
+      }
+    },
+    [viewMode]
+  );
 
   const handleOpenPhoto = (photos: string[], index: number, title: string) => {
     setLightbox({ photos, index, title });
@@ -552,10 +704,6 @@ export const PublicIncidentsPage: React.FC = () => {
         <header className="oid-consulter-hero">
           <div className="oid-consulter-hero-top">
             <div>
-              <span className="oid-consulter-eyebrow">
-                <MapPin size={14} aria-hidden="true" />
-                District d&apos;Abidjan · Veille citoyenne
-              </span>
               <h1 className="oid-consulter-title">
                 {todayOnly ? 'Les incidents du jour' : 'Tous les incidents actifs'}
               </h1>
@@ -565,165 +713,170 @@ export const PublicIncidentsPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="oid-consulter-hero-controls">
-              <div className="oid-consulter-segmented" role="group" aria-label="Période">
+            <div className="oid-consulter-hero-right">
+              <div className="oid-consulter-hero-controls">
+                <div className="oid-consulter-segmented" role="group" aria-label="Période">
+                  <button
+                    type="button"
+                    onClick={() => handlePeriodChange(true)}
+                    aria-pressed={todayOnly}
+                    className={`oid-consulter-seg-btn ${todayOnly ? 'is-active' : ''}`}
+                  >
+                    Aujourd&apos;hui
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePeriodChange(false)}
+                    aria-pressed={!todayOnly}
+                    className={`oid-consulter-seg-btn ${!todayOnly ? 'is-active' : ''}`}
+                  >
+                    Tous actifs
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => handlePeriodChange(true)}
-                  aria-pressed={todayOnly}
-                  className={`oid-consulter-seg-btn ${todayOnly ? 'is-active' : ''}`}
+                  onClick={() => setRefreshTick((t) => t + 1)}
+                  className="oid-consulter-refresh-btn"
+                  aria-label="Actualiser les incidents"
+                  title="Actualiser"
                 >
-                  Aujourd&apos;hui
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handlePeriodChange(false)}
-                  aria-pressed={!todayOnly}
-                  className={`oid-consulter-seg-btn ${!todayOnly ? 'is-active' : ''}`}
-                >
-                  Tous actifs
+                  <RefreshCw
+                    size={15}
+                    className={loadingList || loadingMap ? 'animate-spin' : ''}
+                    aria-hidden="true"
+                  />
+                  <span>Actualiser</span>
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setRefreshTick((t) => t + 1)}
-                className="oid-consulter-refresh-btn"
-                aria-label="Actualiser les incidents"
-                title="Actualiser"
-              >
-                <RefreshCw
-                  size={15}
-                  className={loadingList || loadingMap ? 'animate-spin' : ''}
-                  aria-hidden="true"
-                />
-                <span>Actualiser</span>
-              </button>
+              <div className="oid-consulter-stats-pills">
+                <div className="oid-consulter-stat-pill">
+                  <strong className="font-mono">{filteredIncidents.length}</strong>
+                  <span>
+                    affiché{filteredIncidents.length > 1 ? 's' : ''}
+                    {apiTotal > incidents.length ? ` sur ${apiTotal}` : ''}
+                  </span>
+                </div>
+                <div className="oid-consulter-stat-pill is-crit">
+                  <strong className="font-mono">{severityCounts.critique}</strong>
+                  <span>Critique{severityCounts.critique > 1 ? 's' : ''}</span>
+                </div>
+                <div className="oid-consulter-stat-pill is-warn">
+                  <strong className="font-mono">{severityCounts.route_coupee}</strong>
+                  <span>
+                    Route{severityCounts.route_coupee > 1 ? 's' : ''} coupée
+                    {severityCounts.route_coupee > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="oid-consulter-stat-pill is-vig">
+                  <strong className="font-mono">{severityCounts.vigilance}</strong>
+                  <span>Vigilance</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="oid-consulter-stats-row">
-            <div className="oid-consulter-stat-pill">
-              <strong className="font-mono">{filteredIncidents.length}</strong>
-              <span>
-                affiché{filteredIncidents.length > 1 ? 's' : ''}
-                {apiTotal > incidents.length ? ` sur ${apiTotal}` : ''}
-              </span>
-            </div>
-            <div className="oid-consulter-stat-pill is-crit">
-              <strong className="font-mono">{severityCounts.critique}</strong>
-              <span>Critique{severityCounts.critique > 1 ? 's' : ''}</span>
-            </div>
-            <div className="oid-consulter-stat-pill is-warn">
-              <strong className="font-mono">{severityCounts.route_coupee}</strong>
-              <span>Route{severityCounts.route_coupee > 1 ? 's' : ''} coupée{severityCounts.route_coupee > 1 ? 's' : ''}</span>
-            </div>
-            <div className="oid-consulter-stat-pill is-vig">
-              <strong className="font-mono">{severityCounts.vigilance}</strong>
-              <span>Vigilance</span>
-            </div>
+          {/* Barre unique intégrée à la carte : Recherche + Filtres + Liste / Carte */}
+          <div className="oid-consulter-hero-toolbar" role="search" aria-label="Filtres et affichage des incidents">
+            <div className="oid-consulter-search-row">
+              <div className="oid-consulter-search-wrap">
+                <Search size={16} className="oid-consulter-search-icon" aria-hidden="true" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Rechercher par commune, type, route..."
+                  className="oid-consulter-search-input"
+                  aria-label="Rechercher un incident"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="oid-consulter-search-clear"
+                    aria-label="Effacer la recherche"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
 
-            <div className="oid-consulter-view-switch" role="group" aria-label="Affichage">
-              <button
-                type="button"
-                onClick={() => setViewMode('split')}
-                aria-pressed={viewMode === 'split'}
-                className={`oid-consulter-view-btn ${viewMode === 'split' ? 'is-active' : ''}`}
-              >
-                Liste + Carte
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                aria-pressed={viewMode === 'list'}
-                className={`oid-consulter-view-btn ${viewMode === 'list' ? 'is-active' : ''}`}
-              >
-                <List size={14} aria-hidden="true" />
-                <span>Liste</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('map')}
-                aria-pressed={viewMode === 'map'}
-                className={`oid-consulter-view-btn ${viewMode === 'map' ? 'is-active' : ''}`}
-              >
-                <MapIcon size={14} aria-hidden="true" />
-                <span>Carte</span>
-              </button>
+              <div className="oid-consulter-select-wrap">
+                <select
+                  value={communeFilter}
+                  onChange={(e) => handleCommuneSelect(e.target.value)}
+                  aria-label="Filtrer par commune"
+                  className="oid-consulter-select"
+                >
+                  <option value="all">Toutes les communes ({communeOptions.total})</option>
+                  {communeOptions.items.map((commune) => (
+                    <option key={commune.name} value={commune.name}>
+                      {commune.name} ({commune.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="oid-consulter-select-wrap">
+                <select
+                  value={severityFilter}
+                  onChange={(e) => setSeverityFilter(e.target.value as SeverityFilter)}
+                  aria-label="Filtrer par gravité"
+                  className="oid-consulter-select"
+                >
+                  {SEVERITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.value === 'all'
+                        ? `Toutes gravités (${severityCounts.all})`
+                        : `${option.label} (${severityCounts[option.value]})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="oid-consulter-reset-btn"
+                >
+                  <RotateCcw size={14} aria-hidden="true" />
+                  <span>Réinitialiser</span>
+                </button>
+              )}
+
+              <div className="oid-consulter-view-switch" role="group" aria-label="Affichage">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('split')}
+                  aria-pressed={viewMode === 'split'}
+                  className={`oid-consulter-view-btn ${viewMode === 'split' ? 'is-active' : ''}`}
+                >
+                  Liste + Carte
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  aria-pressed={viewMode === 'list'}
+                  className={`oid-consulter-view-btn ${viewMode === 'list' ? 'is-active' : ''}`}
+                >
+                  <List size={14} aria-hidden="true" />
+                  <span>Liste</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('map')}
+                  aria-pressed={viewMode === 'map'}
+                  className={`oid-consulter-view-btn ${viewMode === 'map' ? 'is-active' : ''}`}
+                >
+                  <MapIcon size={14} aria-hidden="true" />
+                  <span>Carte</span>
+                </button>
+              </div>
             </div>
           </div>
         </header>
-
-        {/* Barre de recherche & Filtres Commune / Gravité sur une ligne */}
-        <section className="oid-consulter-filters" aria-label="Filtres des incidents">
-          <div className="oid-consulter-search-row">
-            <div className="oid-consulter-search-wrap">
-              <Search size={16} className="oid-consulter-search-icon" aria-hidden="true" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher par commune, type d'incident, route coupée..."
-                className="oid-consulter-search-input"
-                aria-label="Rechercher un incident"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="oid-consulter-search-clear"
-                  aria-label="Effacer la recherche"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            <div className="oid-consulter-select-wrap">
-              <select
-                value={communeFilter}
-                onChange={(e) => handleCommuneSelect(e.target.value)}
-                aria-label="Filtrer par commune"
-                className="oid-consulter-select"
-              >
-                <option value="all">Toutes les communes ({communeOptions.total})</option>
-                {communeOptions.items.map((commune) => (
-                  <option key={commune.name} value={commune.name}>
-                    {commune.name} ({commune.count})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="oid-consulter-select-wrap">
-              <select
-                value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value as SeverityFilter)}
-                aria-label="Filtrer par gravité"
-                className="oid-consulter-select"
-              >
-                {SEVERITY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.value === 'all'
-                      ? `Toutes gravités (${severityCounts.all})`
-                      : `${option.label} (${severityCounts[option.value]})`}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                className="oid-consulter-reset-btn"
-              >
-                <RotateCcw size={14} aria-hidden="true" />
-                <span>Réinitialiser</span>
-              </button>
-            )}
-          </div>
-        </section>
 
         {/* Contenu principal : Liste accordéon + Carte publique */}
         <div
@@ -815,8 +968,9 @@ export const PublicIncidentsPage: React.FC = () => {
                     <PublicIncidentCard
                       key={incident.id}
                       incident={incident}
-                      defaultExpanded={false}
+                      defaultExpanded={incident.id === initialIncidentId}
                       onOpenPhoto={handleOpenPhoto}
+                      onLocate={handleLocateIncident}
                     />
                   ))}
                 </div>
@@ -826,7 +980,7 @@ export const PublicIncidentsPage: React.FC = () => {
 
           {viewMode !== 'list' && (
             <aside className="oid-consulter-map-col" aria-label="Carte des incidents">
-              <div className="oid-consulter-map-card">
+              <div ref={mapCardRef} id="carte-publique" className="oid-consulter-map-card">
                 <div className="oid-consulter-map-head">
                   <div>
                     <h2 className="oid-consulter-map-title">Carte publique</h2>

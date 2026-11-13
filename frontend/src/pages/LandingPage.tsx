@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch, apiUrl } from '../api/client';
@@ -122,6 +122,7 @@ const ReportCard: React.FC<ReportCardProps> = ({ to, icon, title, text }) => (
 
 export const LandingPage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   const [activeSection, setActiveSection] = useState<string>('aujourdhui');
   const [todayIncidents, setTodayIncidents] = useState<PublicIncident[]>([]);
@@ -504,6 +505,11 @@ export const LandingPage: React.FC = () => {
                   incident={incident}
                   defaultExpanded={false}
                   onOpenPhoto={handleOpenPhoto}
+                  onLocate={(selected) =>
+                    navigate(
+                      `/consulter?commune=${encodeURIComponent(selected.commune)}&incident=${selected.id}&vue=carte`
+                    )
+                  }
                 />
               ))
             )}

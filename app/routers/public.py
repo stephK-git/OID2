@@ -145,7 +145,7 @@ def public_carte_situation(db: Session = Depends(get_db)):
     """Retourne les incidents actifs (non clôturés) en GeoJSON anonymisé pour la carte publique."""
     from geoalchemy2.shape import to_shape
 
-    zones_by_id = {z.id: z.nom for z in db.scalars(select(Zone)).all()}
+    _zones, zones_by_id, zone_shapes = _resolve_zones_context(db)
     incidents = db.scalars(
         select(Incident).where(Incident.statut != "cloture", Incident.geom.is_not(None))
     ).all()
@@ -160,6 +160,8 @@ def public_carte_situation(db: Session = Depends(get_db)):
             continue
 
         categorie = _categoriser_incident(inc)
+        z_id = _resolve_incident_zone_id(inc, zone_shapes)
+        commune = zones_by_id.get(z_id, "District d'Abidjan") if z_id else "District d'Abidjan"
 
         counts[categorie] += 1
         features.append(
@@ -167,11 +169,12 @@ def public_carte_situation(db: Session = Depends(get_db)):
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [pt.x, pt.y]},
                 "properties": {
+                    "id": inc.id,
                     "type": inc.type,
                     "statut": inc.statut,
                     "danger_immediat": bool(inc.danger_immediat),
                     "categorie": categorie,
-                    "commune": zones_by_id.get(inc.zone_id, "District d'Abidjan"),
+                    "commune": commune,
                     "niveau_fiabilite": inc.niveau_fiabilite,
                     "cree_le": inc.cree_le.isoformat() if inc.cree_le else None,
                 },
@@ -293,6 +296,8 @@ def _serialize_public_incidents(
                 if ph.url not in urls:
                     urls.append(ph.url)
 
+    from geoalchemy2.shape import to_shape
+
     items = []
     for inc in incidents:
         sigs = sigs_by_inc.get(inc.id, [])
@@ -300,6 +305,19 @@ def _serialize_public_incidents(
         ev = latest_eval_by_inc.get(inc.id)
         z_id = resolved_zone_ids.get(inc.id)
         commune = zones_by_id.get(z_id, "District d'Abidjan") if z_id else "District d'Abidjan"
+
+        geom = inc.geom
+        if geom is None:
+            for sig in sigs:
+                if sig.geom is not None:
+                    geom = sig.geom
+                    break
+        lat: float | None = None
+        lon: float | None = None
+        if geom is not None:
+            pt = to_shape(geom)
+            lat = float(pt.y)
+            lon = float(pt.x)
 
         items.append(
             {
@@ -311,6 +329,8 @@ def _serialize_public_incidents(
                 "categorie": _categoriser_incident(inc),
                 "commune": commune,
                 "zone_id": z_id,
+                "lat": lat,
+                "lon": lon,
                 "nb_signalements": len(sigs),
                 "hauteur_eau_max_cm": max(heights) if heights else None,
                 "routes_coupees": ev.routes_coupees if ev else None,
