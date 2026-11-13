@@ -8,7 +8,7 @@
       name="description"
       content="Plateforme citoyenne et territoriale de veille, d'alerte et de suivi des crues et inondations en temps réel."
     />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#f3f6fa" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -21,22 +21,8 @@
     />
     <script>
       (function () {
-        var stored = localStorage.getItem('oid-theme');
-        var theme;
-        if (stored === 'light' || stored === 'dark') {
-          theme = stored;
-        } else {
-          var p = window.location.pathname;
-          var isAgent =
-            p.startsWith('/login') ||
-            p.startsWith('/verification') ||
-            p.startsWith('/coordination') ||
-            p.startsWith('/enquete') ||
-            p.startsWith('/agent');
-          theme = isAgent ? 'dark' : 'light';
-        }
-        document.documentElement.setAttribute('data-theme', theme);
-        document.documentElement.style.colorScheme = theme;
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.style.colorScheme = 'light';
       })();
     </script>
     <script src="https://cdn.tailwindcss.com"></script>

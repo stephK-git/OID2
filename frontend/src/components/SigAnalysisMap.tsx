@@ -3,6 +3,23 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Flame, VolumeX, Eye, MapPin, Grid, Layers, Compass as CompassIcon, Activity, RotateCcw, Filter, Search, X, ChevronDown, BarChart2 } from 'lucide-react';
 
+/** Lit une variable CSS du thème courant (les couches Leaflet n'acceptent pas var()). */
+const readToken = (name: string, fallback: string): string => {
+  if (typeof window === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+};
+
+/** Palette sémantique résolue pour les couches vectorielles Leaflet. */
+const leafletPalette = () => ({
+  water: readToken('--water', '#0b5fc4'),
+  ok: readToken('--ok', '#0b7a4f'),
+  crit: readToken('--crit', '#b3261e'),
+  tx3: readToken('--tx3', '#5b7389'),
+  surface: readToken('--s1', '#ffffff'),
+  line: readToken('--line', '#d3dee9'),
+});
+
 export type HexThematique = 'densite' | 'alea' | 'vulnerabilite' | 'getis_ord';
 
 export interface PointChaud {
@@ -622,6 +639,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
 
     if (!maillesGeoJson || !maillesGeoJson.features?.length) return;
 
+    const c = leafletPalette();
     const hexGeoLayer = L.geoJSON(maillesGeoJson as any, {
       style: (feature) => {
         const p = feature?.properties || {};
@@ -633,7 +651,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
           renderer,
           fillColor: fill,
           fillOpacity: lowOpacity ? 0.14 : 0.68,
-          color: '#64748b',
+          color: c.tx3,
           weight: 0.3,
           opacity: 0.45,
         };
@@ -721,7 +739,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                 ? `<b>Indice multicritère IV :</b> <span style="color:${vuln.couleur}; font-weight:700;">${vuln.indice_vulnerabilite}/100 (${(vuln.classe_jenks_label || vuln.classe_risque).toUpperCase()})</span><br/>`
                 : ''
             }
-            <span style="color: #64748b; font-size: 11px;">Source : ${p.source_geom}</span>
+            <span style="color: var(--tx3); font-size: 11px;">Source : ${p.source_geom}</span>
           </div>
         `;
         if (mode !== 'operationnel') {
@@ -792,7 +810,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
 
                   ${
                     nbDanger > 0
-                      ? `<div style="margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); color: #ef4444; font-family: var(--mono); font-size: 11px; font-weight: 700;">
+                      ? `<div style="margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--crit) 15%, transparent); color: var(--crit); font-family: var(--mono); font-size: 11px; font-weight: 700;">
                           ⚠ ${nbDanger} DANGER${nbDanger > 1 ? 'S' : ''} IMMÉDIAT${nbDanger > 1 ? 'S' : ''} DÉCLARÉ${nbDanger > 1 ? 'S' : ''}
                         </div>`
                       : ''
@@ -801,19 +819,19 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-family: var(--mono); font-size: 11px;">
                     <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
                       <div style="font-size: 9.5px; color: var(--tx3);">OUVERTS (À AFFECTER)</div>
-                      <div style="font-weight: 700; color: #00e5ff; margin-top: 2px;">${nbOuverts}</div>
+                      <div style="font-weight: 700; color: var(--water); margin-top: 2px;">${nbOuverts}</div>
                     </div>
                     <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
                       <div style="font-size: 9.5px; color: var(--tx3);">AFFECTÉS (EN COURS)</div>
-                      <div style="font-weight: 700; color: #38bdf8; margin-top: 2px;">${nbAffectes}</div>
+                      <div style="font-weight: 700; color: var(--water-hi); margin-top: 2px;">${nbAffectes}</div>
                     </div>
                     <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
                       <div style="font-size: 9.5px; color: var(--tx3);">ÉVALUÉS (TERRAIN)</div>
-                      <div style="font-weight: 700; color: #10b981; margin-top: 2px;">${nbEvalues}</div>
+                      <div style="font-weight: 700; color: var(--ok); margin-top: 2px;">${nbEvalues}</div>
                     </div>
                     <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
                       <div style="font-size: 9.5px; color: var(--tx3);">CLÔTURÉS</div>
-                      <div style="font-weight: 700; color: #64748b; margin-top: 2px;">${nbClotures}</div>
+                      <div style="font-weight: 700; color: var(--tx3); margin-top: 2px;">${nbClotures}</div>
                     </div>
                   </div>
 
@@ -1123,6 +1141,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
     });
 
     const markersById = new Map<number, L.CircleMarker>();
+    const c = leafletPalette();
 
     featsToRender.forEach((feat: any) => {
       const [lon, lat] = feat.geometry.coordinates;
@@ -1130,12 +1149,12 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
       const isDanger = Boolean(feat.properties.danger_immediat);
       const statut = feat.properties.statut || 'ouvert';
       const pColor = isDanger
-        ? '#ef4444'
+        ? c.crit
         : statut === 'cloture'
-        ? '#64748b'
+        ? c.tx3
         : statut === 'evalue'
-        ? '#10b981'
-        : '#00e5ff';
+        ? c.ok
+        : c.water;
 
       const isSelectedCommuneIncident =
         selectedZoneId !== '' && feat.properties.zone_id && Number(feat.properties.zone_id) === Number(selectedZoneId);
@@ -1148,7 +1167,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
           ? (isSelectedCommuneIncident ? 11.5 : 9.5)
           : (isSelectedCommuneIncident ? 9 : 7),
         fillColor: pColor,
-        color: '#ffffff',
+        color: c.surface,
         weight: isSelectedCommuneIncident ? 2.8 : 2,
         opacity: 1,
         fillOpacity: selectedZoneId === '' || isSelectedCommuneIncident ? 0.95 : 0.85,
@@ -1164,7 +1183,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
           </div>
           ${
             isDanger
-              ? `<div style="margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); color: #ef4444; font-family: var(--mono); font-size: 10.5px; font-weight: 700;">
+              ? `<div style="margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, ${c.crit} 15%, transparent); color: ${c.crit}; font-family: var(--mono); font-size: 10.5px; font-weight: 700;">
                   ⚠ DANGER IMMÉDIAT DÉCLARÉ — ÉVACUATION / SECOURS PRIORITAIRE
                 </div>`
               : ''
@@ -1176,7 +1195,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
             </div>
             <div style="background: var(--s2); padding: 6px 8px; border-radius: 6px;">
               <div style="font-size: 9.5px; color: var(--tx3);">PRIORITÉ O.I.D</div>
-              <div style="font-weight: 700; color: ${isDanger ? '#ef4444' : '#00e5ff'}; margin-top: 2px;">${feat.properties.score_priorite ?? 0} pts</div>
+              <div style="font-weight: 700; color: ${isDanger ? c.crit : c.water}; margin-top: 2px;">${feat.properties.score_priorite ?? 0} pts</div>
             </div>
           </div>
           <div style="margin-top: 8px; font-size: 11.5px; color: var(--tx2);">
@@ -1187,7 +1206,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
               type="button"
               data-incident-action="open-dossier"
               data-incident-id="${feat.properties.id}"
-              style="flex: 1; text-align: center; border: none; cursor: pointer; background: #00e5ff; color: #051424; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--font);"
+              style="flex: 1; text-align: center; border: none; cursor: pointer; background: ${c.water}; color: var(--water-ink); font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--font);"
             >
               <span class="material-symbols-outlined" style="font-size: 15px; font-weight: 700; line-height: 1;">folder_open</span>
               <span>Ouvrir Dossier #${feat.properties.id}</span>
@@ -1331,7 +1350,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
           >
             <div className="oid-drawer-header">
               <div className="oid-drawer-title">
-                <Layers size={16} color="#00e5ff" />
+                <Layers size={16} style={{ color: 'var(--water)' }} />
                 <span>Fonds &amp; Couches</span>
               </div>
               <button
@@ -1373,7 +1392,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
                           <span style={{ fontWeight: 700 }}>{shortName}</span>
-                          {isActive && <span style={{ color: '#00e5ff', fontSize: '11px' }}>✓</span>}
+                          {isActive && <span style={{ color: 'var(--water)', fontSize: '11px' }}>✓</span>}
                         </div>
                         <div style={{ fontSize: '9.5px', opacity: 0.75, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {cfg.label.split('(')[0].trim()}
@@ -1398,7 +1417,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                     onClick={() => setShowIncidents((prev) => !prev)}
                   >
                     <div className="oid-drawer-layer-left">
-                      <MapPin size={15} color="#00e5ff" />
+                      <MapPin size={15} style={{ color: 'var(--water)' }} />
                       <span>Incidents Opérationnels</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1417,7 +1436,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                     onClick={() => setShowCommunes((prev) => !prev)}
                   >
                     <div className="oid-drawer-layer-left">
-                      <Layers size={15} color="#38bdf8" />
+                      <Layers size={15} style={{ color: 'var(--water-hi)' }} />
                       <span>Limites des 13 Communes</span>
                     </div>
                     <div className={`oid-drawer-switch ${showCommunes ? 'is-on' : ''}`}>
@@ -1535,7 +1554,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
           >
             <div className="oid-drawer-header">
               <div className="oid-drawer-title">
-                <Filter size={16} color="#00e5ff" />
+                <Filter size={16} style={{ color: 'var(--water)' }} />
                 <span>Filtres &amp; Recherche</span>
               </div>
               <button
@@ -1617,7 +1636,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                   type="button"
                   onClick={handleFitDistrict}
                   className="oid-drawer-reset-btn"
-                  style={{ marginTop: '8px', borderColor: 'rgba(0, 229, 255, 0.3)', color: '#00e5ff' }}
+                  style={{ marginTop: '8px', borderColor: 'color-mix(in srgb, var(--water) 30%, transparent)', color: 'var(--water)' }}
                   title="Recentrer et ajuster la vue sur l'ensemble du District d'Abidjan"
                 >
                   <RotateCcw size={13} />
@@ -1642,7 +1661,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                         style={{
                           fontSize: '10.5px',
                           fontFamily: 'var(--mono)',
-                          color: statusFilter && statusFilter !== 'tous' ? '#00e5ff' : 'var(--tx3)',
+                          color: statusFilter && statusFilter !== 'tous' ? 'var(--water)' : 'var(--tx3)',
                           fontWeight: 700,
                         }}
                       >
@@ -1666,11 +1685,11 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                   {statusCollapseOpen && (
                     <div className="oid-drawer-status-chips" style={{ marginTop: '8px' }}>
                       {[
-                        { key: 'tous', label: 'Tous les statuts', count: incidentCounts.tous, color: '#00e5ff' },
-                        { key: 'danger', label: '⚠ Danger immédiat', count: incidentCounts.danger, color: '#ef4444' },
-                        { key: 'ouverts', label: 'Ouverts & Affectés', count: incidentCounts.ouverts, color: '#38bdf8' },
-                        { key: 'evalues', label: 'Évalués (terrain)', count: incidentCounts.evalues, color: '#10b981' },
-                        { key: 'clotures', label: 'Clôturés (résolus)', count: incidentCounts.clotures, color: '#64748b' },
+                        { key: 'tous', label: 'Tous les statuts', count: incidentCounts.tous, color: 'var(--water)' },
+                        { key: 'danger', label: '⚠ Danger immédiat', count: incidentCounts.danger, color: 'var(--crit)' },
+                        { key: 'ouverts', label: 'Ouverts & Affectés', count: incidentCounts.ouverts, color: 'var(--water-hi)' },
+                        { key: 'evalues', label: 'Évalués (terrain)', count: incidentCounts.evalues, color: 'var(--ok)' },
+                        { key: 'clotures', label: 'Clôturés (résolus)', count: incidentCounts.clotures, color: 'var(--tx3)' },
                       ].map((st) => {
                         const isActive = (statusFilter || 'tous') === st.key;
                         return (

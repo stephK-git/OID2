@@ -22,11 +22,12 @@
   --tx2: #9db3c6;
   --tx3: #7390a5;
 
-  /* Eau & Accent principal */
-  --water: #3fd0f0;
-  --water-ink: #032a36;
-  --water-hi: #6adcf5;
-  --water-dim: rgba(63, 208, 240, 0.13);
+  /* Eau & Accent principal — même teinte que le public (#0b5fc4),
+     éclaircie pour rester lisible sur les surfaces sombres */
+  --water: #58a6ff;
+  --water-ink: #061626;
+  --water-hi: #8fc3ff;
+  --water-dim: rgba(88, 166, 255, 0.15);
 
   /* États & alertes */
   --ok: #4fd6a0;
@@ -38,7 +39,7 @@
   --crit-dim: rgba(255, 107, 94, 0.14);
 
   /* Interaction & élévation */
-  --focus: rgba(63, 208, 240, 0.5);
+  --focus: rgba(88, 166, 255, 0.5);
   --shadow: rgba(0, 0, 0, 0.55);
   --scrim: rgba(2, 10, 18, 0.72);
 

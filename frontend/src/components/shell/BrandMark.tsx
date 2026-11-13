@@ -26,9 +26,9 @@ export const BrandMark: React.FC<BrandMarkProps> = ({
       <div
         className="oid-brandmark-badge"
         style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: '9px',
+          width: '34px',
+          height: '34px',
+          borderRadius: '10px',
           backgroundColor: 'var(--water)',
           color: 'var(--water-ink)',
           display: 'flex',
@@ -74,7 +74,7 @@ export const BrandMark: React.FC<BrandMarkProps> = ({
           className="oid-brandmark-subtitle"
           style={{
             fontFamily: 'var(--font)',
-            fontSize: '11px',
+            fontSize: '12px',
             color: 'var(--tx2)',
             fontWeight: 500,
           }}
