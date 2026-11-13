@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, apiUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
+import { BrandMark, VigilancePill } from '../components/shell';
+import { EnqueteReportView } from '../components/EnqueteReportView';
 
 interface PhotoMetaItem {
   url: string;
@@ -219,6 +220,7 @@ export const EnquetePage: React.FC = () => {
   const [communeFilterHistorique, setCommuneFilterHistorique] = useState<string>('');
   const [searchHistorique, setSearchHistorique] = useState<string>('');
   const [inspectingDossier, setInspectingDossier] = useState<DossierItem | null>(null);
+  const [submittedConfirmation, setSubmittedConfirmation] = useState<DossierItem | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const evalScrollRef = useRef<HTMLDivElement>(null);
@@ -504,6 +506,7 @@ export const EnquetePage: React.FC = () => {
   const handleSelectDossier = useCallback(
     (dossier: DossierItem, scrollCardIntoView = false) => {
       setSelectedDossier(dossier);
+      setSubmittedConfirmation(null);
       setSuccessMsg(null);
       setError(null);
       if (evalScrollRef.current) {
@@ -764,14 +767,16 @@ export const EnquetePage: React.FC = () => {
       });
       setNewPhotos([]);
       clearLocalDraftBackup(selectedDossier.id);
+      const submittedAt = res.soumise_le || new Date().toISOString();
       setEvalForm((prev) => ({
         ...prev,
         statut: res.statut || 'soumise',
+        soumise_le: submittedAt,
         photos: res.photos || prev.photos,
         photos_meta: res.photos_meta || prev.photos_meta,
       }));
       setLastSavedLabel(
-        `Transmis au PC Central à ${new Date().toLocaleTimeString('fr-FR', {
+        `Transmis au PC Central à ${new Date(submittedAt).toLocaleTimeString('fr-FR', {
           hour: '2-digit',
           minute: '2-digit',
         })}`
@@ -779,6 +784,12 @@ export const EnquetePage: React.FC = () => {
       setSuccessMsg(
         "Évaluation et photographies transmises avec succès ! L'incident est désormais marqué comme évalué."
       );
+      setSubmittedConfirmation({
+        ...selectedDossier,
+        evaluation_statut: 'soumise',
+        statut: 'evalue',
+        maj_le: submittedAt,
+      });
       loadDossiers(true);
     } catch (err: any) {
       setError(err.message);
@@ -1543,7 +1554,6 @@ export const EnquetePage: React.FC = () => {
               <span>Actualiser</span>
             </button>
             <VigilancePill />
-            <ThemeToggle />
           </div>
         </header>
 
@@ -1781,17 +1791,112 @@ export const EnquetePage: React.FC = () => {
                 </div>
               </div>
 
-              {/* RIGHT COLUMN: EVALUATION FORM */}
+              {/* RIGHT COLUMN: CONFIRMATION OR EVALUATION FORM */}
               <div className="oid-enq-right-col">
-                {renderEvaluationCard()}
+                {submittedConfirmation ? (
+                  <div className="oid-enq-confirm-card">
+                    <div className="oid-enq-confirm-icon">
+                      <span className="material-symbols-outlined">task_alt</span>
+                    </div>
+                    <span className="oid-enq-confirm-eyebrow">
+                      TRANSMISSION VALIDÉE · CENTRE OPÉRATIONNEL O.I.D
+                    </span>
+                    <h2>Enquête du dossier #{submittedConfirmation.id} transmise</h2>
+                    <p className="oid-enq-confirm-desc">
+                      Votre évaluation pour{' '}
+                      <strong>{submittedConfirmation.commune || "le District d'Abidjan"}</strong>{' '}
+                      (réf.{' '}
+                      <span className="mono">
+                        OID-ABJ-{submittedConfirmation.reference_publique.slice(0, 10).toUpperCase()}
+                      </span>
+                      ) a bien été enregistrée et déplacée vers l'onglet Historique.
+                    </p>
+
+                    <div className="oid-enq-confirm-summary">
+                      <div>
+                        <span>Ménages touchés</span>
+                        <strong>{evalForm.menages_touches}</strong>
+                      </div>
+                      <div>
+                        <span>Personnes affectées</span>
+                        <strong>{evalForm.personnes_affectees}</strong>
+                      </div>
+                      <div>
+                        <span>Blessés / Déplacés</span>
+                        <strong>
+                          {evalForm.blesses} / {evalForm.deplaces}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Photos jointes</span>
+                        <strong>{(evalForm.photos || []).length}</strong>
+                      </div>
+                    </div>
+
+                    <div className="oid-enq-confirm-actions">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => {
+                          const target = submittedConfirmation;
+                          setSubmittedConfirmation(null);
+                          setInspectingDossier(target);
+                          setActiveTab('historique');
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                          description
+                        </span>
+                        <span>Consulter le rapport</span>
+                      </button>
+
+                      {dossiersAffectes.length > 0 ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => {
+                            const nextDossier = dossiersAffectes[0];
+                            setSubmittedConfirmation(null);
+                            if (nextDossier) {
+                              handleSelectDossier(nextDossier, true);
+                            }
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                            arrow_forward
+                          </span>
+                          <span>Passer au dossier suivant ({dossiersAffectes.length})</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => {
+                            setSubmittedConfirmation(null);
+                            setInspectingDossier(null);
+                            setActiveTab('historique');
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                            history
+                          </span>
+                          <span>Voir tous les dossiers traités</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  renderEvaluationCard()
+                )}
               </div>
             </div>
           )}
 
           {activeTab === 'historique' && (
             inspectingDossier ? (
-              <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)', gap: '12px' }}>
+              <div className="oid-enq-report-wrap" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div
+                  className="no-print"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1813,7 +1918,7 @@ export const EnquetePage: React.FC = () => {
                     <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
                       arrow_back
                     </span>
-                    <span>← Retour à la liste de l'historique</span>
+                    <span>Retour à la liste des rapports</span>
                   </button>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span
@@ -1825,7 +1930,7 @@ export const EnquetePage: React.FC = () => {
                         padding: '3px 8px',
                       }}
                     >
-                      ARCHIVE CONSULTABLE · LECTURE SEULE
+                      RAPPORT D'ENQUÊTE · LECTURE SEULE
                     </span>
                     <span style={{ fontSize: '13px', color: 'var(--tx2)' }}>
                       Dossier #{inspectingDossier.id} · {inspectingDossier.commune || "District d'Abidjan"}
@@ -1833,9 +1938,13 @@ export const EnquetePage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="oid-enq-right-col" style={{ flex: 1, minHeight: 0 }}>
-                  {renderEvaluationCard()}
-                </div>
+                <EnqueteReportView
+                  dossier={inspectingDossier}
+                  evaluation={evalForm}
+                  inspectorName={user?.nom}
+                  loading={saving}
+                  onOpenLightbox={(url) => setLightboxUrl(url)}
+                />
               </div>
             ) : (
               <div
