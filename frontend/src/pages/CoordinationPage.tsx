@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiFetch, apiUrl, getToken } from '../api/client';
-import { BrandMark, VigilancePill, ThemeToggle } from '../components/shell';
+import { BrandMark, VigilancePill } from '../components/shell';
+import { EnqueteReportView } from '../components/EnqueteReportView';
 import {
   SigAnalysisMap,
   type PointChaud,
@@ -12,6 +13,13 @@ import {
   type ZoneSilencieuse,
   type CommunesGeoJsonCollection,
 } from '../components/SigAnalysisMap';
+
+/** Lit une variable CSS du thème courant (les couches Leaflet n'acceptent pas var()). */
+const readToken = (name: string, fallback: string): string => {
+  if (typeof window === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+};
 
 interface StatsData {
   incidents: number;
@@ -69,6 +77,8 @@ interface IncidentEvaluationData {
   besoins: string | null;
   recommandations: string | null;
   soumise_le: string | null;
+  photos?: string[];
+  photos_meta?: PhotoMetaItem[];
 }
 
 interface IncidentItem {
@@ -100,6 +110,8 @@ interface EnqueteurItem {
   id: number;
   nom: string;
   email: string;
+  zone_id?: number | null;
+  zone_nom?: string | null;
   dossiers_actifs: number;
 }
 
@@ -233,7 +245,6 @@ const IncidentMiniMap: React.FC<{
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap',
         maxZoom: 19,
-        className: 'oid-dark-map-tiles',
       }).addTo(map);
 
       layerGroupRef.current = L.layerGroup().addTo(map);
@@ -248,23 +259,28 @@ const IncidentMiniMap: React.FC<{
     const { lat, lon } = incident.coords;
     map.setView([lat, lon], 15, { animate: true });
 
+    const water = readToken('--water', '#0b5fc4');
+    const ok = readToken('--ok', '#0b7a4f');
+    const crit = readToken('--crit', '#b3261e');
+    const surface = readToken('--s1', '#ffffff');
+
     L.circle([lat, lon], {
       radius: 400,
-      color: incident.danger_immediat ? '#ef4444' : '#00e5ff',
+      color: incident.danger_immediat ? crit : water,
       weight: 1.5,
       dashArray: '5, 6',
-      fillColor: incident.danger_immediat ? '#ef4444' : '#00e5ff',
+      fillColor: incident.danger_immediat ? crit : water,
       fillOpacity: 0.08,
     }).addTo(lg);
 
     L.circleMarker([lat, lon], {
       radius: 9,
-      color: '#ffffff',
+      color: surface,
       fillColor: incident.danger_immediat
-        ? '#ef4444'
+        ? crit
         : incident.statut === 'evalue'
-        ? '#6ffbbe'
-        : '#00e5ff',
+        ? ok
+        : water,
       fillOpacity: 1,
       weight: 2.5,
     })
@@ -362,6 +378,7 @@ export const CoordinationPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [showFullReportModal, setShowFullReportModal] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -698,10 +715,16 @@ export const CoordinationPage: React.FC = () => {
 
         if (!q) return true;
         const enq = enqueteurs.find((e) => e.id === inc.enqueteur_id);
+        const zoneNom = inc.zone_id ? zones.find((zn) => zn.id === inc.zone_id)?.nom || '' : '';
+        const communeName = (inc.commune || zoneNom).toLowerCase();
+        const idStr = String(inc.id);
         return (
+          idStr.includes(q.replace(/^#/, '')) ||
+          `#${idStr}`.includes(q) ||
           inc.reference_publique.toLowerCase().includes(q) ||
           inc.type.toLowerCase().includes(q) ||
           inc.statut.toLowerCase().includes(q) ||
+          communeName.includes(q) ||
           (enq && enq.nom.toLowerCase().includes(q))
         );
       })
@@ -714,7 +737,7 @@ export const CoordinationPage: React.FC = () => {
         if (a.danger_immediat !== b.danger_immediat) return a.danger_immediat ? -1 : 1;
         return b.score_priorite - a.score_priorite;
       });
-  }, [incidents, enqueteurs, incidentSearch, incidentFilter, incidentSort]);
+  }, [incidents, enqueteurs, zones, incidentSearch, incidentFilter, incidentSort]);
 
   const selectedIncident = useMemo(() => {
     if (filteredIncidents.length === 0) return null;
@@ -1168,18 +1191,6 @@ export const CoordinationPage: React.FC = () => {
           </div>
 
           <div className="top-actions">
-            {/* Recherche rapide */}
-            <div className="search-box">
-              <span className="material-symbols-outlined">search</span>
-              <input
-                className="search-input"
-                type="search"
-                placeholder="Rechercher un dossier / incident..."
-                value={incidentSearch}
-                onChange={(e) => setIncidentSearch(e.target.value)}
-              />
-            </div>
-
             {/* Menu Exports & SITREP */}
             <div className="menu" ref={exportMenuRef} style={{ position: 'relative' }}>
               <button
@@ -1248,7 +1259,6 @@ export const CoordinationPage: React.FC = () => {
               <LiveClockDisplay />
             </div>
 
-            <ThemeToggle />
           </div>
         </header>
 
@@ -1413,7 +1423,7 @@ export const CoordinationPage: React.FC = () => {
                 <div className="oid-map-kpi-sidebar-header">
                   <div className="oid-map-kpi-sidebar-title-group">
                     <div className="oid-map-kpi-sidebar-title">
-                      <span className="material-symbols-outlined" style={{ fontSize: '17px', color: '#00e5ff' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '17px', color: 'var(--water)' }}>
                         monitoring
                       </span>
                       <span>Indicateurs Stratégiques</span>
@@ -1501,7 +1511,7 @@ export const CoordinationPage: React.FC = () => {
                     <div className="oid-map-kpi-impact-grid">
                       <div className="oid-map-kpi-impact-chip">
                         <div className="oid-map-kpi-impact-l">
-                          <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#38bdf8' }}>family_restroom</span>
+                          <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--water-hi)' }}>family_restroom</span>
                           <span>Ménages</span>
                         </div>
                         <span className="oid-map-kpi-impact-v">{(stats?.menages_touches ?? 0).toLocaleString('fr-FR')}</span>
@@ -1509,7 +1519,7 @@ export const CoordinationPage: React.FC = () => {
 
                       <div className="oid-map-kpi-impact-chip">
                         <div className="oid-map-kpi-impact-l">
-                          <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#38bdf8' }}>groups</span>
+                          <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--water-hi)' }}>groups</span>
                           <span>Personnes</span>
                         </div>
                         <span className="oid-map-kpi-impact-v">{(stats?.personnes_affectees ?? 0).toLocaleString('fr-FR')}</span>
@@ -1970,30 +1980,20 @@ export const CoordinationPage: React.FC = () => {
 
                     return (
                       <div className="verif-detail-card">
-                        {/* 1. En-tête épinglé du dossier d'incident */}
-                        <div className="verif-detail-header">
-                          <div className="verif-detail-head-left">
-                            <div className="verif-detail-icon-box">
-                              <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
-                                emergency_share
-                              </span>
-                            </div>
-                            <div>
-                              <span className="verif-detail-eyebrow">DOSSIER OPÉRATIONNEL D'INCIDENT</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-                                <h2 className="verif-detail-title">Incident #{selectedIncident.id}</h2>
-                                {renderIncidentStatusBadge(selectedIncident.statut)}
-                              </div>
-                            </div>
+                        {/* 1. En-tête compact sur 1 ligne */}
+                        <div className="verif-detail-header oid-coord-dhead-compact">
+                          <div className="oid-coord-dhead-left">
+                            <h2 className="verif-detail-title">Incident #{selectedIncident.id}</h2>
+                            {renderIncidentStatusBadge(selectedIncident.statut)}
+                            <span className="chip water">{selCommune}</span>
                           </div>
 
-                          <div className="verif-detail-head-right">
+                          <div className="oid-coord-dhead-right">
                             <span className="verif-detail-ref">
                               OID-ABJ-{selectedIncident.reference_publique.slice(0, 10).toUpperCase()}
                             </span>
                             <span className="verif-detail-time">
-                              Ouvert à {formatUtcTime(selectedIncident.cree_le)} ·{' '}
-                              {formatRelativeTime(selectedIncident.cree_le)}
+                              · Ouvert à {formatUtcTime(selectedIncident.cree_le)} ({formatRelativeTime(selectedIncident.cree_le)})
                             </span>
                           </div>
                         </div>
@@ -2295,12 +2295,24 @@ export const CoordinationPage: React.FC = () => {
                                   </span>
                                   <span>Rapport d'évaluation terrain (Enquêteur) :</span>
                                 </span>
-                                <span className="verif-exif-tag">
-                                  {selectedIncident.evaluation.statut.toUpperCase()}
-                                  {selectedIncident.evaluation.soumise_le
-                                    ? ` · ${formatShortDate(selectedIncident.evaluation.soumise_le)}`
-                                    : ''}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                  <span className="verif-exif-tag">
+                                    {selectedIncident.evaluation.statut.toUpperCase()}
+                                    {selectedIncident.evaluation.soumise_le
+                                      ? ` · ${formatShortDate(selectedIncident.evaluation.soumise_le)}`
+                                      : ''}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="oid-coord-locate-link"
+                                    onClick={() => setShowFullReportModal(true)}
+                                  >
+                                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                                      description
+                                    </span>
+                                    <span>Rapport complet</span>
+                                  </button>
+                                </div>
                               </div>
 
                               <div className="oid-coord-impact-grid" style={{ marginBottom: '0.75rem' }}>
@@ -2322,9 +2334,17 @@ export const CoordinationPage: React.FC = () => {
                                     {selectedIncident.evaluation.blesses} / {selectedIncident.evaluation.deplaces}
                                   </span>
                                 </div>
+                                <div className="oid-coord-impact-box border-b-danger">
+                                  <span className="oid-coord-impact-lbl">Décès / Disparus</span>
+                                  <span className="oid-coord-impact-val">
+                                    {selectedIncident.evaluation.deces} / {selectedIncident.evaluation.disparus}
+                                  </span>
+                                </div>
                               </div>
 
                               {(selectedIncident.evaluation.degats ||
+                                selectedIncident.evaluation.routes_coupees ||
+                                selectedIncident.evaluation.risques_sanitaires ||
                                 selectedIncident.evaluation.besoins ||
                                 selectedIncident.evaluation.recommandations) && (
                                 <div className="verif-quote-box">
@@ -2336,6 +2356,12 @@ export const CoordinationPage: React.FC = () => {
                                   {selectedIncident.evaluation.routes_coupees && (
                                     <p style={{ margin: '0 0 0.35rem' }}>
                                       <strong>Routes coupées :</strong> {selectedIncident.evaluation.routes_coupees}
+                                    </p>
+                                  )}
+                                  {selectedIncident.evaluation.risques_sanitaires && (
+                                    <p style={{ margin: '0 0 0.35rem' }}>
+                                      <strong>Risques sanitaires :</strong>{' '}
+                                      {selectedIncident.evaluation.risques_sanitaires}
                                     </p>
                                   )}
                                   {selectedIncident.evaluation.besoins && (
@@ -2355,46 +2381,40 @@ export const CoordinationPage: React.FC = () => {
                           )}
                         </div>
 
-                        {/* 8. PIED DE PANNEAU ÉPINGLÉ À DROITE : BOUTON AFFECTER & ACTIONS CYCLE DE VIE */}
-                        <div className="verif-actions-footer">
+                        {/* 8. PIED DE PANNEAU COMPACT ÉPINGLÉ À DROITE */}
+                        <div className="verif-actions-footer oid-coord-dfoot-compact">
                           {['ouvert', 'rouvert'].includes(selectedIncident.statut) && (
-                            <>
-                              <div className="verif-reject-row" style={{ marginBottom: '0.75rem' }}>
-                                <div className="verif-reject-input-wrap">
-                                  <span className="material-symbols-outlined verif-reject-icon">
-                                    person_search
-                                  </span>
-                                  <select
-                                    value={panelEnqueteurId}
-                                    onChange={(e) =>
-                                      setPanelEnqueteurId(e.target.value ? Number(e.target.value) : '')
-                                    }
-                                    className="verif-reject-input"
-                                    style={{ cursor: 'pointer' }}
-                                    aria-label="Sélectionner un enquêteur terrain à affecter"
-                                  >
-                                    <option value="">
-                                      -- Sélectionner un enquêteur terrain à affecter --
-                                    </option>
-                                    {enqueteurs.map((enq) => (
-                                      <option key={enq.id} value={enq.id}>
-                                        {enq.nom} ({enq.email}) — {enq.dossiers_actifs} dossier(s) actif(s)
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  disabled={actionLoading}
-                                  onClick={() => handlePanelCloturer(selectedIncident.id)}
-                                  className="verif-btn-reject"
+                            <div className="oid-coord-assign-row">
+                              <div className="verif-reject-input-wrap" style={{ flex: 1, minWidth: '200px' }}>
+                                <span className="material-symbols-outlined verif-reject-icon">
+                                  person_search
+                                </span>
+                                <select
+                                  value={panelEnqueteurId}
+                                  onChange={(e) =>
+                                    setPanelEnqueteurId(e.target.value ? Number(e.target.value) : '')
+                                  }
+                                  className="verif-reject-input"
+                                  style={{ cursor: 'pointer' }}
+                                  aria-label="Sélectionner un enquêteur terrain à affecter"
                                 >
-                                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                                    task_alt
-                                  </span>
-                                  <span>Clôturer</span>
-                                </button>
+                                  <option value="">
+                                    -- Sélectionner un enquêteur --
+                                  </option>
+                                  {enqueteurs.map((enq) => {
+                                    const sameZone =
+                                      Boolean(enq.zone_nom) &&
+                                      Boolean(selCommune) &&
+                                      enq.zone_nom!.toLowerCase() === selCommune.toLowerCase();
+                                    return (
+                                      <option key={enq.id} value={enq.id}>
+                                        {sameZone ? '★ ' : ''}
+                                        {enq.nom} · {enq.zone_nom || 'Toutes zones'} ·{' '}
+                                        {enq.dossiers_actifs} dossier(s)
+                                      </option>
+                                    );
+                                  })}
+                                </select>
                               </div>
 
                               <button
@@ -2402,16 +2422,26 @@ export const CoordinationPage: React.FC = () => {
                                 type="button"
                                 disabled={actionLoading || !panelEnqueteurId}
                                 onClick={() => handlePanelAffecter(selectedIncident.id)}
-                                className="verif-btn-validate"
+                                className="verif-btn-validate oid-coord-assign-btn"
                               >
-                                <span className="material-symbols-outlined">assignment_ind</span>
-                                <span>
-                                  {actionLoading
-                                    ? 'Affectation en cours...'
-                                    : "Affecter l'incident à l'enquêteur sélectionné"}
+                                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                                  assignment_ind
                                 </span>
+                                <span>{actionLoading ? 'Affectation…' : 'Affecter'}</span>
                               </button>
-                            </>
+
+                              <button
+                                type="button"
+                                disabled={actionLoading}
+                                onClick={() => handlePanelCloturer(selectedIncident.id)}
+                                className="oid-coord-print-btn"
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                                  task_alt
+                                </span>
+                                <span>Clôturer</span>
+                              </button>
+                            </div>
                           )}
 
                           {['affecte', 'evalue'].includes(selectedIncident.statut) && (
@@ -2455,8 +2485,7 @@ export const CoordinationPage: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => window.print()}
-                                  className="verif-btn-reject"
-                                  style={{ textDecoration: 'none' }}
+                                  className="oid-coord-print-btn no-print"
                                   title="Imprimer ou exporter la fiche complète de l'incident"
                                 >
                                   <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
@@ -2775,6 +2804,69 @@ export const CoordinationPage: React.FC = () => {
           </div>
         )}
       </main>
+
+      {showFullReportModal && selectedIncident && selectedIncident.evaluation && (
+        <div
+          className="oid-coord-report-modal-backdrop"
+          onClick={() => setShowFullReportModal(false)}
+        >
+          <div
+            className="oid-coord-report-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="oid-coord-report-modal-top no-print">
+              <span>Rapport d'enquête terrain — Incident #{selectedIncident.id}</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowFullReportModal(false)}
+              >
+                Fermer
+              </button>
+            </div>
+            <div className="oid-coord-report-modal-body">
+              <EnqueteReportView
+                dossier={{
+                  id: selectedIncident.id,
+                  reference_publique: selectedIncident.reference_publique,
+                  type: selectedIncident.type,
+                  statut: selectedIncident.statut,
+                  score_priorite: selectedIncident.score_priorite,
+                  niveau_fiabilite: selectedIncident.niveau_fiabilite,
+                  danger_immediat: selectedIncident.danger_immediat,
+                  coords: selectedIncident.coords ?? null,
+                  commune: selectedIncident.commune,
+                  code_adm: selectedIncident.code_adm,
+                  description_citoyenne: selectedIncident.description_synthese,
+                  hauteur_eau_cm: selectedIncident.hauteur_eau_max_cm,
+                  photos_citoyennes: (selectedIncident.signalements_lies || []).flatMap(
+                    (s) => s.photos || []
+                  ),
+                  evaluation_statut: selectedIncident.evaluation.statut,
+                  cree_le: selectedIncident.cree_le,
+                  maj_le: selectedIncident.maj_le,
+                }}
+                evaluation={{
+                  ...selectedIncident.evaluation,
+                  degats: selectedIncident.evaluation.degats || '',
+                  routes_coupees: selectedIncident.evaluation.routes_coupees || '',
+                  risques_sanitaires: selectedIncident.evaluation.risques_sanitaires || '',
+                  besoins: selectedIncident.evaluation.besoins || '',
+                  recommandations: selectedIncident.evaluation.recommandations || '',
+                  photos: selectedIncident.evaluation.photos || [],
+                  photos_meta: (selectedIncident.evaluation.photos_meta || []).map((m) => ({
+                    ...m,
+                    sha256_short: null,
+                    horodatage_utc: null,
+                  })),
+                }}
+                inspectorName={selectedIncident.enqueteur_nom || undefined}
+                onOpenLightbox={(url) => setLightboxUrl(url)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

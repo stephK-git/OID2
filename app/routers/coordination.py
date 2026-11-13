@@ -119,6 +119,13 @@ def _serialize_incident(db: Session, inc: Incident, include_details: bool = True
                 .limit(1)
             )
             if ev:
+                eval_photos_rows = db.scalars(
+                    select(Photo).where(Photo.evaluation_id == ev.id)
+                ).all()
+                eval_photos = [p.url for p in eval_photos_rows]
+                eval_photos_meta = [
+                    inspect_photo_metadata(p.url, PHOTO_UPLOAD_DIR) for p in eval_photos_rows
+                ]
                 eval_data = {
                     "id": ev.id,
                     "statut": ev.statut,
@@ -134,6 +141,8 @@ def _serialize_incident(db: Session, inc: Incident, include_details: bool = True
                     "besoins": ev.besoins,
                     "recommandations": ev.recommandations,
                     "soumise_le": ev.soumise_le.isoformat() if ev.soumise_le else None,
+                    "photos": eval_photos,
+                    "photos_meta": eval_photos_meta,
                 }
 
     return {
@@ -375,11 +384,14 @@ def liste_enqueteurs(
     users = db.scalars(
         select(Utilisateur).where(Utilisateur.role == "enqueteur", Utilisateur.actif.is_(True))
     ).all()
-    return [
+    zones_map = {z.id: z.nom for z in db.scalars(select(Zone)).all()}
+    items = [
         {
             "id": u.id,
             "nom": u.nom,
             "email": u.email,
+            "zone_id": u.zone_id,
+            "zone_nom": zones_map.get(u.zone_id) if u.zone_id else None,
             "dossiers_actifs": db.scalar(
                 select(func.count()).select_from(Incident).where(
                     Incident.enqueteur_id == u.id,
@@ -389,6 +401,8 @@ def liste_enqueteurs(
         }
         for u in users
     ]
+    items.sort(key=lambda x: (x["dossiers_actifs"], x["nom"]))
+    return items
 
 
 # ---------------------------------------------------------------------------
