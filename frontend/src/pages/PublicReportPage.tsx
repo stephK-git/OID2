@@ -327,9 +327,9 @@ export const PublicReportPage: React.FC = () => {
   }, [lat, lon, fallbackCommune]);
 
   const headerCommuneBadge = useMemo(() => {
-    if (geoInfo.loading) return 'LOCALISATION SIG...';
-    if (geoInfo.commune) return `${geoInfo.commune.toUpperCase()} DÉTECTÉ`;
-    return 'HORS DISTRICT';
+    if (geoInfo.loading) return 'Localisation…';
+    if (geoInfo.commune) return geoInfo.commune;
+    return 'Hors district';
   }, [geoInfo]);
 
   const mapTelemetryLabel = useMemo(() => {
@@ -540,7 +540,7 @@ export const PublicReportPage: React.FC = () => {
         <section className="oid-hero-header">
           <h1 className="oid-main-title">Signaler une inondation</h1>
           <p className="oid-main-subtitle">
-            Alertez instantanément les secours du District d'Abidjan en quelques clics.
+            Alertez les secours et les équipes municipales du District d'Abidjan en quelques clics.
           </p>
         </section>
 
@@ -605,9 +605,9 @@ export const PublicReportPage: React.FC = () => {
                 </span>
                 <div className="oid-gps-text">
                   <span className="oid-gps-title">
-                    {locating ? 'Acquisition satellite en cours...' : 'Me géolocaliser'}
+                    {locating ? 'Localisation en cours…' : 'Me géolocaliser'}
                   </span>
-                  <span className="oid-gps-sub">GPS automatique 1-clic</span>
+                  <span className="oid-gps-sub">Position automatique</span>
                 </div>
               </div>
               <span className="material-symbols-outlined">my_location</span>
@@ -631,8 +631,8 @@ export const PublicReportPage: React.FC = () => {
                 <div className="oid-reverse-geo-text">
                   <span className="oid-reverse-geo-label">
                     {geoInfo.loading
-                      ? 'Géocodage inverse PostGIS / OSM en cours...'
-                      : `Adresse détectée (${geoInfo.source === 'postgis+osm' ? 'PostGIS + OSM' : geoInfo.source.toUpperCase()})`}
+                      ? 'Adresse en cours de détection…'
+                      : 'Adresse détectée'}
                   </span>
                   <strong className="oid-reverse-geo-value">
                     {geoInfo.adresseComplete || 'Déplacez le repère sur la carte'}
@@ -698,7 +698,7 @@ export const PublicReportPage: React.FC = () => {
                 <h2 className="oid-block-title">3. Hauteur de l'eau</h2>
               </div>
               <div className="oid-level-badge">
-                <span className="oid-level-lbl">NIVEAU :</span>
+                <span className="oid-level-lbl">Hauteur :</span>
                 <span className="oid-level-val" id="height-display">
                   {hauteurEauCm} cm
                 </span>

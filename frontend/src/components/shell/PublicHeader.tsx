@@ -2,8 +2,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { BrandMark } from './BrandMark';
-import { ThemeToggle } from './ThemeToggle';
-import { MapPin, LogOut, LogIn, ArrowLeft } from 'lucide-react';
+import { MapPin, LogOut, LogIn, ArrowLeft, ListFilter } from 'lucide-react';
 
 export interface PublicHeaderProps {
   isLanding?: boolean;
@@ -145,7 +144,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
             </nav>
           ) : !isAuth ? (
             <nav
-              className="hidden md:flex items-center gap-3 font-semibold text-sm"
+              className="hidden md:flex items-center gap-2 font-semibold text-sm"
               aria-label="Navigation principale"
             >
               <Link
@@ -165,15 +164,34 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
                 <MapPin size={16} />
                 <span>Signaler</span>
               </Link>
+              <Link
+                to="/consulter"
+                className={`btn btn-ghost ${isActive('/consulter') || isActive('/incidents') ? 'active' : ''}`}
+                style={{
+                  color:
+                    isActive('/consulter') || isActive('/incidents') ? 'var(--water)' : 'var(--tx)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  textDecoration: 'none',
+                  padding: '6px 14px',
+                  borderRadius: 'var(--r-md)',
+                  backgroundColor:
+                    isActive('/consulter') || isActive('/incidents')
+                      ? 'var(--water-dim)'
+                      : 'transparent',
+                }}
+              >
+                <ListFilter size={16} />
+                <span>Consulter les incidents</span>
+              </Link>
             </nav>
           ) : (
             <div style={{ flex: 1 }} />
           )}
 
-          {/* Espace droit : ThemeToggle + Bouton d'action */}
+          {/* Espace droit : Bouton d'action */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {!isLanding && <ThemeToggle />}
-
             {isAuth ? (
               <Link
                 to="/"
@@ -251,7 +269,7 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
             ) : (
               <Link
                 to="/login"
-                className="btn btn-primary btn-sm"
+                className="btn btn-secondary btn-sm"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -281,6 +299,15 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
           >
             <span className="material-symbols-outlined">add_location_alt</span>
             <span>Signaler</span>
+          </Link>
+          <Link
+            to="/consulter"
+            className={`oid-mob-nav-item ${
+              isActive('/consulter') || isActive('/incidents') ? 'active' : ''
+            }`}
+          >
+            <span className="material-symbols-outlined">fact_check</span>
+            <span>Consulter</span>
           </Link>
           <Link
             to={isAuthenticated && user ? agentDest : '/login'}

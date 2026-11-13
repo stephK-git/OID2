@@ -8,6 +8,7 @@ import { ProtectedRoute, CitizenOnlyRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { PublicReportPage } from './pages/PublicReportPage';
 import { LoginPage } from './pages/LoginPage';
+import { PublicIncidentsPage } from './pages/PublicIncidentsPage';
 import { VerificationPage } from './pages/VerificationPage';
 import { CoordinationPage } from './pages/CoordinationPage';
 import { EnquetePage } from './pages/EnquetePage';
@@ -38,6 +39,8 @@ const AppShell: React.FC = () => {
             }
           />
           <Route path="/signalement" element={<Navigate to="/signaler" replace />} />
+          <Route path="/consulter" element={<PublicIncidentsPage />} />
+          <Route path="/incidents" element={<Navigate to="/consulter" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/agent/connexion" element={<Navigate to="/login" replace />} />
 
@@ -80,9 +83,6 @@ const AppShell: React.FC = () => {
               <span className="footer-sep">•</span>
               <span>District Autonome d'Abidjan</span>
             </div>
-            <p className="footer-copy">
-              © {new Date().getFullYear()} Dispositif de gestion de crise hydrologique, veille citoyenne et résilience urbaine · Urgences GSPM : <strong>180</strong> / Secours : <strong>112</strong>
-            </p>
           </div>
         </footer>
       )}

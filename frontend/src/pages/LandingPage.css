@@ -2,10 +2,11 @@
    OID — LANDING PAGE SCOPED PREFLIGHT & CUSTOM STYLES
    ========================================================================== */
 
-.oid-landing-page,
-.oid-landing-page *,
-.oid-landing-page *::before,
-.oid-landing-page *::after {
+/* Reset scopé en spécificité nulle (:where) pour ne jamais écraser les
+   classes utilitaires Tailwind (couleurs, padding, bordures, typographie). */
+:where(.oid-landing-page) :where(*),
+:where(.oid-landing-page) :where(*)::before,
+:where(.oid-landing-page) :where(*)::after {
   box-sizing: border-box;
   border-width: 0;
   border-style: solid;
@@ -16,47 +17,32 @@
   color-scheme: light;
   -webkit-tap-highlight-color: transparent;
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: var(--bg);
+  color: var(--tx);
   line-height: 1.5;
   min-height: 100vh;
 }
 
-.oid-landing-page h1,
-.oid-landing-page h2,
-.oid-landing-page h3,
-.oid-landing-page h4,
-.oid-landing-page h5,
-.oid-landing-page h6 {
+:where(.oid-landing-page) :where(h1, h2, h3, h4, h5, h6) {
   margin: 0;
 }
 
-.oid-landing-page p,
-.oid-landing-page blockquote,
-.oid-landing-page dl,
-.oid-landing-page dd,
-.oid-landing-page figure,
-.oid-landing-page hr {
+:where(.oid-landing-page) :where(p, blockquote, dl, dd, figure, hr) {
   margin: 0;
 }
 
-.oid-landing-page ol,
-.oid-landing-page ul,
-.oid-landing-page menu {
+:where(.oid-landing-page) :where(ol, ul, menu) {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.oid-landing-page a {
+:where(.oid-landing-page) :where(a) {
   color: inherit;
   text-decoration: inherit;
 }
 
-.oid-landing-page button,
-.oid-landing-page input,
-.oid-landing-page select,
-.oid-landing-page textarea {
+:where(.oid-landing-page) :where(button, input, select, textarea) {
   font-family: inherit;
   font-size: 100%;
   font-weight: inherit;
@@ -66,9 +52,7 @@
   padding: 0;
 }
 
-.oid-landing-page button,
-.oid-landing-page [type='button'],
-.oid-landing-page [type='submit'] {
+:where(.oid-landing-page) :where(button, [type='button'], [type='submit']) {
   -webkit-appearance: button;
   appearance: button;
   background-color: transparent;
@@ -76,13 +60,12 @@
   cursor: pointer;
 }
 
-.oid-landing-page img,
-.oid-landing-page svg {
+:where(.oid-landing-page) :where(img, svg) {
   display: block;
   vertical-align: middle;
 }
 
-.oid-landing-page img {
+:where(.oid-landing-page) :where(img) {
   max-width: 100%;
   height: auto;
 }
@@ -146,6 +129,39 @@
   scroll-margin-top: 6rem;
 }
 
+/* Images de couverture : neutralise le height:auto du reset scopé */
+.oid-landing-page .landing-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Voile du hero : photo d'Abidjan lisible + contraste du texte */
+.oid-landing-page .landing-hero-overlay {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(29, 75, 120, 0.72) 0%,
+      rgba(15, 49, 83, 0.62) 55%,
+      rgba(11, 31, 51, 0.9) 100%
+    ),
+    rgba(11, 31, 51, 0.45);
+}
+
+/* Défilement horizontal des filtres mobiles, sans barre visible */
+.oid-landing-page .landing-scroll-x {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.oid-landing-page .landing-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+.oid-landing-page .landing-shadow-card {
+  box-shadow: 0 8px 24px rgba(11, 31, 51, 0.12);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .oid-landing-page *,
   .oid-landing-page *::before,
@@ -155,4 +171,3 @@
     scroll-behavior: auto !important;
   }
 }
-
