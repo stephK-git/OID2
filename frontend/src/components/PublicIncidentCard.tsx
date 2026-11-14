@@ -260,7 +260,7 @@ export const PublicIncidentCard: React.FC<PublicIncidentCardProps> = ({
               <button
                 type="button"
                 onClick={() => onLocate(incident)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold border border-[var(--water)] bg-surface text-[var(--water)] hover:bg-[var(--water)] hover:text-white transition"
+                className="inline-flex h-10 w-full sm:h-auto sm:w-auto items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold border border-[var(--water)] bg-surface text-[var(--water)] hover:bg-[var(--water)] hover:text-white transition"
               >
                 <LocateFixed size={15} aria-hidden="true" />
                 <span>Localiser</span>

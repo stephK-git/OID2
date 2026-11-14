@@ -381,7 +381,7 @@ def public_communes_actives(db: Session = Depends(get_db)):
 
 @router.get("/recents")
 def public_recents_incidents(
-    limit: int = Query(3, ge=1, le=30),
+    limit: int = Query(3, ge=1, le=100),
     zone_id: int | None = Query(None, ge=1),
     today_only: bool = Query(False),
     db: Session = Depends(get_db),
