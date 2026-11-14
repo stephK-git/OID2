@@ -12,11 +12,13 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  SlidersHorizontal,
   ShieldAlert,
   X,
 } from 'lucide-react';
 import { apiFetch, apiUrl } from '../api/client';
 import { PublicIncidentCard, type PublicIncident } from '../components/PublicIncidentCard';
+import { Pagination } from '../components/Pagination';
 import {
   INCIDENT_FIABILITE_LABELS,
   INCIDENT_STATUT_LABELS,
@@ -24,6 +26,9 @@ import {
   formatRelativeTime,
 } from '../components/incidentLabels';
 import { SEVERITY_META, severityOf, type Severity } from '../components/landing/severity';
+
+const PAGE_SIZE = 10;
+const FETCH_LIMIT = 100;
 
 type SeverityFilter = Severity | 'all';
 type ViewMode = 'split' | 'list' | 'map';
@@ -150,8 +155,12 @@ export const PublicIncidentsPage: React.FC = () => {
     ) {
       return 'map';
     }
+    if (typeof window !== 'undefined' && window.innerWidth < 960) {
+      return 'list';
+    }
     return 'split';
   });
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(false);
   const [focusedIncidentId, setFocusedIncidentId] = useState<number | null>(initialIncidentId);
   const [focusTick, setFocusTick] = useState<number>(
     initialVue === 'carte' || initialIncidentId !== null ? 1 : 0
@@ -192,7 +201,7 @@ export const PublicIncidentsPage: React.FC = () => {
     setLoadingList(true);
 
     apiFetch<{ items: PublicIncident[]; total: number }>(
-      `/signalements/recents?limit=30&today_only=${todayOnly}`
+      `/signalements/recents?limit=${FETCH_LIMIT}&today_only=${todayOnly}`
     )
       .then((data) => {
         if (!mounted) return;
@@ -358,6 +367,34 @@ export const PublicIncidentsPage: React.FC = () => {
       return tb - ta;
     });
   }, [incidents, communeFilter, severityFilter, matchesSearch]);
+
+  // Pagination : la page choisie est liée aux filtres actifs, donc elle revient
+  // à la première page dès qu'un filtre, la recherche ou la période change.
+  const filterKey = `${todayOnly}|${communeFilter}|${severityFilter}|${searchQuery}`;
+  const [pageChoice, setPageChoice] = useState<{ key: string; page: number }>({
+    key: '',
+    page: 1,
+  });
+  const totalPages = Math.max(1, Math.ceil(filteredIncidents.length / PAGE_SIZE));
+  const focusIndex =
+    focusedIncidentId != null
+      ? filteredIncidents.findIndex((incident) => incident.id === focusedIncidentId)
+      : -1;
+  const defaultPage = focusIndex >= 0 ? Math.floor(focusIndex / PAGE_SIZE) + 1 : 1;
+  const currentPage = Math.min(
+    pageChoice.key === filterKey ? pageChoice.page : defaultPage,
+    totalPages
+  );
+  const pagedIncidents = useMemo(
+    () => filteredIncidents.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredIncidents, currentPage]
+  );
+  const listSectionRef = useRef<HTMLElement | null>(null);
+
+  const handlePageChange = (nextPage: number) => {
+    setPageChoice({ key: filterKey, page: nextPage });
+    listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const todayUtcStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const isMapVisible = viewMode !== 'list';
@@ -700,85 +737,66 @@ export const PublicIncidentsPage: React.FC = () => {
   return (
     <div className="oid-report-page oid-consulter-page">
       <div className="oid-consulter-container">
-        {/* En-tête de la page Consulter */}
+        {/* En-tête compact : titre + période, puis une seule barre d'outils */}
         <header className="oid-consulter-hero">
           <div className="oid-consulter-hero-top">
-            <div>
+            <div className="oid-consulter-hero-heading">
               <h1 className="oid-consulter-title">
                 {todayOnly ? 'Les incidents du jour' : 'Tous les incidents actifs'}
               </h1>
-              <p className="oid-consulter-subtitle">
-                Filtrez par commune ou par gravité, localisez les axes coupés et cliquez sur un
-                incident pour consulter son suivi.
+              <p className="oid-consulter-subtitle" aria-live="polite">
+                <strong className="font-mono">{filteredIncidents.length}</strong>
+                {` affiché${filteredIncidents.length > 1 ? 's' : ''}`}
+                {apiTotal > incidents.length ? ` sur ${apiTotal}` : ''}
+                <span className="oid-consulter-subtitle-hint">
+                  {' '}
+                  · ouvrez un incident pour consulter son suivi
+                </span>
               </p>
             </div>
 
-            <div className="oid-consulter-hero-right">
-              <div className="oid-consulter-hero-controls">
-                <div className="oid-consulter-segmented" role="group" aria-label="Période">
-                  <button
-                    type="button"
-                    onClick={() => handlePeriodChange(true)}
-                    aria-pressed={todayOnly}
-                    className={`oid-consulter-seg-btn ${todayOnly ? 'is-active' : ''}`}
-                  >
-                    Aujourd&apos;hui
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handlePeriodChange(false)}
-                    aria-pressed={!todayOnly}
-                    className={`oid-consulter-seg-btn ${!todayOnly ? 'is-active' : ''}`}
-                  >
-                    Tous actifs
-                  </button>
-                </div>
-
+            <div className="oid-consulter-hero-controls">
+              <div className="oid-consulter-segmented" role="group" aria-label="Période">
                 <button
                   type="button"
-                  onClick={() => setRefreshTick((t) => t + 1)}
-                  className="oid-consulter-refresh-btn"
-                  aria-label="Actualiser les incidents"
-                  title="Actualiser"
+                  onClick={() => handlePeriodChange(true)}
+                  aria-pressed={todayOnly}
+                  className={`oid-consulter-seg-btn ${todayOnly ? 'is-active' : ''}`}
                 >
-                  <RefreshCw
-                    size={15}
-                    className={loadingList || loadingMap ? 'animate-spin' : ''}
-                    aria-hidden="true"
-                  />
-                  <span>Actualiser</span>
+                  Aujourd&apos;hui
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePeriodChange(false)}
+                  aria-pressed={!todayOnly}
+                  className={`oid-consulter-seg-btn ${!todayOnly ? 'is-active' : ''}`}
+                >
+                  Tous actifs
                 </button>
               </div>
 
-              <div className="oid-consulter-stats-pills">
-                <div className="oid-consulter-stat-pill">
-                  <strong className="font-mono">{filteredIncidents.length}</strong>
-                  <span>
-                    affiché{filteredIncidents.length > 1 ? 's' : ''}
-                    {apiTotal > incidents.length ? ` sur ${apiTotal}` : ''}
-                  </span>
-                </div>
-                <div className="oid-consulter-stat-pill is-crit">
-                  <strong className="font-mono">{severityCounts.critique}</strong>
-                  <span>Critique{severityCounts.critique > 1 ? 's' : ''}</span>
-                </div>
-                <div className="oid-consulter-stat-pill is-warn">
-                  <strong className="font-mono">{severityCounts.route_coupee}</strong>
-                  <span>
-                    Route{severityCounts.route_coupee > 1 ? 's' : ''} coupée
-                    {severityCounts.route_coupee > 1 ? 's' : ''}
-                  </span>
-                </div>
-                <div className="oid-consulter-stat-pill is-vig">
-                  <strong className="font-mono">{severityCounts.vigilance}</strong>
-                  <span>Vigilance</span>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setRefreshTick((t) => t + 1)}
+                className="oid-consulter-refresh-btn"
+                aria-label="Actualiser les incidents"
+                title="Actualiser"
+              >
+                <RefreshCw
+                  size={16}
+                  className={loadingList || loadingMap ? 'animate-spin' : ''}
+                  aria-hidden="true"
+                />
+              </button>
             </div>
           </div>
 
-          {/* Barre unique intégrée à la carte : Recherche + Filtres + Liste / Carte */}
-          <div className="oid-consulter-hero-toolbar" role="search" aria-label="Filtres et affichage des incidents">
+          {/* Barre unique : Recherche + Commune + Gravité (puces) + Liste / Carte */}
+          <div
+            className="oid-consulter-hero-toolbar"
+            role="search"
+            aria-label="Filtres et affichage des incidents"
+          >
             <div className="oid-consulter-search-row">
               <div className="oid-consulter-search-wrap">
                 <Search size={16} className="oid-consulter-search-icon" aria-hidden="true" />
@@ -802,7 +820,25 @@ export const PublicIncidentsPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="oid-consulter-select-wrap">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((open) => !open)}
+                className={`oid-consulter-filters-toggle ${
+                  filtersOpen || communeFilter !== 'all' ? 'is-active' : ''
+                }`}
+                aria-expanded={filtersOpen}
+                aria-controls="consulter-commune-filter"
+              >
+                <SlidersHorizontal size={16} aria-hidden="true" />
+                <span>Commune</span>
+              </button>
+
+              <div
+                id="consulter-commune-filter"
+                className={`oid-consulter-select-wrap oid-consulter-commune-wrap ${
+                  filtersOpen ? 'is-open' : ''
+                }`}
+              >
                 <select
                   value={communeFilter}
                   onChange={(e) => handleCommuneSelect(e.target.value)}
@@ -818,40 +854,53 @@ export const PublicIncidentsPage: React.FC = () => {
                 </select>
               </div>
 
-              <div className="oid-consulter-select-wrap">
-                <select
-                  value={severityFilter}
-                  onChange={(e) => setSeverityFilter(e.target.value as SeverityFilter)}
-                  aria-label="Filtrer par gravité"
-                  className="oid-consulter-select"
-                >
-                  {SEVERITY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.value === 'all'
-                        ? `Toutes gravités (${severityCounts.all})`
-                        : `${option.label} (${severityCounts[option.value]})`}
-                    </option>
-                  ))}
-                </select>
+              <div className="oid-consulter-chips" role="group" aria-label="Filtrer par gravité">
+                {SEVERITY_OPTIONS.map((option) => {
+                  const active = severityFilter === option.value;
+                  const count = severityCounts[option.value];
+                  const tone =
+                    option.value === 'critique'
+                      ? 'is-crit'
+                      : option.value === 'route_coupee'
+                      ? 'is-warn'
+                      : option.value === 'vigilance'
+                      ? 'is-vig'
+                      : '';
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setSeverityFilter(option.value)}
+                      aria-pressed={active}
+                      className={`oid-consulter-chip ${tone} ${active ? 'is-active' : ''}`}
+                    >
+                      {tone && <span className={`oid-consulter-dot ${tone}`} aria-hidden="true" />}
+                      <span>{option.value === 'all' ? 'Toutes' : option.label}</span>
+                      <strong className="font-mono">{count}</strong>
+                    </button>
+                  );
+                })}
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="oid-consulter-reset-btn"
+                    title="Réinitialiser les filtres"
+                  >
+                    <RotateCcw size={14} aria-hidden="true" />
+                    <span>Réinitialiser</span>
+                  </button>
+                )}
               </div>
-
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={handleResetFilters}
-                  className="oid-consulter-reset-btn"
-                >
-                  <RotateCcw size={14} aria-hidden="true" />
-                  <span>Réinitialiser</span>
-                </button>
-              )}
 
               <div className="oid-consulter-view-switch" role="group" aria-label="Affichage">
                 <button
                   type="button"
                   onClick={() => setViewMode('split')}
                   aria-pressed={viewMode === 'split'}
-                  className={`oid-consulter-view-btn ${viewMode === 'split' ? 'is-active' : ''}`}
+                  className={`oid-consulter-view-btn is-split-only ${
+                    viewMode === 'split' ? 'is-active' : ''
+                  }`}
                 >
                   Liste + Carte
                 </button>
@@ -889,7 +938,11 @@ export const PublicIncidentsPage: React.FC = () => {
           }`}
         >
           {viewMode !== 'map' && (
-            <section className="oid-consulter-list-col" aria-label="Liste des incidents">
+            <section
+              ref={listSectionRef}
+              className="oid-consulter-list-col"
+              aria-label="Liste des incidents"
+            >
               {loadingList ? (
                 <div className="space-y-3">
                   {[1, 2, 3, 4].map((item) => (
@@ -963,17 +1016,25 @@ export const PublicIncidentsPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {filteredIncidents.map((incident) => (
-                    <PublicIncidentCard
-                      key={incident.id}
-                      incident={incident}
-                      defaultExpanded={incident.id === initialIncidentId}
-                      onOpenPhoto={handleOpenPhoto}
-                      onLocate={handleLocateIncident}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="space-y-3">
+                    {pagedIncidents.map((incident) => (
+                      <PublicIncidentCard
+                        key={incident.id}
+                        incident={incident}
+                        defaultExpanded={incident.id === initialIncidentId}
+                        onOpenPhoto={handleOpenPhoto}
+                        onLocate={handleLocateIncident}
+                      />
+                    ))}
+                  </div>
+                  <Pagination
+                    page={currentPage}
+                    pageSize={PAGE_SIZE}
+                    total={filteredIncidents.length}
+                    onPageChange={handlePageChange}
+                  />
+                </>
               )}
             </section>
           )}

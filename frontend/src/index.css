@@ -12956,3 +12956,314 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
     justify-content: center;
   }
 }
+
+/* ==========================================================================
+   CONSULTER — EN-TÊTE COMPACT (remplace la grande carte du hero)
+   ========================================================================== */
+
+.oid-consulter-hero {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.15rem 0 0;
+  gap: 0.7rem;
+}
+
+.oid-consulter-hero-top {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+.oid-consulter-hero-heading {
+  min-width: 0;
+}
+
+.oid-consulter-title {
+  font-size: clamp(1.25rem, 2.2vw, 1.6rem);
+}
+
+.oid-consulter-subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.86rem;
+  max-width: none;
+}
+
+.oid-consulter-subtitle strong {
+  color: var(--tx);
+}
+
+.oid-consulter-refresh-btn {
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+.oid-consulter-hero-toolbar {
+  padding-top: 0;
+  border-top: none;
+}
+
+.oid-consulter-search-row {
+  flex-wrap: wrap;
+}
+
+.oid-consulter-search-input,
+.oid-consulter-select {
+  background: var(--s1);
+}
+
+.oid-consulter-filters-toggle {
+  display: none;
+}
+
+.oid-consulter-chips {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.oid-consulter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 38px;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--line2);
+  background: var(--s1);
+  color: var(--tx2);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.oid-consulter-chip strong {
+  color: var(--tx);
+}
+
+.oid-consulter-chip:hover {
+  border-color: var(--water);
+}
+
+.oid-consulter-chip.is-active {
+  background: var(--water-dim);
+  border-color: var(--water);
+  color: var(--water);
+}
+
+.oid-consulter-chip.is-crit.is-active {
+  background: var(--crit-dim);
+  border-color: var(--crit);
+  color: var(--crit);
+}
+
+.oid-consulter-chip.is-warn.is-active {
+  background: var(--warn-dim);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.oid-consulter-chip:focus-visible,
+.oid-consulter-filters-toggle:focus-visible {
+  outline: 2px solid var(--water);
+  outline-offset: 2px;
+}
+
+.oid-consulter-chips .oid-consulter-reset-btn {
+  height: 38px;
+  background: transparent;
+}
+
+@media (max-width: 960px) {
+  .oid-consulter-view-btn.is-split-only {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .oid-consulter-hero {
+    padding: 0;
+  }
+
+  .oid-consulter-subtitle-hint {
+    display: none;
+  }
+
+  .oid-consulter-hero-controls {
+    width: 100%;
+  }
+
+  .oid-consulter-segmented {
+    flex: 1;
+  }
+
+  .oid-consulter-seg-btn {
+    flex: 1;
+  }
+
+  .oid-consulter-search-wrap {
+    flex: 1 1 0;
+    order: 1;
+  }
+
+  .oid-consulter-filters-toggle {
+    order: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 42px;
+    padding: 0 0.85rem;
+    border-radius: 11px;
+    border: 1px solid var(--line2);
+    background: var(--s1);
+    color: var(--tx);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .oid-consulter-filters-toggle.is-active {
+    border-color: var(--water);
+    color: var(--water);
+    background: var(--water-dim);
+  }
+
+  .oid-consulter-commune-wrap {
+    display: none;
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  .oid-consulter-commune-wrap.is-open {
+    display: block;
+  }
+
+  .oid-consulter-chips {
+    order: 4;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .oid-consulter-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .oid-consulter-view-switch {
+    order: 5;
+  }
+}
+
+/* ==========================================================================
+   PAGINATION
+   ========================================================================== */
+
+.oid-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.oid-pagination-info {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--tx2);
+}
+
+.oid-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.oid-pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oid-pagination-btn,
+.oid-pagination-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  height: 38px;
+  min-width: 38px;
+  padding: 0 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--line2);
+  background: var(--s1);
+  color: var(--tx);
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.oid-pagination-btn:hover:not(:disabled),
+.oid-pagination-num:hover:not(.is-active) {
+  border-color: var(--water);
+  color: var(--water);
+}
+
+.oid-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.oid-pagination-num.is-active {
+  background: var(--water);
+  border-color: var(--water);
+  color: var(--water-ink);
+}
+
+.oid-pagination-btn:focus-visible,
+.oid-pagination-num:focus-visible {
+  outline: 2px solid var(--water);
+  outline-offset: 2px;
+}
+
+.oid-pagination-gap {
+  padding: 0 0.15rem;
+  color: var(--tx3);
+}
+
+@media (max-width: 520px) {
+  .oid-pagination {
+    justify-content: center;
+  }
+
+  .oid-pagination-btn-label {
+    display: none;
+  }
+
+  .oid-pagination-btn {
+    padding: 0;
+    width: 38px;
+  }
+}
+
+.oid-consulter-list-col {
+  scroll-margin-top: 84px;
+}
