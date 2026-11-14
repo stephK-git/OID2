@@ -15,8 +15,8 @@ from app.models.incident import Incident
 from app.models.photo import Photo
 from app.models.signalement import Signalement
 from app.models.zone import Zone
-from app.schemas.signalement import SignalementIn, SignalementOut
-from app.services.photos import PhotoError, save_photo_data_url
+from app.schemas.signalement import MAX_PHOTOS, SignalementIn, SignalementOut
+from app.services.photos import PhotoError, delete_stored_photo, save_photo_data_url
 
 router = APIRouter(prefix="/signalements", tags=["public"])
 
@@ -45,12 +45,21 @@ def creer_signalement(
     )
     db.add(s)
     db.flush()
-    if data.photo_data_url:
+    # Compatibilité : l'ancien champ photo_data_url s'ajoute à la liste, 3 photos maximum
+    photos = ([data.photo_data_url] if data.photo_data_url else []) + data.photos_data_urls
+    if len(photos) > MAX_PHOTOS:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=f"{MAX_PHOTOS} photos maximum par signalement.")
+    saved_urls: list[str] = []
+    for photo_data in photos:
         try:
-            photo_url = save_photo_data_url(data.photo_data_url, PHOTO_UPLOAD_DIR)
+            photo_url = save_photo_data_url(photo_data, PHOTO_UPLOAD_DIR)
         except PhotoError as exc:
             db.rollback()
+            for url in saved_urls:
+                delete_stored_photo(url, PHOTO_UPLOAD_DIR)
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        saved_urls.append(photo_url)
         db.add(Photo(signalement_id=s.id, url=photo_url))
     db.commit()
     db.refresh(s)
@@ -119,6 +128,19 @@ def localiser_point(
         "dans_district": False,
         "methode": "hors_couverture",
     }
+
+
+@router.get("/adresse")
+@limiter.limit("30/minute")
+def adresse_point(
+    request: Request,
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+):
+    """Géocodage inverse (quartier, rue) via Nominatim, mis en cache côté serveur."""
+    from app.services.geocodage import adresse_depuis_coordonnees
+
+    return adresse_depuis_coordonnees(lat, lon)
 
 
 @router.get("/communes")

@@ -40,38 +40,38 @@ interface FloodTypeOption {
 const FLOOD_TYPES: FloodTypeOption[] = [
   {
     value: 'ruissellement',
-    title: 'Ruissellement',
-    subtitle: 'Voies coupées, caniveaux débordés',
+    title: 'Rue inondée',
+    subtitle: 'Eau dans la rue, caniveaux pleins',
     icon: 'water',
   },
   {
     value: 'cours-d-eau',
-    title: 'Débordement',
-    subtitle: 'Crue lagune & canaux',
+    title: "Cours d'eau qui déborde",
+    subtitle: 'Rivière, canal ou lagune',
     icon: 'waves',
   },
   {
     value: 'refoulement',
-    title: 'Refoulement',
-    subtitle: 'Égouts & collecteurs',
+    title: 'Égout qui déborde',
+    subtitle: 'Eau qui remonte des égouts',
     icon: 'plumbing',
   },
   {
     value: 'lagunaire',
-    title: 'Submersion',
-    subtitle: 'Côtière / Ébrié',
+    title: 'Lagune qui monte',
+    subtitle: 'Bord de lagune ou de mer',
     icon: 'tsunami',
   },
   {
     value: 'nappe',
-    title: 'Remontée nappe',
-    subtitle: 'Infiltration sous-sol',
+    title: 'Eau qui sort du sol',
+    subtitle: 'Cour, sous-sol, maison',
     icon: 'water_drop',
   },
   {
     value: 'autre',
-    title: 'Autre sinistre',
-    subtitle: 'Éboulement / coulée',
+    title: 'Autre problème',
+    subtitle: 'Éboulement, coulée de boue',
     icon: 'crisis_alert',
   },
 ];
@@ -126,6 +126,56 @@ const SEVERITIES: SeverityOption[] = [
   },
 ];
 
+interface DangerTypeOption {
+  value: 'trapped' | 'electric' | 'effondrement' | 'personnes_en_danger' | 'autre';
+  label: string;
+}
+
+const DANGER_TYPES: DangerTypeOption[] = [
+  { value: 'trapped', label: 'Personnes piégées' },
+  { value: 'personnes_en_danger', label: 'Personnes en danger' },
+  { value: 'electric', label: 'Risque électrique' },
+  { value: 'effondrement', label: 'Risque d\'effondrement' },
+  { value: 'autre', label: 'Autre danger' },
+];
+
+const MAX_DESCRIPTION_LENGTH = 1000;
+const MAX_PHOTOS = 3;
+
+interface PhotoItem {
+  id: number;
+  dataUrl: string;
+  meta: string;
+}
+
+// Réduit la photo côté navigateur (max 1600 px, JPEG 0,7) pour un envoi fiable en 3G.
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const maxSide = 1600;
+      const ratio = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * ratio);
+      canvas.height = Math.round(img.height * ratio);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('canvas indisponible'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('image illisible'));
+    };
+    img.src = url;
+  });
+}
+
 // Fallback local hors-ligne pour les 13 communes du District Autonome d'Abidjan
 const ABIDJAN_COMMUNES_FALLBACK = [
   { nom: 'Cocody', quartier: 'Riviera Palmeraie', lat: 5.3599, lon: -3.9870 },
@@ -170,22 +220,24 @@ export const PublicReportPage: React.FC = () => {
       : 'ruissellement';
 
   const [type, setType] = useState(validInitialType);
-  const [lat, setLat] = useState<number>(5.3599); // Abidjan — Cocody par défaut
-  const [lon, setLon] = useState<number>(-4.0083);
-  const [hauteurEauCm, setHauteurEauCm] = useState<number>(80);
+  // Centre d'Abidjan : simple point de départ de la carte, jamais envoyé sans confirmation
+  const [lat, setLat] = useState<number>(5.3364);
+  const [lon, setLon] = useState<number>(-4.0267);
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
+  const [hauteurEauCm, setHauteurEauCm] = useState<number | null>(null);
   const [gravite, setGravite] = useState<'faible' | 'moderee' | 'elevee' | 'critique'>('moderee');
   const [dangerImmediat, setDangerImmediat] = useState(false);
+  const [dangerType, setDangerType] = useState<DangerTypeOption['value']>('personnes_en_danger');
   const [dangerNotes, setDangerNotes] = useState('');
   const [description, setDescription] = useState('');
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [photoMeta, setPhotoMeta] = useState<string>('PHOTO CHARGÉE');
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
 
   const [geoInfo, setGeoInfo] = useState<ReverseGeoState>({
     loading: false,
-    commune: 'Cocody',
-    quartier: 'Riviera Palmeraie',
+    commune: null,
+    quartier: null,
     rue: null,
-    adresseComplete: 'Riviera Palmeraie, Cocody',
+    adresseComplete: null,
     source: 'fallback',
   });
 
@@ -194,9 +246,14 @@ export const PublicReportPage: React.FC = () => {
   const [result, setResult] = useState<SignalementResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [copiedRef, setCopiedRef] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const photoIdRef = useRef(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
   const toastTimeoutRef = useRef<number | null>(null);
 
   const showToast = (msg: string) => {
@@ -228,7 +285,10 @@ export const PublicReportPage: React.FC = () => {
 
   // Géocodage inverse hybride en temps réel : PostGIS (ST_Intersects sur polygones communaux) + OpenStreetMap Nominatim (quartier & rue)
   useEffect(() => {
+    // Pas de géocodage tant que le citoyen n'a pas placé sa position
+    if (!locationConfirmed) return;
     const controller = new AbortController();
+    // Délai de 1 s après le dernier déplacement du repère
     const timer = window.setTimeout(async () => {
       setGeoInfo((prev) => ({ ...prev, loading: true }));
 
@@ -250,43 +310,20 @@ export const PublicReportPage: React.FC = () => {
           // Fallback silencieux si backend non joignable
         });
 
-      const nominatimPromise = fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=fr`,
-        {
-          signal: controller.signal,
-          headers: { Accept: 'application/json' },
-        }
-      )
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (!data || !data.address) return;
-          const addr = data.address;
-          osmCommune =
-            addr.city_district ||
-            addr.municipality ||
-            addr.borough ||
-            addr.town ||
-            addr.Suburb ||
-            null;
-          osmQuartier =
-            addr.neighbourhood ||
-            addr.suburb ||
-            addr.quarter ||
-            addr.residential ||
-            addr.hamlet ||
-            addr.village ||
-            null;
-          osmRue =
-            addr.road ||
-            addr.pedestrian ||
-            addr.amenity ||
-            addr.building ||
-            addr.shop ||
-            data.name ||
-            null;
+      // Adresse (quartier, rue) : le serveur interroge OpenStreetMap et met en cache
+      const nominatimPromise = apiFetch<{
+        commune: string | null;
+        quartier: string | null;
+        rue: string | null;
+      }>(`/signalements/adresse?lat=${lat}&lon=${lon}`, { signal: controller.signal })
+        .then((res) => {
+          if (!res) return;
+          osmCommune = res.commune;
+          osmQuartier = res.quartier;
+          osmRue = res.rue;
         })
         .catch(() => {
-          // Fallback silencieux si hors-ligne
+          // Fallback silencieux si le service d'adresse est indisponible
         });
 
       await Promise.allSettled([postgisPromise, nominatimPromise]);
@@ -318,19 +355,20 @@ export const PublicReportPage: React.FC = () => {
         adresseComplete: parts.join(', ') || 'Position GPS sélectionnée',
         source,
       });
-    }, 320);
+    }, 1000);
 
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [lat, lon, fallbackCommune]);
+  }, [lat, lon, fallbackCommune, locationConfirmed]);
 
   const headerCommuneBadge = useMemo(() => {
+    if (!locationConfirmed) return 'À localiser';
     if (geoInfo.loading) return 'Localisation…';
     if (geoInfo.commune) return geoInfo.commune;
     return 'Hors district';
-  }, [geoInfo]);
+  }, [geoInfo, locationConfirmed]);
 
   const mapTelemetryLabel = useMemo(() => {
     const tokens = [geoInfo.rue, geoInfo.quartier || geoInfo.commune].filter(Boolean);
@@ -351,8 +389,9 @@ export const PublicReportPage: React.FC = () => {
         const nextLon = Number(pos.coords.longitude.toFixed(6));
         setLat(nextLat);
         setLon(nextLon);
+        setLocationConfirmed(true);
         setLocating(false);
-        showToast(`GPS actualisé : ${nextLat.toFixed(4)}° N, ${nextLon.toFixed(4)}° W`);
+        showToast(`Position GPS enregistrée (${nextLat.toFixed(4)}, ${nextLon.toFixed(4)})`);
       },
       (err) => {
         setError(`Impossible d'obtenir la position : ${err.message}`);
@@ -377,6 +416,9 @@ export const PublicReportPage: React.FC = () => {
     if (val === 'critique' && !dangerImmediat) {
       setDangerImmediat(true);
       showToast('Alerte Péril Immédiat activée.');
+    } else if (val !== 'critique' && dangerImmediat) {
+      setDangerImmediat(false);
+      showToast('Péril Immédiat désactivé.');
     }
   };
 
@@ -392,39 +434,130 @@ export const PublicReportPage: React.FC = () => {
     }
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handlePhotoFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const files = Array.from(input.files ?? []);
+    input.value = ''; // permet de re-choisir la même photo
+    if (files.length === 0) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError("L'image est trop lourde (max 10 Mo).");
+    const free = MAX_PHOTOS - photos.length;
+    if (free <= 0) {
+      setError(`${MAX_PHOTOS} photos maximum par signalement.`);
+      return;
+    }
+    if (files.length > free) {
+      showToast(`${MAX_PHOTOS} photos maximum : seules les ${free} premières sont ajoutées.`);
+    }
+
+    const added: PhotoItem[] = [];
+    for (const file of files.slice(0, free)) {
+      if (file.size > 10 * 1024 * 1024) {
+        setError(`« ${file.name} » est trop lourde (max 10 Mo).`);
+        continue;
+      }
+      try {
+        const dataUrl = await compressImage(file);
+        const sizeKb = Math.round((dataUrl.length * 0.75) / 1024);
+        photoIdRef.current += 1;
+        added.push({ id: photoIdRef.current, dataUrl, meta: `JPG • ${sizeKb} Ko` });
+      } catch {
+        setError('Impossible de lire cette image. Essayez une autre photo.');
+      }
+    }
+    if (added.length > 0) {
+      setPhotos((prev) => [...prev, ...added].slice(0, MAX_PHOTOS));
+      showToast(added.length > 1 ? 'Photos prêtes pour envoi.' : 'Photo prête pour envoi.');
+    }
+  };
+
+  const stopCameraStream = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  };
+
+  const closeCamera = () => {
+    stopCameraStream();
+    setCameraOpen(false);
+  };
+
+  // Branche le flux vidéo sur l'aperçu quand la fenêtre caméra s'ouvre ; coupe la caméra à la fermeture
+  useEffect(() => {
+    if (cameraOpen && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+    return () => {
+      if (!cameraOpen) stopCameraStream();
+    };
+  }, [cameraOpen]);
+
+  useEffect(() => stopCameraStream, []);
+
+  const openCamera = async () => {
+    if (photos.length >= MAX_PHOTOS) return;
+    setError(null);
+
+    // Caméra en direct : exige HTTPS ou localhost. Sinon, on passe par l'appareil photo du téléphone.
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click();
       return;
     }
 
-    const ext = (file.name.split('.').pop() || 'JPG').toUpperCase();
-    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-    setPhotoMeta(`${ext} • ${sizeMb}Mo`);
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPhotoPreview(reader.result as string);
-      showToast('Photo prête pour envoi.');
-    };
-    reader.readAsDataURL(file);
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      setCameraOpen(true);
+    } catch (err: any) {
+      if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+        setError(
+          "L'accès à l'appareil photo est bloqué. Autorisez la caméra pour ce site dans votre navigateur (icône de cadenas près de l'adresse), puis réessayez, ou utilisez « Importer »."
+        );
+      } else if (err?.name === 'NotFoundError' || err?.name === 'OverconstrainedError') {
+        setError("Aucun appareil photo détecté sur cet appareil. Utilisez « Importer » pour choisir une photo.");
+      } else {
+        // Caméra occupée ou autre souci : repli sur la capture native
+        cameraInputRef.current?.click();
+      }
+    }
   };
 
-  const handleDeletePhoto = () => {
-    setPhotoPreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const takeSnapshot = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+    const ratio = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(video.videoWidth * ratio);
+    canvas.height = Math.round(video.videoHeight * ratio);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+    const sizeKb = Math.round((dataUrl.length * 0.75) / 1024);
+    photoIdRef.current += 1;
+    const item: PhotoItem = { id: photoIdRef.current, dataUrl, meta: `JPG • ${sizeKb} Ko` };
+    setPhotos((prev) => [...prev, item].slice(0, MAX_PHOTOS));
+    showToast('Photo prête pour envoi.');
+    closeCamera();
+  };
+
+  const handleDeletePhoto = (id: number) => {
+    setPhotos((prev) => prev.filter((p) => p.id !== id));
     showToast('Photo supprimée du rapport.');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
+
+    if (!locationConfirmed) {
+      setError("Indiquez où se trouve l'inondation : utilisez « Me géolocaliser » ou touchez la carte.");
+      window.setTimeout(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
       const combinedDesc = [
@@ -432,18 +565,19 @@ export const PublicReportPage: React.FC = () => {
         description.trim() || geoInfo.adresseComplete || '',
       ]
         .filter(Boolean)
-        .join(' — ');
+        .join(' — ')
+        .slice(0, MAX_DESCRIPTION_LENGTH);
 
       const payload = {
         type,
         lat: Number(lat),
         lon: Number(lon),
-        hauteur_eau_cm: Number(hauteurEauCm),
+        hauteur_eau_cm: hauteurEauCm === null ? null : Number(hauteurEauCm),
         gravite,
         danger_immediat: dangerImmediat,
-        danger_type: dangerImmediat ? 'trapped' : null,
+        danger_type: dangerImmediat ? dangerType : null,
         description: combinedDesc || null,
-        photo_data_url: photoPreview,
+        photos_data_urls: photos.map((p) => p.dataUrl),
       };
 
       const res = await apiFetch<SignalementResponse>('/signalements', {
@@ -452,86 +586,87 @@ export const PublicReportPage: React.FC = () => {
       });
 
       setResult(res);
+      window.scrollTo({ top: 0 });
     } catch (err: any) {
       setError(err.message || "Une erreur est survenue lors de l'envoi du signalement.");
+      window.setTimeout(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleCopyRef = () => {
-    if (!result?.reference_suivi) return;
-    navigator.clipboard?.writeText(result.reference_suivi);
-    setCopiedRef(true);
-    setTimeout(() => setCopiedRef(false), 2500);
   };
 
   if (isAuthenticated && user) {
     return null;
   }
 
-  // ÉCRAN DE CONFIRMATION APRÈS SOUMISSION
-  if (result) {
-    return (
-      <div className="oid-report-page">
-        <div className="oid-report-container">
-          <div className="oid-confirm-panel">
-            <div className="oid-confirm-badge">
-              <span className="material-symbols-outlined">verified</span>
-            </div>
-
-            <h2 className="oid-confirm-title">Signalement transmis aux secours !</h2>
-            <p className="oid-confirm-subtitle">
-              Votre alerte a été enregistrée par le centre de régulation <strong>O.I.D • GSPM 180</strong>.
-            </p>
-
-            <div className="oid-ref-card">
-              <span className="oid-ref-label">RÉFÉRENCE DE VOTRE SIGNALEMENT</span>
-              <div className="oid-ref-code">{result.reference_suivi}</div>
-              <button type="button" onClick={handleCopyRef} className="oid-copy-btn">
-                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                  {copiedRef ? 'check' : 'content_copy'}
-                </span>
-                <span>{copiedRef ? 'Référence copiée !' : 'Copier la référence'}</span>
-              </button>
-              <p className="oid-ref-hint">
-                Conservez cette référence en cas de contact avec les équipes de coordination municipale.
-              </p>
-            </div>
-
-            <div className="oid-confirm-actions">
-              <Link to="/" className="oid-submit-btn">
-                <span className="material-symbols-outlined">home</span>
-                <span>Retour à l'accueil</span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setResult(null);
-                  setDescription('');
-                  setDangerNotes('');
-                  setDangerImmediat(false);
-                  setPhotoPreview(null);
-                }}
-                className="oid-secondary-btn"
-              >
-                <span className="material-symbols-outlined">add_circle</span>
-                <span>Nouveau signalement</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleNewReport = () => {
+    setResult(null);
+    setDescription('');
+    setDangerNotes('');
+    setDangerImmediat(false);
+    setPhotos([]);
+    setLocationConfirmed(false);
+    setHauteurEauCm(null);
+    setGravite('moderee');
+  };
 
   return (
     <div className="oid-report-page">
       {/* Notification Toast Flottante */}
       {toastMsg && (
         <div className="oid-toast" role="status" aria-live="polite">
-          <span className="material-symbols-outlined oid-toast-icon">bolt</span>
+          <span aria-hidden="true" className="material-symbols-outlined oid-toast-icon">bolt</span>
           <span>{toastMsg}</span>
+        </div>
+      )}
+
+      {/* Caméra en direct */}
+      {cameraOpen && (
+        <div className="oid-overlay" role="dialog" aria-modal="true" aria-label="Prendre une photo">
+          <div className="oid-camera-modal">
+            <video ref={videoRef} className="oid-camera-video" playsInline muted autoPlay />
+            <div className="oid-camera-controls">
+              <button type="button" onClick={closeCamera} className="oid-secondary-btn">
+                <span>Annuler</span>
+              </button>
+              <button type="button" onClick={takeSnapshot} className="oid-submit-btn">
+                <span aria-hidden="true" className="material-symbols-outlined">photo_camera</span>
+                <span>Capturer</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation après envoi : fenêtre par-dessus le formulaire */}
+      {result && (
+        <div className="oid-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+          <div className="oid-confirm-panel">
+            <div className="oid-confirm-badge">
+              <span aria-hidden="true" className="material-symbols-outlined">verified</span>
+            </div>
+
+            <h2 id="confirm-title" className="oid-confirm-title">Signalement enregistré</h2>
+            <p className="oid-confirm-subtitle">
+              Merci, votre signalement a bien été reçu par la plateforme <strong>O.I.D</strong> et sera examiné par
+              les équipes de vérification.
+            </p>
+            <p className="oid-confirm-subtitle">
+              <strong>Si une vie est en danger, appelez immédiatement le <a href="tel:180">180</a> (GSPM) ou le{' '}
+              <a href="tel:112">112</a>.</strong>
+            </p>
+
+            <div className="oid-confirm-actions">
+              <Link to="/" className="oid-submit-btn">
+                <span aria-hidden="true" className="material-symbols-outlined">home</span>
+                <span>Retour à l'accueil</span>
+              </Link>
+              <button type="button" onClick={handleNewReport} className="oid-secondary-btn">
+                <span aria-hidden="true" className="material-symbols-outlined">add_circle</span>
+                <span>Nouveau signalement</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -551,7 +686,7 @@ export const PublicReportPage: React.FC = () => {
             className="oid-call-gspm"
             title="Appel d'urgence GSPM (Sapeurs-Pompiers)"
           >
-            <span className="material-symbols-outlined oid-call-error-icon">call</span>
+            <span aria-hidden="true" className="material-symbols-outlined oid-call-error-icon">call</span>
             <span>URGENCES GSPM : 180</span>
           </a>
           <a
@@ -559,14 +694,14 @@ export const PublicReportPage: React.FC = () => {
             className="oid-call-112"
             title="Appel d'urgence SAMU / Police / Secours"
           >
-            <span className="material-symbols-outlined oid-call-shield-icon">shield</span>
+            <span aria-hidden="true" className="material-symbols-outlined oid-call-shield-icon">shield</span>
             <span>SECOURS : 112</span>
           </a>
         </div>
 
         {error && (
-          <div className="oid-error-banner" role="alert">
-            <span className="material-symbols-outlined">warning</span>
+          <div className="oid-error-banner" role="alert" ref={errorRef}>
+            <span aria-hidden="true" className="material-symbols-outlined">warning</span>
             <span>{error}</span>
           </div>
         )}
@@ -576,7 +711,7 @@ export const PublicReportPage: React.FC = () => {
           <section className="oid-block-card">
             <div className="oid-block-header">
               <div className="oid-block-title-wrap">
-                <span className="material-symbols-outlined oid-block-icon">my_location</span>
+                <span aria-hidden="true" className="material-symbols-outlined oid-block-icon">my_location</span>
                 <h2 className="oid-block-title">1. Localisation précise</h2>
               </div>
               <span
@@ -600,7 +735,7 @@ export const PublicReportPage: React.FC = () => {
               className="oid-gps-btn"
             >
               <div className="oid-gps-left">
-                <span className="material-symbols-outlined oid-gps-icon">
+                <span aria-hidden="true" className="material-symbols-outlined oid-gps-icon">
                   {locating ? 'sync' : 'near_me'}
                 </span>
                 <div className="oid-gps-text">
@@ -610,7 +745,7 @@ export const PublicReportPage: React.FC = () => {
                   <span className="oid-gps-sub">Position automatique</span>
                 </div>
               </div>
-              <span className="material-symbols-outlined">my_location</span>
+              <span aria-hidden="true" className="material-symbols-outlined">my_location</span>
             </button>
 
             {/* Mini-Carte Interactive LocationPickerMap avec télémétrie flottante */}
@@ -621,13 +756,15 @@ export const PublicReportPage: React.FC = () => {
               onChange={(newLat, newLon) => {
                 setLat(newLat);
                 setLon(newLon);
+                setLocationConfirmed(true);
+                setError(null);
               }}
             />
 
             {/* Bandeau d'adresse géocodée en direct (PostGIS ST_Intersects + Nominatim OSM) */}
             <div className="oid-reverse-geo-strip">
               <div className="oid-reverse-geo-info">
-                <span className="material-symbols-outlined oid-reverse-geo-pin">pin_drop</span>
+                <span aria-hidden="true" className="material-symbols-outlined oid-reverse-geo-pin">pin_drop</span>
                 <div className="oid-reverse-geo-text">
                   <span className="oid-reverse-geo-label">
                     {geoInfo.loading
@@ -647,7 +784,7 @@ export const PublicReportPage: React.FC = () => {
                   className="oid-inject-addr-btn"
                   title="Copier cette adresse dans le champ Carrefour / Repère visuel"
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                  <span aria-hidden="true" className="material-symbols-outlined" style={{ fontSize: '15px' }}>
                     add_location_alt
                   </span>
                   <span>Utiliser comme repère</span>
@@ -660,8 +797,8 @@ export const PublicReportPage: React.FC = () => {
           <section className="oid-block-card">
             <div className="oid-block-header">
               <div className="oid-block-title-wrap">
-                <span className="material-symbols-outlined oid-block-icon">flood</span>
-                <h2 className="oid-block-title">2. Nature du sinistre</h2>
+                <span aria-hidden="true" className="material-symbols-outlined oid-block-icon">flood</span>
+                <h2 className="oid-block-title">2. Que se passe-t-il ?</h2>
               </div>
               <span className="oid-block-meta">1 Choix obligatoire</span>
             </div>
@@ -675,10 +812,11 @@ export const PublicReportPage: React.FC = () => {
                     type="button"
                     data-type={item.value}
                     onClick={() => setType(item.value)}
+                    aria-pressed={isSelected}
                     className={`oid-flood-card ${isSelected ? 'selected' : ''}`}
                   >
                     <div className="oid-flood-icon-box">
-                      <span className="material-symbols-outlined">{item.icon}</span>
+                      <span aria-hidden="true" className="material-symbols-outlined">{item.icon}</span>
                     </div>
                     <div className="oid-flood-text">
                       <span className="oid-flood-title">{item.title}</span>
@@ -694,13 +832,13 @@ export const PublicReportPage: React.FC = () => {
           <section className="oid-block-card">
             <div className="oid-block-header">
               <div className="oid-block-title-wrap">
-                <span className="material-symbols-outlined oid-block-icon">straighten</span>
+                <span aria-hidden="true" className="material-symbols-outlined oid-block-icon">straighten</span>
                 <h2 className="oid-block-title">3. Hauteur de l'eau</h2>
               </div>
               <div className="oid-level-badge">
                 <span className="oid-level-lbl">Hauteur :</span>
                 <span className="oid-level-val" id="height-display">
-                  {hauteurEauCm} cm
+                  {hauteurEauCm === null ? 'Non précisée' : `${hauteurEauCm} cm`}
                 </span>
               </div>
             </div>
@@ -709,9 +847,10 @@ export const PublicReportPage: React.FC = () => {
             <div className="oid-presets-grid" id="presets-container">
               {WATER_PRESETS.map((preset) => {
                 const isActive =
-                  preset.isRoof
+                  hauteurEauCm !== null &&
+                  (preset.isRoof
                     ? hauteurEauCm >= 200
-                    : Math.abs(preset.value - hauteurEauCm) <= 18;
+                    : Math.abs(preset.value - hauteurEauCm) <= 18);
 
                 return (
                   <button
@@ -719,12 +858,14 @@ export const PublicReportPage: React.FC = () => {
                     type="button"
                     data-value={preset.value}
                     onClick={() => setHauteurEauCm(preset.value)}
+                    aria-pressed={isActive}
+                    aria-label={`Hauteur d'eau : ${preset.label}, ${preset.display}`}
                     className={`oid-preset-btn ${isActive ? 'active' : ''}`}
                   >
                     <div className="oid-silhouette-box">
                       {preset.isRoof ? (
                         <div className="oid-water-fill roof-fill">
-                          <span className="material-symbols-outlined oid-roof-icon">roofing</span>
+                          <span aria-hidden="true" className="material-symbols-outlined oid-roof-icon">roofing</span>
                         </div>
                       ) : (
                         <div
@@ -756,7 +897,7 @@ export const PublicReportPage: React.FC = () => {
           <section className="oid-block-card">
             <div className="oid-block-header">
               <div className="oid-block-title-wrap">
-                <span className="material-symbols-outlined oid-block-icon">speed</span>
+                <span aria-hidden="true" className="material-symbols-outlined oid-block-icon">speed</span>
                 <h2 className="oid-block-title">4. Gravité estimée</h2>
               </div>
 
@@ -786,6 +927,7 @@ export const PublicReportPage: React.FC = () => {
                     type="button"
                     data-severity={sev.value}
                     onClick={() => handleSelectSeverity(sev.value)}
+                    aria-pressed={isSelected}
                     className={`oid-severity-btn ${
                       isSelected ? (isCritique ? 'selected-critique' : 'selected') : ''
                     }`}
@@ -803,8 +945,27 @@ export const PublicReportPage: React.FC = () => {
             {/* Zone de détail d'urgence vitale (affichée si Péril Vital ou Gravité Critique) */}
             {(dangerImmediat || gravite === 'critique') && (
               <div className="oid-peril-box" id="peril-details-box">
+                <p className="oid-peril-call" role="alert">
+                  <strong>Ce formulaire ne remplace pas un appel.</strong> Appelez maintenant le{' '}
+                  <a href="tel:180">180 (GSPM)</a> ou le <a href="tel:112">112</a>.
+                </p>
+                <label htmlFor="peril-type" className="oid-peril-label">
+                  <span>Nature du danger :</span>
+                </label>
+                <select
+                  id="peril-type"
+                  value={dangerType}
+                  onChange={(e) => setDangerType(e.target.value as DangerTypeOption['value'])}
+                  className="oid-peril-textarea"
+                >
+                  {DANGER_TYPES.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
                 <label htmlFor="peril-notes" className="oid-peril-label">
-                  <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>
+                  <span aria-hidden="true" className="material-symbols-outlined" style={{ fontSize: '17px' }}>
                     emergency_home
                   </span>
                   <span>Précisez l'urgence vitale constatée :</span>
@@ -826,65 +987,96 @@ export const PublicReportPage: React.FC = () => {
           <section className="oid-block-card">
             <div className="oid-block-header">
               <div className="oid-block-title-wrap">
-                <span className="material-symbols-outlined oid-block-icon">add_a_photo</span>
+                <span aria-hidden="true" className="material-symbols-outlined oid-block-icon">add_a_photo</span>
                 <h2 className="oid-block-title">5. Photo &amp; Repères</h2>
               </div>
-              <span className={`oid-photo-status ${photoPreview ? 'loaded' : ''}`}>
-                {photoPreview ? '1 PHOTO CHARGÉE' : 'RECOMMANDÉ'}
+              <span className={`oid-photo-status ${photos.length > 0 ? 'loaded' : ''}`}>
+                {photos.length > 0
+                  ? `${photos.length}/${MAX_PHOTOS} PHOTO${photos.length > 1 ? 'S' : ''}`
+                  : 'RECOMMANDÉ'}
               </span>
             </div>
 
-            <div className="oid-photo-row">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoUpload}
-                style={{ display: 'none' }}
-              />
+            {/* Deux entrées : appareil photo direct, ou import depuis la galerie */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhotoFiles}
+              style={{ display: 'none' }}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handlePhotoFiles}
+              style={{ display: 'none' }}
+            />
 
+            <div className="oid-photo-actions">
               <button
                 id="btn-camera"
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={openCamera}
+                disabled={photos.length >= MAX_PHOTOS}
                 className="oid-camera-btn"
               >
-                <span className="material-symbols-outlined oid-camera-icon">photo_camera</span>
-                <span className="oid-camera-title">Prendre photo</span>
-                <span className="oid-camera-sub">ou parcourir la galerie</span>
+                <span aria-hidden="true" className="material-symbols-outlined oid-camera-icon">photo_camera</span>
+                <span className="oid-camera-title">Prendre une photo</span>
+                <span className="oid-camera-sub">avec l'appareil</span>
               </button>
-
-              {photoPreview && (
-                <div className="oid-photo-thumb" id="photo-preview-container">
-                  <img src={photoPreview} alt="Aperçu du sinistre" />
-                  <div className="oid-photo-overlay" />
-                  <button
-                    id="btn-delete-photo"
-                    type="button"
-                    onClick={handleDeletePhoto}
-                    aria-label="Supprimer la photo"
-                    className="oid-photo-delete"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                      close
-                    </span>
-                  </button>
-                  <div className="oid-photo-tag">{photoMeta}</div>
-                </div>
-              )}
+              <button
+                id="btn-gallery"
+                type="button"
+                onClick={() => galleryInputRef.current?.click()}
+                disabled={photos.length >= MAX_PHOTOS}
+                className="oid-camera-btn"
+              >
+                <span aria-hidden="true" className="material-symbols-outlined oid-camera-icon">photo_library</span>
+                <span className="oid-camera-title">Importer</span>
+                <span className="oid-camera-sub">depuis la galerie</span>
+              </button>
             </div>
+            <p className="oid-photo-hint">
+              Jusqu'à {MAX_PHOTOS} photos. Il en reste {MAX_PHOTOS - photos.length} à ajouter.
+            </p>
+
+            {photos.length > 0 && (
+              <div className="oid-photo-grid" id="photo-preview-container">
+                {photos.map((photo, index) => (
+                  <div className="oid-photo-thumb" key={photo.id}>
+                    <img src={photo.dataUrl} alt={`Photo ${index + 1} du sinistre`} />
+                    <div className="oid-photo-overlay" />
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePhoto(photo.id)}
+                      aria-label={`Supprimer la photo ${index + 1}`}
+                      className="oid-photo-delete"
+                    >
+                      <span aria-hidden="true" className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                        close
+                      </span>
+                    </button>
+                    <div className="oid-photo-tag">{photo.meta}</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Champ Repères et Carrefour */}
             <div className="oid-landmark-group">
               <label htmlFor="crossroad-input" className="oid-landmark-label">
-                <span className="material-symbols-outlined oid-landmark-icon">signpost</span>
+                <span aria-hidden="true" className="material-symbols-outlined oid-landmark-icon">signpost</span>
                 <span>Carrefour, repère visuel ou concession :</span>
               </label>
               <div className="oid-landmark-input-wrap">
-                <input
+                <textarea
                   id="crossroad-input"
-                  type="text"
-                  enterKeyHint="done"
+                  rows={2}
+                  maxLength={MAX_DESCRIPTION_LENGTH}
+                  enterKeyHint="enter"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={
@@ -894,7 +1086,7 @@ export const PublicReportPage: React.FC = () => {
                   }
                   className="oid-landmark-input"
                 />
-                <span className="material-symbols-outlined oid-landmark-edit-icon">edit_location</span>
+                <span aria-hidden="true" className="material-symbols-outlined oid-landmark-edit-icon">edit_location</span>
               </div>
             </div>
           </section>
