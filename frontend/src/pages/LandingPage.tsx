@@ -457,7 +457,7 @@ export const LandingPage: React.FC = () => {
 
                 <div className="px-5 pb-5 pt-3">
                   <Link
-                    to="/consulter"
+                    to="/consulter?periode=tous&tri=recent"
                     className="group flex h-12 items-center justify-center gap-2 rounded-xl border border-line2 text-[15px] font-bold text-ink transition-colors hover:bg-[var(--s2)]"
                   >
                     {visible.length > LIST_LIMIT

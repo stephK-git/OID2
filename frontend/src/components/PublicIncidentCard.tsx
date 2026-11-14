@@ -71,6 +71,8 @@ interface PublicIncidentCardProps {
   defaultExpanded?: boolean;
   onOpenPhoto: (photos: string[], index: number, title: string) => void;
   onLocate?: (incident: PublicIncident) => void;
+  /** Carte mise en évidence (ex. marqueur cliqué sur la carte) : dépliée et entourée. */
+  highlighted?: boolean;
 }
 
 export const PublicIncidentCard: React.FC<PublicIncidentCardProps> = ({
@@ -78,8 +80,12 @@ export const PublicIncidentCard: React.FC<PublicIncidentCardProps> = ({
   defaultExpanded = false,
   onOpenPhoto,
   onLocate,
+  highlighted = false,
 }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  React.useEffect(() => {
+    if (highlighted) setExpanded(true);
+  }, [highlighted]);
   const typeLabel = INCIDENT_TYPE_LABELS[incident.type] || incident.type;
   const catBadge = getCategorieBadge(incident.categorie, incident.danger_immediat);
   const statutBadge = INCIDENT_STATUT_LABELS[incident.statut] || {
@@ -90,7 +96,12 @@ export const PublicIncidentCard: React.FC<PublicIncidentCardProps> = ({
     INCIDENT_FIABILITE_LABELS[incident.niveau_fiabilite] || incident.niveau_fiabilite;
 
   return (
-    <article className="rounded-2xl bg-surface border border-line shadow-sm overflow-hidden transition hover:border-slate-300">
+    <article
+      id={`incident-${incident.id}`}
+      className={`rounded-2xl bg-surface border shadow-sm overflow-hidden transition hover:border-slate-300 ${
+        highlighted ? 'border-[var(--water)] ring-2 ring-[var(--water)]/40' : 'border-line'
+      }`}
+    >
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}

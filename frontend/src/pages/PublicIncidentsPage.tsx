@@ -11,7 +11,6 @@ import {
   PlusCircle,
   RefreshCw,
   RotateCcw,
-  Search,
   SlidersHorizontal,
   ShieldAlert,
   X,
@@ -86,6 +85,25 @@ interface LightboxState {
 
 const ABIDJAN_CENTER: [number, number] = [5.3484, -4.0244];
 
+type SortMode = 'gravite' | 'recent' | 'ancien' | 'proche';
+
+const SORT_OPTIONS: Array<{ value: SortMode; label: string }> = [
+  { value: 'gravite', label: 'Gravité' },
+  { value: 'recent', label: 'Plus récents' },
+  { value: 'ancien', label: 'Plus anciens' },
+  { value: 'proche', label: 'Plus proches de moi' },
+];
+
+function distanceKm(a: [number, number], b: [number, number]): number {
+  const rad = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * rad;
+  const dLon = (b[1] - a[1]) * rad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLon / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
 const SEVERITY_RANK: Record<Severity, number> = {
   critique: 0,
   route_coupee: 1,
@@ -127,6 +145,17 @@ function isSameUtcDate(isoDate: string | null | undefined, utcDateStr: string): 
   return parsed.toISOString().slice(0, 10) === utcDateStr;
 }
 
+function communeStyle(isSelected: boolean): L.PathOptions {
+  return {
+    className: 'oid-commune-poly',
+    color: isSelected ? '#0b5fc4' : '#64748b',
+    weight: isSelected ? 2.5 : 1,
+    opacity: isSelected ? 0.95 : 0.45,
+    fillColor: isSelected ? '#0b5fc4' : '#94a3b8',
+    fillOpacity: isSelected ? 0.14 : 0.04,
+  };
+}
+
 function featureSeverity(props: PublicMapFeature['properties']): Severity {
   if (props.danger_immediat || props.categorie === 'critique') return 'critique';
   if (props.categorie === 'route_coupee') return 'route_coupee';
@@ -145,8 +174,20 @@ export const PublicIncidentsPage: React.FC = () => {
 
   const [todayOnly, setTodayOnly] = useState<boolean>(initialPeriod);
   const [communeFilter, setCommuneFilter] = useState<string>(initialCommune);
-  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>(() => {
+    const param = searchParams.get('gravite');
+    return SEVERITY_OPTIONS.some((option) => option.value === param)
+      ? (param as SeverityFilter)
+      : 'all';
+  });
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    const param = searchParams.get('tri');
+    return param === 'recent' || param === 'ancien' ? param : 'gravite';
+  });
+  const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  const [geoError, setGeoError] = useState<string>('');
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const revealedIdRef = useRef<number | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (
       initialVue === 'carte' &&
@@ -171,6 +212,11 @@ export const PublicIncidentsPage: React.FC = () => {
   const [apiTotal, setApiTotal] = useState<number>(0);
   const [loadingList, setLoadingList] = useState<boolean>(true);
   const [listError, setListError] = useState<boolean>(false);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [loadMoreError, setLoadMoreError] = useState<boolean>(false);
+  // Identifie le chargement « première page » en cours : une réponse « page suivante »
+  // d'une génération précédente (période changée, actualisation) est ignorée.
+  const listGenerationRef = useRef<number>(0);
 
   const [communesList, setCommunesList] = useState<CommuneSummary[]>([]);
   const [mapFeatures, setMapFeatures] = useState<PublicMapFeature[]>([]);
@@ -184,21 +230,71 @@ export const PublicIncidentsPage: React.FC = () => {
   const mapRef = useRef<L.Map | null>(null);
   const communesLayerRef = useRef<L.GeoJSON | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const haloLayerRef = useRef<L.LayerGroup | null>(null);
 
-  const syncUrlParams = useCallback(
-    (nextCommune: string, nextTodayOnly: boolean) => {
-      const params = new URLSearchParams();
-      if (nextCommune !== 'all') params.set('commune', nextCommune);
-      if (!nextTodayOnly) params.set('periode', 'tous');
+  // Clic sur un marqueur : met la fiche correspondante en évidence dans la liste
+  const handleMarkerSelect = useCallback((id: number) => {
+    setHighlightedId(id);
+    if (typeof window !== 'undefined' && window.innerWidth < 960) setViewMode('list');
+  }, []);
+
+  const handleSortChange = (next: SortMode) => {
+    setGeoError('');
+    if (next !== 'proche') {
+      setSortMode(next);
+      return;
+    }
+    if (userPos) {
+      setSortMode('proche');
+      return;
+    }
+    if (!navigator.geolocation) {
+      setGeoError('La géolocalisation n’est pas disponible sur cet appareil.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserPos([pos.coords.latitude, pos.coords.longitude]);
+        setSortMode('proche');
+      },
+      () => setGeoError('Position refusée ou indisponible : tri par gravité conservé.'),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  };
+
+  // Vrai quand le rechargement vient du minuteur : on garde l'affichage actuel
+  // (pas de squelette, pas d'effacement en cas d'erreur réseau passagère).
+  const silentRefreshRef = useRef<boolean>(false);
+  // Nombre d'incidents chargés : le rafraîchissement auto est suspendu au-delà d'une page,
+  // sinon il ferait disparaître les pages supplémentaires déjà chargées.
+  const loadedCountRef = useRef<number>(0);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // Synchronise les filtres partageables (commune, période, gravité) avec l'URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    if (communeFilter !== 'all') params.set('commune', communeFilter);
+    else params.delete('commune');
+    if (!todayOnly) params.set('periode', 'tous');
+    else params.delete('periode');
+    if (severityFilter !== 'all') params.set('gravite', severityFilter);
+    else params.delete('gravite');
+    if (sortMode === 'recent' || sortMode === 'ancien') params.set('tri', sortMode);
+    else params.delete('tri');
+    if (focusedIncidentId == null) params.delete('incident');
+    if (params.toString() !== searchParams.toString()) {
       setSearchParams(params, { replace: true });
-    },
-    [setSearchParams]
-  );
+    }
+  }, [communeFilter, todayOnly, severityFilter, sortMode, focusedIncidentId, searchParams, setSearchParams]);
 
   // Chargement des incidents filtrés par période (aujourd'hui vs tous actifs)
   useEffect(() => {
     let mounted = true;
-    setLoadingList(true);
+    const silent = silentRefreshRef.current;
+    listGenerationRef.current += 1;
+    setLoadingMore(false);
+    setLoadMoreError(false);
+    if (!silent) setLoadingList(true);
 
     apiFetch<{ items: PublicIncident[]; total: number }>(
       `/signalements/recents?limit=${FETCH_LIMIT}&today_only=${todayOnly}`
@@ -209,9 +305,10 @@ export const PublicIncidentsPage: React.FC = () => {
         setIncidents(items);
         setApiTotal(typeof data?.total === 'number' ? data.total : items.length);
         setListError(false);
+        setLastUpdated(new Date());
       })
       .catch(() => {
-        if (!mounted) return;
+        if (!mounted || silent) return;
         setIncidents([]);
         setApiTotal(0);
         setListError(true);
@@ -225,32 +322,63 @@ export const PublicIncidentsPage: React.FC = () => {
     };
   }, [todayOnly, refreshTick]);
 
-  // Chargement des communes et des points/limites pour la carte publique
+  // Charge la page suivante côté serveur (offset = nombre d'incidents déjà reçus)
+  const handleLoadMore = useCallback(() => {
+    const generation = listGenerationRef.current;
+    setLoadingMore(true);
+    setLoadMoreError(false);
+    apiFetch<{ items: PublicIncident[]; total: number }>(
+      `/signalements/recents?limit=${FETCH_LIMIT}&offset=${incidents.length}&today_only=${todayOnly}`
+    )
+      .then((data) => {
+        if (generation !== listGenerationRef.current) return;
+        const more = Array.isArray(data?.items) ? data.items : [];
+        setIncidents((prev) => {
+          const known = new Set(prev.map((incident) => incident.id));
+          return [...prev, ...more.filter((incident) => !known.has(incident.id))];
+        });
+        if (typeof data?.total === 'number') setApiTotal(data.total);
+      })
+      .catch(() => {
+        if (generation === listGenerationRef.current) setLoadMoreError(true);
+      })
+      .finally(() => {
+        if (generation === listGenerationRef.current) setLoadingMore(false);
+      });
+  }, [incidents.length, todayOnly]);
+
+  // Chargement des communes actives et des points de la carte publique
   useEffect(() => {
     let mounted = true;
-    setLoadingMap(true);
+    const silent = silentRefreshRef.current;
+    silentRefreshRef.current = false;
+    if (!silent) setLoadingMap(true);
 
     Promise.allSettled([
       apiFetch<CartePubliqueResponse>('/signalements/carte-publique'),
       apiFetch<{ communes: CommuneSummary[] }>('/signalements/communes-actives'),
-      apiFetch<GeoJsonFeatureCollection>('/signalements/communes'),
     ])
-      .then(([carteRes, communesRes, geoRes]) => {
+      .then(([carteRes, communesRes]) => {
         if (!mounted) return;
         if (carteRes.status === 'fulfilled') {
-          setMapFeatures(
-            Array.isArray(carteRes.value?.features) ? carteRes.value.features : []
-          );
-        } else {
+          const next = Array.isArray(carteRes.value?.features) ? carteRes.value.features : [];
+          const signature = (list: PublicMapFeature[]) =>
+            list
+              .map(
+                (f) =>
+                  `${f.properties.id}:${f.properties.statut}:${f.properties.categorie}:${f.geometry?.coordinates?.join(',')}`
+              )
+              .join('|');
+          // Conserve la référence précédente si rien n'a changé : évite de redessiner
+          // la carte (et de fermer une popup ouverte) à chaque rafraîchissement.
+          setMapFeatures((prev) => (signature(prev) === signature(next) ? prev : next));
+        } else if (!silent) {
           setMapFeatures([]);
         }
         if (communesRes.status === 'fulfilled') {
           setCommunesList(
             Array.isArray(communesRes.value?.communes) ? communesRes.value.communes : []
           );
-        }
-        if (geoRes.status === 'fulfilled' && geoRes.value?.type === 'FeatureCollection') {
-          setCommunesGeoJson(geoRes.value);
         }
       })
       .finally(() => {
@@ -261,6 +389,31 @@ export const PublicIncidentsPage: React.FC = () => {
       mounted = false;
     };
   }, [refreshTick]);
+
+  // Limites des communes : lourdes et quasi statiques, chargées une seule fois
+  useEffect(() => {
+    let mounted = true;
+    apiFetch<GeoJsonFeatureCollection>('/signalements/communes')
+      .then((geo) => {
+        if (mounted && geo?.type === 'FeatureCollection') setCommunesGeoJson(geo);
+      })
+      .catch(() => {
+        /* la carte reste utilisable sans les limites */
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Rafraîchissement automatique toutes les 60 s quand l'onglet est visible
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.hidden || loadedCountRef.current > FETCH_LIMIT) return;
+      silentRefreshRef.current = true;
+      setRefreshTick((t) => t + 1);
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Fermeture clavier de la visionneuse photo
   useEffect(() => {
@@ -287,33 +440,12 @@ export const PublicIncidentsPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [lightbox]);
 
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-
-  const matchesSearch = useCallback(
-    (incident: PublicIncident): boolean => {
-      if (!normalizedQuery) return true;
-      const typeLabel = (INCIDENT_TYPE_LABELS[incident.type] || incident.type).toLowerCase();
-      const statutLabel = (
-        INCIDENT_STATUT_LABELS[incident.statut]?.label || incident.statut
-      ).toLowerCase();
-      return (
-        incident.commune.toLowerCase().includes(normalizedQuery) ||
-        typeLabel.includes(normalizedQuery) ||
-        statutLabel.includes(normalizedQuery) ||
-        (incident.routes_coupees || '').toLowerCase().includes(normalizedQuery) ||
-        (incident.degats || '').toLowerCase().includes(normalizedQuery) ||
-        (incident.risques_sanitaires || '').toLowerCase().includes(normalizedQuery)
-      );
-    },
-    [normalizedQuery]
-  );
+  loadedCountRef.current = incidents.length;
 
   // Options de communes fusionnant les 13 communes d'Abidjan et les comptes filtrés
   const communeOptions = useMemo(() => {
     const base = incidents.filter(
-      (incident) =>
-        (severityFilter === 'all' || severityOf(incident) === severityFilter) &&
-        matchesSearch(incident)
+      (incident) => severityFilter === 'all' || severityOf(incident) === severityFilter
     );
     const counts = new Map<string, number>();
 
@@ -334,13 +466,11 @@ export const PublicIncidentsPage: React.FC = () => {
       });
 
     return { total: base.length, items };
-  }, [incidents, communesList, severityFilter, matchesSearch]);
+  }, [incidents, communesList, severityFilter]);
 
   const severityCounts = useMemo(() => {
     const base = incidents.filter(
-      (incident) =>
-        (communeFilter === 'all' || incident.commune === communeFilter) &&
-        matchesSearch(incident)
+      (incident) => communeFilter === 'all' || incident.commune === communeFilter
     );
     return {
       all: base.length,
@@ -349,28 +479,38 @@ export const PublicIncidentsPage: React.FC = () => {
         .length,
       vigilance: base.filter((incident) => severityOf(incident) === 'vigilance').length,
     };
-  }, [incidents, communeFilter, matchesSearch]);
+  }, [incidents, communeFilter]);
 
   const filteredIncidents = useMemo(() => {
     const list = incidents.filter(
       (incident) =>
         (communeFilter === 'all' || incident.commune === communeFilter) &&
-        (severityFilter === 'all' || severityOf(incident) === severityFilter) &&
-        matchesSearch(incident)
+        (severityFilter === 'all' || severityOf(incident) === severityFilter)
     );
 
+    const time = (i: PublicIncident) => new Date(i.maj_le || i.cree_le || 0).getTime();
+    const distance = (i: PublicIncident) =>
+      userPos && i.lat != null && i.lon != null
+        ? distanceKm(userPos, [i.lat, i.lon])
+        : Number.POSITIVE_INFINITY;
+
     return [...list].sort((a, b) => {
+      if (sortMode === 'recent') return time(b) - time(a);
+      if (sortMode === 'ancien') return time(a) - time(b);
+      if (sortMode === 'proche') {
+        const diff = distance(a) - distance(b);
+        if (diff !== 0 && !Number.isNaN(diff)) return diff;
+        return time(b) - time(a);
+      }
       const rankDiff = SEVERITY_RANK[severityOf(a)] - SEVERITY_RANK[severityOf(b)];
       if (rankDiff !== 0) return rankDiff;
-      const ta = new Date(a.maj_le || a.cree_le || 0).getTime();
-      const tb = new Date(b.maj_le || b.cree_le || 0).getTime();
-      return tb - ta;
+      return time(b) - time(a);
     });
-  }, [incidents, communeFilter, severityFilter, matchesSearch]);
+  }, [incidents, communeFilter, severityFilter, sortMode, userPos]);
 
   // Pagination : la page choisie est liée aux filtres actifs, donc elle revient
   // à la première page dès qu'un filtre, la recherche ou la période change.
-  const filterKey = `${todayOnly}|${communeFilter}|${severityFilter}|${searchQuery}`;
+  const filterKey = `${todayOnly}|${communeFilter}|${severityFilter}`;
   const [pageChoice, setPageChoice] = useState<{ key: string; page: number }>({
     key: '',
     page: 1,
@@ -396,7 +536,9 @@ export const PublicIncidentsPage: React.FC = () => {
     listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const todayUtcStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // Recalculée à chaque rafraîchissement (manuel ou automatique), y compris après minuit
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const todayUtcStr = useMemo(() => new Date().toISOString().slice(0, 10), [refreshTick]);
   const isMapVisible = viewMode !== 'list';
 
   const focusedIncident = useMemo(
@@ -418,20 +560,6 @@ export const PublicIncidentsPage: React.FC = () => {
       if (severityFilter !== 'all' && sev !== severityFilter) return false;
       if (todayOnly && props.cree_le && !isSameUtcDate(props.cree_le, todayUtcStr)) {
         return false;
-      }
-      if (normalizedQuery) {
-        const typeLabel = (INCIDENT_TYPE_LABELS[props.type] || props.type).toLowerCase();
-        const statutLabel = (
-          INCIDENT_STATUT_LABELS[props.statut]?.label || props.statut
-        ).toLowerCase();
-        const communeLower = (props.commune || '').toLowerCase();
-        if (
-          !communeLower.includes(normalizedQuery) &&
-          !typeLabel.includes(normalizedQuery) &&
-          !statutLabel.includes(normalizedQuery)
-        ) {
-          return false;
-        }
       }
       return true;
     });
@@ -471,7 +599,6 @@ export const PublicIncidentsPage: React.FC = () => {
     severityFilter,
     todayOnly,
     todayUtcStr,
-    normalizedQuery,
     focusedIncidentId,
     focusedIncident,
   ]);
@@ -493,16 +620,19 @@ export const PublicIncidentsPage: React.FC = () => {
 
     const communesLayer = L.geoJSON(undefined).addTo(map);
     const markersLayer = L.layerGroup().addTo(map);
+    const haloLayer = L.layerGroup().addTo(map);
 
     mapRef.current = map;
     communesLayerRef.current = communesLayer;
     markersLayerRef.current = markersLayer;
+    haloLayerRef.current = haloLayer;
 
     return () => {
       map.remove();
       mapRef.current = null;
       communesLayerRef.current = null;
       markersLayerRef.current = null;
+      haloLayerRef.current = null;
     };
   }, [isMapVisible]);
 
@@ -515,53 +645,60 @@ export const PublicIncidentsPage: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [viewMode, isMapVisible]);
 
-  // Mise à jour des polygones de communes + marqueurs filtrés sur la carte
+  // Polygones de communes : créés une seule fois (ou quand la carte est recréée)
+  useEffect(() => {
+    const communesLayer = communesLayerRef.current;
+    if (!communesLayer || !isMapVisible) return;
+
+    communesLayer.clearLayers();
+    if (!communesGeoJson) return;
+
+    const geo = L.geoJSON(communesGeoJson as any, {
+      style: () => communeStyle(false),
+      onEachFeature: (feature, layer) => {
+        const name = getCommunePropName(feature?.properties);
+        if (!name) return;
+        // Survol = simple info-bulle : la commune se choisit uniquement via les filtres
+        layer.bindTooltip(name, { sticky: true, direction: 'center' });
+      },
+    });
+    geo.eachLayer((layer) => communesLayer.addLayer(layer));
+  }, [communesGeoJson, isMapVisible]);
+
+  // Met simplement à jour le style quand la commune sélectionnée change
+  useEffect(() => {
+    const communesLayer = communesLayerRef.current;
+    if (!communesLayer || !isMapVisible) return;
+    communesLayer.eachLayer((layer) => {
+      const name = getCommunePropName((layer as any).feature?.properties);
+      (layer as L.Path).setStyle(communeStyle(communeFilter !== 'all' && name === communeFilter));
+    });
+  }, [communeFilter, communesGeoJson, isMapVisible]);
+
+  // Marqueurs filtrés + cadrage de la carte
   useEffect(() => {
     const map = mapRef.current;
     const communesLayer = communesLayerRef.current;
     const markersLayer = markersLayerRef.current;
-    if (!map || !communesLayer || !markersLayer || viewMode === 'list') return;
+    const haloLayer = haloLayerRef.current;
+    if (!map || !communesLayer || !markersLayer || !haloLayer || viewMode === 'list') return;
 
-    communesLayer.clearLayers();
     let selectedCommuneBounds: L.LatLngBounds | null = null;
-
-    if (communesGeoJson) {
-      const geo = L.geoJSON(communesGeoJson as any, {
-        style: (feature) => {
-          const name = getCommunePropName(feature?.properties);
-          const isSelected = communeFilter !== 'all' && name === communeFilter;
-          return {
-            color: isSelected ? '#0b5fc4' : '#64748b',
-            weight: isSelected ? 2.5 : 1,
-            opacity: isSelected ? 0.95 : 0.45,
-            fillColor: isSelected ? '#0b5fc4' : '#94a3b8',
-            fillOpacity: isSelected ? 0.14 : 0.04,
-          };
-        },
-        onEachFeature: (feature, layer) => {
-          const name = getCommunePropName(feature?.properties);
-          if (!name) return;
-          layer.bindTooltip(name, { sticky: true, direction: 'center' });
-          layer.on('click', () => {
-            setCommuneFilter((prev) => {
-              const next = prev === name ? 'all' : name;
-              syncUrlParams(next, todayOnly);
-              return next;
-            });
-          });
-          if (communeFilter !== 'all' && name === communeFilter && 'getBounds' in layer) {
-            try {
-              selectedCommuneBounds = (layer as L.Polygon).getBounds();
-            } catch {
-              selectedCommuneBounds = null;
-            }
+    if (communeFilter !== 'all') {
+      communesLayer.eachLayer((layer) => {
+        const name = getCommunePropName((layer as any).feature?.properties);
+        if (name === communeFilter && 'getBounds' in layer) {
+          try {
+            selectedCommuneBounds = (layer as L.Polygon).getBounds();
+          } catch {
+            selectedCommuneBounds = null;
           }
-        },
+        }
       });
-      geo.eachLayer((layer) => communesLayer.addLayer(layer));
     }
 
     markersLayer.clearLayers();
+    haloLayer.clearLayers();
     const pointBounds = L.latLngBounds([]);
     let focusedMarker: L.CircleMarker | null = null;
     let focusedCoords: [number, number] | null = null;
@@ -621,7 +758,7 @@ export const PublicIncidentsPage: React.FC = () => {
           fillColor: '#0b5fc4',
           fillOpacity: 0.16,
           interactive: false,
-        }).addTo(markersLayer);
+        }).addTo(haloLayer);
       }
 
       const marker = L.circleMarker([lat, lon], {
@@ -633,6 +770,10 @@ export const PublicIncidentsPage: React.FC = () => {
       });
 
       marker.bindPopup(popupHtml);
+      if (props.id != null) {
+        const markerId = props.id;
+        marker.on('click', () => handleMarkerSelect(markerId));
+      }
       marker.addTo(markersLayer);
       pointBounds.extend([lat, lon]);
 
@@ -673,12 +814,31 @@ export const PublicIncidentsPage: React.FC = () => {
     communeFilter,
     viewMode,
     isMapVisible,
-    todayOnly,
-    syncUrlParams,
     focusedIncidentId,
     focusedIncident,
     focusTick,
+    handleMarkerSelect,
   ]);
+
+  // Amène la fiche mise en évidence à l'écran (bonne page de pagination + défilement)
+  useEffect(() => {
+    if (highlightedId == null || viewMode === 'map') {
+      revealedIdRef.current = null;
+      return;
+    }
+    // Une seule fois par sélection : ne pas ramener la page à chaque rafraîchissement
+    if (revealedIdRef.current === highlightedId) return;
+    const index = filteredIncidents.findIndex((incident) => incident.id === highlightedId);
+    if (index < 0) return;
+    revealedIdRef.current = highlightedId;
+    setPageChoice({ key: filterKey, page: Math.floor(index / PAGE_SIZE) + 1 });
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById(`incident-${highlightedId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [highlightedId, viewMode, filteredIncidents, filterKey]);
 
   // Fait défiler jusqu'à la carte lorsque l'utilisateur demande à localiser un incident
   useEffect(() => {
@@ -692,21 +852,22 @@ export const PublicIncidentsPage: React.FC = () => {
   const handleCommuneSelect = (commune: string) => {
     setFocusedIncidentId(null);
     setCommuneFilter(commune);
-    syncUrlParams(commune, todayOnly);
   };
 
   const handlePeriodChange = (nextTodayOnly: boolean) => {
     setFocusedIncidentId(null);
     setTodayOnly(nextTodayOnly);
-    syncUrlParams(communeFilter, nextTodayOnly);
+  };
+
+  const handleSeverityChange = (next: SeverityFilter) => {
+    setFocusedIncidentId(null);
+    setSeverityFilter(next);
   };
 
   const handleResetFilters = () => {
     setFocusedIncidentId(null);
     setCommuneFilter('all');
     setSeverityFilter('all');
-    setSearchQuery('');
-    syncUrlParams('all', todayOnly);
   };
 
   const handleLocateIncident = useCallback(
@@ -731,8 +892,8 @@ export const PublicIncidentsPage: React.FC = () => {
     setLightbox({ photos, index, title });
   };
 
-  const hasActiveFilters =
-    communeFilter !== 'all' || severityFilter !== 'all' || searchQuery.trim().length > 0;
+  const activeFilterCount = (communeFilter !== 'all' ? 1 : 0) + (severityFilter !== 'all' ? 1 : 0);
+  const hasActiveFilters = activeFilterCount > 0;
 
   return (
     <div className="oid-report-page oid-consulter-page">
@@ -752,6 +913,12 @@ export const PublicIncidentsPage: React.FC = () => {
                   {' '}
                   · ouvrez un incident pour consulter son suivi
                 </span>
+                {lastUpdated && (
+                  <span className="oid-consulter-subtitle-hint">
+                    {' '}
+                    · actualisé {formatRelativeTime(lastUpdated.toISOString())}
+                  </span>
+                )}
               </p>
             </div>
 
@@ -798,39 +965,22 @@ export const PublicIncidentsPage: React.FC = () => {
             aria-label="Filtres et affichage des incidents"
           >
             <div className="oid-consulter-search-row">
-              <div className="oid-consulter-search-wrap">
-                <Search size={16} className="oid-consulter-search-icon" aria-hidden="true" />
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Rechercher par commune, type, route..."
-                  className="oid-consulter-search-input"
-                  aria-label="Rechercher un incident"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="oid-consulter-search-clear"
-                    aria-label="Effacer la recherche"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-
               <button
                 type="button"
                 onClick={() => setFiltersOpen((open) => !open)}
                 className={`oid-consulter-filters-toggle ${
-                  filtersOpen || communeFilter !== 'all' ? 'is-active' : ''
+                  filtersOpen || activeFilterCount > 0 ? 'is-active' : ''
                 }`}
                 aria-expanded={filtersOpen}
-                aria-controls="consulter-commune-filter"
+                aria-controls="consulter-commune-filter consulter-severity-filter"
               >
                 <SlidersHorizontal size={16} aria-hidden="true" />
-                <span>Commune</span>
+                <span>Filtres</span>
+                {activeFilterCount > 0 && (
+                  <span className="oid-consulter-filters-count" aria-label={`${activeFilterCount} filtre actif`}>
+                    {activeFilterCount}
+                  </span>
+                )}
               </button>
 
               <div
@@ -854,7 +1004,12 @@ export const PublicIncidentsPage: React.FC = () => {
                 </select>
               </div>
 
-              <div className="oid-consulter-chips" role="group" aria-label="Filtrer par gravité">
+              <div
+                id="consulter-severity-filter"
+                className={`oid-consulter-chips ${filtersOpen ? 'is-open' : ''}`}
+                role="group"
+                aria-label="Filtrer par gravité"
+              >
                 {SEVERITY_OPTIONS.map((option) => {
                   const active = severityFilter === option.value;
                   const count = severityCounts[option.value];
@@ -870,7 +1025,7 @@ export const PublicIncidentsPage: React.FC = () => {
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => setSeverityFilter(option.value)}
+                      onClick={() => handleSeverityChange(option.value)}
                       aria-pressed={active}
                       className={`oid-consulter-chip ${tone} ${active ? 'is-active' : ''}`}
                     >
@@ -891,6 +1046,21 @@ export const PublicIncidentsPage: React.FC = () => {
                     <span>Réinitialiser</span>
                   </button>
                 )}
+              </div>
+
+              <div className="oid-consulter-select-wrap oid-consulter-sort-wrap">
+                <select
+                  value={sortMode}
+                  onChange={(e) => handleSortChange(e.target.value as SortMode)}
+                  aria-label="Trier les incidents"
+                  className="oid-consulter-select"
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      Tri : {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="oid-consulter-view-switch" role="group" aria-label="Affichage">
@@ -924,6 +1094,11 @@ export const PublicIncidentsPage: React.FC = () => {
                 </button>
               </div>
             </div>
+            {geoError && (
+              <p className="oid-consulter-subtitle" role="status">
+                {geoError}
+              </p>
+            )}
           </div>
         </header>
 
@@ -1023,6 +1198,7 @@ export const PublicIncidentsPage: React.FC = () => {
                         key={incident.id}
                         incident={incident}
                         defaultExpanded={incident.id === initialIncidentId}
+                        highlighted={incident.id === highlightedId}
                         onOpenPhoto={handleOpenPhoto}
                         onLocate={handleLocateIncident}
                       />
@@ -1034,6 +1210,28 @@ export const PublicIncidentsPage: React.FC = () => {
                     total={filteredIncidents.length}
                     onPageChange={handlePageChange}
                   />
+                  {incidents.length < apiTotal && (
+                    <div className="mt-4 flex flex-col items-center gap-2 text-center">
+                      <p className="text-sm text-ink2">
+                        {incidents.length} incidents chargés sur {apiTotal}.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="oid-consulter-empty-btn is-primary"
+                      >
+                        {loadingMore
+                          ? 'Chargement…'
+                          : `Charger ${Math.min(FETCH_LIMIT, apiTotal - incidents.length)} incidents de plus`}
+                      </button>
+                      {loadMoreError && (
+                        <p className="text-sm text-[var(--crit)]" role="alert">
+                          Impossible de charger la suite. Réessayez.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </section>
@@ -1049,7 +1247,7 @@ export const PublicIncidentsPage: React.FC = () => {
                       {filteredMapFeatures.length} point
                       {filteredMapFeatures.length > 1 ? 's' : ''} localisé
                       {filteredMapFeatures.length > 1 ? 's' : ''}
-                      {communeFilter !== 'all' ? ` · ${communeFilter}` : ' · Cliquez une commune pour filtrer'}
+                      {communeFilter !== 'all' ? ` · ${communeFilter}` : ''}
                     </p>
                   </div>
                 </div>
