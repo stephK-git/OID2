@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -12,6 +12,29 @@ import { PublicIncidentsPage } from './pages/PublicIncidentsPage';
 import { VerificationPage } from './pages/VerificationPage';
 import { CoordinationPage } from './pages/CoordinationPage';
 import { EnquetePage } from './pages/EnquetePage';
+
+/**
+ * React Router ne réinitialise pas le défilement : sans ceci, une page ouverte depuis
+ * le bas de l'accueil s'affiche au même décalage. Seul le chemin déclenche le retour en haut
+ * (les changements de filtres dans l'URL ne doivent pas faire remonter la page).
+ */
+const ScrollToTop: React.FC = () => {
+  const { pathname, hash } = useLocation();
+
+  useLayoutEffect(() => {
+    if (hash) {
+      const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+    }
+    // 'instant' : le CSS global active scroll-behavior: smooth, qui animerait le retour en haut
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname, hash]);
+
+  return null;
+};
 
 const AppShell: React.FC = () => {
   const location = useLocation();
@@ -87,6 +110,7 @@ export const App: React.FC = () => {
     <AuthProvider>
       <BrowserRouter>
         <ThemeProvider>
+          <ScrollToTop />
           <AppShell />
         </ThemeProvider>
       </BrowserRouter>

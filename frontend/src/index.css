@@ -13036,6 +13036,10 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   display: none;
 }
 
+.oid-consulter-filters-count {
+  display: none;
+}
+
 .oid-consulter-chips {
   flex: 0 1 auto;
   display: flex;
@@ -13127,13 +13131,29 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
     flex: 1;
   }
 
-  .oid-consulter-search-wrap {
+  .oid-consulter-sort-wrap {
+    order: 2;
     flex: 1 1 0;
-    order: 1;
+    min-width: 0;
+  }
+
+  .oid-consulter-filters-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--water);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
   }
 
   .oid-consulter-filters-toggle {
-    order: 2;
+    order: 1;
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -13166,12 +13186,17 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   }
 
   .oid-consulter-chips {
+    display: none;
     order: 4;
     flex: 1 1 100%;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
     padding-bottom: 2px;
+  }
+
+  .oid-consulter-chips.is-open {
+    display: flex;
   }
 
   .oid-consulter-chips::-webkit-scrollbar {
@@ -13359,4 +13384,16 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
+}
+
+/* Communes de la carte Consulter : info-bulle au survol, pas d'effet cliquable */
+.oid-consulter-leaflet path.oid-commune-poly {
+  cursor: grab;
+}
+
+/* Pas de rectangle de focus noir autour des points/polygones cliqués sur la carte */
+.oid-consulter-leaflet .leaflet-interactive,
+.oid-consulter-leaflet .leaflet-interactive:focus,
+.oid-consulter-leaflet svg path:focus {
+  outline: none;
 }

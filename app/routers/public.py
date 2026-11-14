@@ -404,11 +404,16 @@ def public_communes_actives(db: Session = Depends(get_db)):
 @router.get("/recents")
 def public_recents_incidents(
     limit: int = Query(3, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     zone_id: int | None = Query(None, ge=1),
     today_only: bool = Query(False),
     db: Session = Depends(get_db),
 ):
-    """Retourne les derniers incidents actifs (avec détails non sensibles et photos)."""
+    """Retourne les derniers incidents actifs (avec détails non sensibles et photos).
+
+    `limit` plafonne la taille d'une page (100) ; `offset` permet de charger les suivantes.
+    `total` est toujours le nombre d'incidents correspondant aux filtres, toutes pages confondues.
+    """
     _zones, zones_by_id, zone_shapes = _resolve_zones_context(db)
     today_date = datetime.now(UTC).date()
 
@@ -437,7 +442,8 @@ def public_recents_incidents(
         filtered.append(inc)
 
     total = len(filtered)
-    items = _serialize_public_incidents(db, filtered[:limit], zones_by_id, resolved_zone_ids)
+    page = filtered[offset : offset + limit]
+    items = _serialize_public_incidents(db, page, zones_by_id, resolved_zone_ids)
     return {"items": items, "total": total}
 
 

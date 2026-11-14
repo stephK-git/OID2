@@ -226,6 +226,15 @@ def test_recents_incidents_anonymises(client, db_session) -> None:
     assert yop_data["total"] == 1
     assert yop_data["items"][0]["id"] == inc_new.id
 
+    # Pagination : offset décale la page sans changer le total
+    full = client.get("/signalements/recents?limit=100").json()
+    assert full["total"] >= 2
+    second = client.get("/signalements/recents?limit=1&offset=1").json()
+    assert second["total"] == full["total"]
+    assert [item["id"] for item in second["items"]] == [full["items"][1]["id"]]
+    beyond = client.get(f"/signalements/recents?limit=10&offset={full['total']}").json()
+    assert beyond["items"] == []
+
 
 
 
