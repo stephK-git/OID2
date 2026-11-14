@@ -1368,7 +1368,7 @@ def generer_rapport_retex_pdf(db: Session) -> bytes:
     ]
 
     # 1. Encadré méthodologique SIG
-    story.append(Paragraph("1. Protocole Géomatique & Sources Certifiées", h1_style))
+    story.append(Paragraph("1. Protocole Géomatique & Sources des données", h1_style))
     couv = meta["couverture_administrative"]
     mh = meta["maillage_hexagonal"]
     m2 = meta["methodes_lot2"]

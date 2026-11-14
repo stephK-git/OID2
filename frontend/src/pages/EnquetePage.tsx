@@ -741,7 +741,7 @@ export const EnquetePage: React.FC = () => {
     if (!validateCoherence()) return;
     if (
       !window.confirm(
-        "Confirmer la transmission définitive de l'évaluation terrain au Centre Opérationnel O.I.D ?\nStatut incident cible : ÉVALUÉ"
+        "Confirmer la transmission définitive de l'évaluation terrain à la coordination O.I.D ?\nStatut incident cible : ÉVALUÉ"
       )
     ) {
       return;
@@ -1068,7 +1068,7 @@ export const EnquetePage: React.FC = () => {
                               </span>
                             </div>
                             <span className="oid-enq-counter-hint">
-                              Recherche active GSPM : {evalForm.disparus}
+                              Recherche active des secours : {evalForm.disparus}
                             </span>
                           </div>
                         </div>
@@ -1122,7 +1122,7 @@ export const EnquetePage: React.FC = () => {
                               disabled={isReadOnly}
                               value={evalForm.routes_coupees}
                               onChange={(e) => handleFormChange('routes_coupees', e.target.value)}
-                              placeholder="Carrefours impraticables aux véhicules légers, radiers submergés, accès GSPM..."
+                              placeholder="Carrefours impraticables aux véhicules légers, radiers submergés, accès des secours..."
                               className="oid-enq-textarea"
                             />
                           </div>
@@ -2002,7 +2002,7 @@ export const EnquetePage: React.FC = () => {
                       Historique des dossiers et évaluations
                     </h2>
                     <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--tx2)' }}>
-                      Dossiers clôturés ou dont l'évaluation de terrain a été transmise au Centre Opérationnel O.I.D.
+                      Dossiers clôturés ou dont l'évaluation de terrain a été transmise à la coordination O.I.D.
                     </p>
                   </div>
                   <div className="chip" style={{ fontSize: '12px', padding: '4px 10px', backgroundColor: 'var(--tertiary-dim)', color: 'var(--tertiary)' }}>

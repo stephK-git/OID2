@@ -1344,3 +1344,23 @@
   .oid-itin-overlay { padding: 0; }
   .oid-itin-panel { height: 100%; border-radius: 0; border: 0; }
 }
+
+/* Indication affichée quand la molette est utilisée sur une carte non activée */
+.oid-map-wheel-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(6, 22, 38, 0.45);
+  animation: oid-wheel-hint-in 0.15s ease-out;
+}
+
+@keyframes oid-wheel-hint-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

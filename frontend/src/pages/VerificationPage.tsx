@@ -53,7 +53,6 @@ interface SignalementItem {
 
 interface HistoriqueItem {
   id: number;
-  reference_suivi: string;
   type: string;
   statut: string;
   motif_rejet: string | null;
@@ -196,18 +195,6 @@ const formatRelativeTime = (iso: string | null | undefined): string => {
   const remMin = diffMin % 60;
   if (diffH < 24) return remMin > 0 ? `il y a ${diffH} h ${remMin}` : `il y a ${diffH} h`;
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
-};
-
-const formatUtcShort = (iso: string | null | undefined): string => {
-  if (!iso) return '--:--';
-  try {
-    return new Date(iso).toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
 };
 
 const formatUtcFull = (iso: string | null | undefined): string => {
@@ -535,7 +522,7 @@ export const VerificationPage: React.FC = () => {
       if (histStatus !== 'all' && h.statut !== histStatus) return false;
       if (q) {
         const communeName = resolveCommuneLabel(h.commune, h.coords);
-        const hay = `${h.reference_suivi} ${h.type} ${communeName} ${h.verifie_par_nom || ''} ${h.motif_rejet || ''}`.toLowerCase();
+        const hay = `${h.id} ${h.type} ${communeName} ${h.verifie_par_nom || ''} ${h.motif_rejet || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -788,50 +775,28 @@ export const VerificationPage: React.FC = () => {
   // Contrôles automatiques dynamiques pour le signalement sélectionné
   const autoChecks = React.useMemo(() => {
     if (!selectedSignalement) return [];
-    const communeName = resolveCommuneLabel(selectedSignalement.commune, selectedSignalement.coords);
     const hasPhoto = currentPhotosMeta.length > 0;
     const anyExifGps = currentPhotosMeta.some((p) => p.exif_gps);
     const h = selectedSignalement.hauteur_eau_cm ?? 0;
+
+    const nbDup = selectedSignalement.doublons_suggeres.length;
 
     return [
       hasPhoto
         ? {
             s: anyExifGps ? 'ok' : 'warn',
-            l: anyExifGps ? 'EXIF GPS valide' : 'Segment EXIF caméra vérifié',
-            d: anyExifGps ? 'Écart < 25 m avec la position déclarée' : 'Image authentifiée sans balise GPS',
+            l: anyExifGps ? 'Photo géolocalisée' : 'Photo sans position GPS',
           }
-        : {
-            s: 'warn',
-            l: 'Aucune photo jointe',
-            d: 'Corroboration visuelle impossible',
-          },
-      hasPhoto
-        ? {
-            s: 'ok',
-            l: 'Empreinte SHA-256 vérifiée',
-            d: 'Fichier non modifié',
-          }
-        : {
-            s: selectedSignalement.doublons_suggeres.length === 0 ? 'ok' : 'warn',
-            l:
-              selectedSignalement.doublons_suggeres.length === 0
-                ? 'Aucun doublon à moins de 400 m'
-                : `${selectedSignalement.doublons_suggeres.length} doublon(s) à moins de 400 m`,
-            d: 'ST_DWithin PostGIS',
-          },
+        : { s: 'warn', l: 'Aucune photo jointe' },
       {
-        s: 'ok',
-        l: `Dans le secteur ${communeName}`,
-        d: 'Contrôle PostGIS',
+        s: nbDup === 0 ? 'ok' : 'warn',
+        l: nbDup === 0 ? 'Aucun doublon à moins de 400 m' : `${nbDup} doublon(s) à moins de 400 m`,
       },
       {
         s: h >= 30 ? 'ok' : 'warn',
-        l: h >= 30 ? 'Hauteur cohérente avec la pluviométrie' : "Hauteur d'eau modérée",
-        d: `${h} cm déclarés · ${
-          h >= 150 ? 'seuil toiture' : h >= 100 ? 'seuil de 1 m dépassé' : h >= 50 ? 'niveau du genou' : 'ruissellement de surface'
-        }`,
+        l: h >= 30 ? 'Hauteur d’eau cohérente' : "Hauteur d'eau modérée",
       },
-    ];
+    ] as Array<{ s: string; l: string }>;
   }, [selectedSignalement, currentPhotosMeta]);
 
   const activeSectorLabel = selectedSignalement
@@ -1161,8 +1126,7 @@ export const VerificationPage: React.FC = () => {
                   </span>
                 </div>
                 <span className="mono oid-verif-dtop-time">
-                  Reçu à {formatUtcShort(selectedSignalement.cree_le)} UTC ·{' '}
-                  {formatRelativeTime(selectedSignalement.cree_le)}
+                  Reçu {formatRelativeTime(selectedSignalement.cree_le)}
                 </span>
               </div>
 
@@ -1173,7 +1137,6 @@ export const VerificationPage: React.FC = () => {
                     <div className="spec">
                       <span className="eyebrow">Type d'aléa</span>
                       <div className="v">{getTypeMeta(selectedSignalement.type).label}</div>
-                      <small>{getTypeMeta(selectedSignalement.type).sub}</small>
                     </div>
 
                     <div className="spec">
@@ -1188,11 +1151,7 @@ export const VerificationPage: React.FC = () => {
                       >
                         {selectedSignalement.gravite}
                       </div>
-                      <small>
-                        {selectedSignalement.danger_immediat
-                          ? 'Péril vital actif'
-                          : 'Évaluation terrain'}
-                      </small>
+                      {selectedSignalement.danger_immediat && <small>Péril vital actif</small>}
                     </div>
 
                     <div className="spec">
@@ -1201,19 +1160,6 @@ export const VerificationPage: React.FC = () => {
                       <WaterGaugeBar cm={selectedSignalement.hauteur_eau_cm ?? 0} />
                     </div>
 
-                    <div className="spec">
-                      <span className="eyebrow">Secteur PostGIS</span>
-                      <div className="v" style={{ color: 'var(--water)' }}>
-                        {resolveCommuneLabel(selectedSignalement.commune, selectedSignalement.coords)}
-                      </div>
-                      <small>
-                        {selectedSignalement.coords
-                          ? `${selectedSignalement.coords.lat.toFixed(4)}° N, ${Math.abs(
-                              selectedSignalement.coords.lon
-                            ).toFixed(4)}° W`
-                          : 'Abidjan'}
-                      </small>
-                    </div>
                   </div>
 
                   {/* 2. Contrôle spatial · rayon de corroboration 400 m */}
@@ -1294,7 +1240,6 @@ export const VerificationPage: React.FC = () => {
                           </span>
                           <div>
                             <b style={{ fontWeight: 600 }}>{c.l}</b>
-                            <small>{c.d}</small>
                           </div>
                         </div>
                       ))}
@@ -1317,7 +1262,7 @@ export const VerificationPage: React.FC = () => {
                   {/* 5. Photographies certifiées */}
                   <div>
                     <div className="sec-head">
-                      <h2>Photographies certifiées</h2>
+                      <h2>Photographies</h2>
                       <span
                         className="mono"
                         style={{
@@ -1326,9 +1271,7 @@ export const VerificationPage: React.FC = () => {
                         }}
                       >
                         {currentPhotosMeta.length > 0
-                          ? `${currentPhotosMeta.length} fichier${
-                              currentPhotosMeta.length > 1 ? 's' : ''
-                            } · EXIF GPS valide`
+                          ? `${currentPhotosMeta.length} fichier${currentPhotosMeta.length > 1 ? 's' : ''}`
                           : 'aucun fichier'}
                       </span>
                     </div>
@@ -1370,7 +1313,7 @@ export const VerificationPage: React.FC = () => {
                               </div>
                               <div className="meta">
                                 <b>{pMeta.filename}</b>
-                                <span>{metaLabel} · SHA-256 vérifié</span>
+                                <span>{metaLabel}</span>
                                 <button
                                   type="button"
                                   className="linkbtn"
@@ -1405,9 +1348,6 @@ export const VerificationPage: React.FC = () => {
                           <h2>Doublons potentiels</h2>
                           <p>Incidents ouverts à moins de 400 m.</p>
                         </div>
-                        <span className="mono" style={{ fontSize: '11.5px', color: 'var(--tx3)' }}>
-                          ST_DWithin
-                        </span>
                       </div>
                       <div className="dups">
                         {selectedSignalement.doublons_suggeres.map((d) => (
@@ -1677,7 +1617,7 @@ export const VerificationPage: React.FC = () => {
                     {selectedHistorique.statut.toUpperCase()}
                   </span>
                   <span className="mono" style={{ fontSize: '13px', color: 'var(--tx2)' }}>
-                    {selectedHistorique.reference_suivi}
+                    Signalement #{selectedHistorique.id}
                   </span>
                 </div>
               </div>
@@ -1851,7 +1791,7 @@ export const VerificationPage: React.FC = () => {
                     type="text"
                     value={histSearch}
                     onChange={(e) => setHistSearch(e.target.value)}
-                    placeholder="Rechercher par réf., commune, agent, motif…"
+                    placeholder="Rechercher par n°, commune, agent, motif…"
                     aria-label="Rechercher dans l'historique"
                   />
                 </div>
@@ -1880,7 +1820,7 @@ export const VerificationPage: React.FC = () => {
                 <table>
                   <thead>
                     <tr>
-                      <th>Réf. Suivi</th>
+                      <th>N°</th>
                       <th>Type &amp; Commune</th>
                       <th>Statut</th>
                       <th>Vérifié par</th>
@@ -1903,7 +1843,7 @@ export const VerificationPage: React.FC = () => {
                           className="oid-verif-hist-row"
                           onClick={() => handleOpenHistoriqueDetail(h)}
                         >
-                          <td><strong className="code">{h.reference_suivi}</strong></td>
+                          <td><strong className="code">#{h.id}</strong></td>
                           <td>
                             <div style={{ fontWeight: 600 }}>{getTypeMeta(h.type).label}</div>
                             <div style={{ fontSize: '12px', color: 'var(--tx3)' }}>

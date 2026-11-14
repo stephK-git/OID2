@@ -204,7 +204,6 @@ def historique_traites(
         commune, code_adm = _resolve_commune(db, s.geom)
         out.append({
             "id": s.id,
-            "reference_suivi": s.reference_suivi,
             "type": s.type,
             "statut": s.statut,
             "motif_rejet": s.motif_rejet,

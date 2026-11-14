@@ -615,7 +615,7 @@ export const LandingPage: React.FC = () => {
               <div className="mt-6 grid grid-cols-2 gap-2.5">
                 <a href="tel:180" className="landing-num is-red">
                   <strong className="font-mono">180</strong>
-                  <span>Sapeurs-pompiers (GSPM)</span>
+                  <span>Sapeurs-pompiers</span>
                 </a>
                 <a href="tel:112" className="landing-num">
                   <strong className="font-mono">112</strong>

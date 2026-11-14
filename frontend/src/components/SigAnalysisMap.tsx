@@ -199,6 +199,8 @@ export interface SigAnalysisMapProps {
   onOpenIncidentDetail?: (incidentId: number) => void;
   onToggleKpiSidebar?: () => void;
   isKpiSidebarOpen?: boolean;
+  /** Si vrai, la molette ne zoome qu'après un clic sur la carte : la page reste défilable. */
+  scrollZoomOnClick?: boolean;
 }
 
 type BasemapKey = 'sobre' | 'hot' | 'osm' | 'topo';
@@ -345,8 +347,10 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
   onOpenIncidentDetail,
   onToggleKpiSidebar,
   isKpiSidebarOpen,
+  scrollZoomOnClick = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [showWheelHint, setShowWheelHint] = useState(false);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
@@ -477,6 +481,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
         preferCanvas: true,
         renderer: canvasRenderer,
         closePopupOnClick: false,
+        scrollWheelZoom: !scrollZoomOnClick,
       }).setView([5.36, -4.01], 11);
 
       // Panneau dédié aux incidents avec z-index prioritaire pour garantir la visibilité au-dessus des polygones
@@ -540,6 +545,34 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
       mapInstanceRef.current = map;
     }
 
+    // Zoom molette activé au clic, désactivé dès que la souris quitte la carte
+    let detachWheelGuard: (() => void) | null = null;
+    const containerEl = mapContainerRef.current;
+    const mapForWheel = mapInstanceRef.current;
+    if (scrollZoomOnClick && containerEl && mapForWheel) {
+      let hintTimer: number | undefined;
+      const enable = () => {
+        mapForWheel.scrollWheelZoom.enable();
+        setShowWheelHint(false);
+      };
+      const disable = () => mapForWheel.scrollWheelZoom.disable();
+      const onWheel = () => {
+        if (mapForWheel.scrollWheelZoom.enabled()) return;
+        setShowWheelHint(true);
+        window.clearTimeout(hintTimer);
+        hintTimer = window.setTimeout(() => setShowWheelHint(false), 1600);
+      };
+      containerEl.addEventListener('mousedown', enable);
+      containerEl.addEventListener('mouseleave', disable);
+      containerEl.addEventListener('wheel', onWheel, { passive: true });
+      detachWheelGuard = () => {
+        window.clearTimeout(hintTimer);
+        containerEl.removeEventListener('mousedown', enable);
+        containerEl.removeEventListener('mouseleave', disable);
+        containerEl.removeEventListener('wheel', onWheel);
+      };
+    }
+
     // Observation automatique du redimensionnement du conteneur (ex: repli/dépli du volet 250px)
     let resizeObserver: ResizeObserver | null = null;
     if (mapContainerRef.current) {
@@ -550,6 +583,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
     }
 
     return () => {
+      detachWheelGuard?.();
       if (resizeObserver) {
         resizeObserver.disconnect();
       }
@@ -1302,6 +1336,12 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
             zIndex: 10,
           }}
         />
+
+        {showWheelHint && (
+          <div className="oid-map-wheel-hint" role="status">
+            Cliquez sur la carte pour zoomer à la molette
+          </div>
+        )}
 
         {/* Bouton icône de couches situé directement sous les boutons + et - de Leaflet */}
         <button

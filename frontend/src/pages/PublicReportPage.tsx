@@ -652,7 +652,7 @@ export const PublicReportPage: React.FC = () => {
               les équipes de vérification.
             </p>
             <p className="oid-confirm-subtitle">
-              <strong>Si une vie est en danger, appelez immédiatement le <a href="tel:180">180</a> (GSPM) ou le{' '}
+              <strong>Si une vie est en danger, appelez immédiatement le <a href="tel:180">180</a> (sapeurs-pompiers) ou le{' '}
               <a href="tel:112">112</a>.</strong>
             </p>
 
@@ -679,15 +679,15 @@ export const PublicReportPage: React.FC = () => {
           </p>
         </section>
 
-        {/* Barre d'appel rapide GSPM 180 / 112 (Crucial sur mobile) */}
+        {/* Barre d'appel rapide 180 / 112 (crucial sur mobile) */}
         <div className="oid-emergency-strip">
           <a
             href="tel:180"
             className="oid-call-gspm"
-            title="Appel d'urgence GSPM (Sapeurs-Pompiers)"
+            title="Appel d'urgence sapeurs-pompiers (180)"
           >
             <span aria-hidden="true" className="material-symbols-outlined oid-call-error-icon">call</span>
-            <span>URGENCES GSPM : 180</span>
+            <span>POMPIERS : 180</span>
           </a>
           <a
             href="tel:112"
@@ -947,7 +947,7 @@ export const PublicReportPage: React.FC = () => {
               <div className="oid-peril-box" id="peril-details-box">
                 <p className="oid-peril-call" role="alert">
                   <strong>Ce formulaire ne remplace pas un appel.</strong> Appelez maintenant le{' '}
-                  <a href="tel:180">180 (GSPM)</a> ou le <a href="tel:112">112</a>.
+                  <a href="tel:180">180 (sapeurs-pompiers)</a> ou le <a href="tel:112">112</a>.
                 </p>
                 <label htmlFor="peril-type" className="oid-peril-label">
                   <span>Nature du danger :</span>
