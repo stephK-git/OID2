@@ -1,11 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { apiFetch, apiUrl } from '../api/client';
-import { LandingHeader } from '../components/landing/LandingHeader';
 import { severityOf, type Severity } from '../components/landing/severity';
-import { formatRelativeTime } from '../components/incidentLabels';
 import { PublicIncidentCard, type PublicIncident } from '../components/PublicIncidentCard';
 import './LandingPage.css';
 
@@ -70,17 +67,6 @@ const EMERGENCY_NUMBERS = [
   { number: '112', label: 'Secours & urgences', href: 'tel:112' },
 ];
 
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function formatTime(isoDate: string | null): string {
-  if (!isoDate) return '—';
-  const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-}
-
 const ReportIcon: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <svg
     width="22"
@@ -121,24 +107,13 @@ const ReportCard: React.FC<ReportCardProps> = ({ to, icon, title, text }) => (
 );
 
 export const LandingPage: React.FC = () => {
-  const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [activeSection, setActiveSection] = useState<string>('aujourdhui');
   const [todayIncidents, setTodayIncidents] = useState<PublicIncident[]>([]);
-  const [todayTotal, setTodayTotal] = useState<number>(0);
   const [loadingToday, setLoadingToday] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<boolean>(false);
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
-
-  const agentPath =
-    isAuthenticated && user
-      ? user.role === 'coordinateur'
-        ? '/coordination'
-        : user.role === 'verificateur'
-        ? '/verification'
-        : '/enquete'
-      : '/login';
 
   // Chargement des incidents actifs du jour
   useEffect(() => {
@@ -150,13 +125,11 @@ export const LandingPage: React.FC = () => {
       .then((response) => {
         if (!mounted) return;
         setTodayIncidents(Array.isArray(response?.items) ? response.items : []);
-        setTodayTotal(typeof response?.total === 'number' ? response.total : 0);
         setLoadError(false);
       })
       .catch(() => {
         if (!mounted) return;
         setTodayIncidents([]);
-        setTodayTotal(0);
         setLoadError(true);
       })
       .finally(() => {
@@ -196,71 +169,17 @@ export const LandingPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [lightbox]);
 
-  // Section active pour la navigation
+  // Défilement vers l'ancre quand on arrive depuis une autre page (ex. /#securite)
   useEffect(() => {
-    if (!('IntersectionObserver' in window)) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.id);
-          }
-        });
-      },
-      { rootMargin: '-45% 0px -50% 0px' }
-    );
-
-    ['aujourdhui', 'quoi', 'etapes', 'securite'].forEach((id) => {
-      const element = document.getElementById(id);
-      if (element) observer.observe(element);
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
-  const [today] = useState(() => new Date());
-  const dateLabel = useMemo(
-    () =>
-      capitalize(
-        today.toLocaleDateString('fr-FR', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-        })
-      ),
-    [today]
-  );
-  const currentYear = today.getFullYear();
-
-  const stats = useMemo(() => {
-    const total = todayTotal > 0 ? todayTotal : todayIncidents.length;
-    const communes = new Set(todayIncidents.map((incident) => incident.commune)).size;
-    const critical = todayIncidents.filter(
-      (incident) => severityOf(incident) === 'critique'
-    ).length;
-    return { total, communes, critical };
-  }, [todayIncidents, todayTotal]);
-
-  const latestUpdate = useMemo(() => {
-    let latest: string | null = null;
-    let latestTimestamp = 0;
-
-    for (const incident of todayIncidents) {
-      const isoDate = incident.maj_le || incident.cree_le;
-      if (!isoDate) continue;
-      const timestamp = new Date(isoDate).getTime();
-      if (!Number.isNaN(timestamp) && timestamp > latestTimestamp) {
-        latestTimestamp = timestamp;
-        latest = isoDate;
-      }
+    if (!location.hash) {
+      return;
     }
-
-    return latest;
-  }, [todayIncidents]);
-
-  const lastUpdateRelative = latestUpdate ? formatRelativeTime(latestUpdate) : '—';
-  const lastUpdateTime = latestUpdate ? formatTime(latestUpdate) : '—';
+    const id = decodeURIComponent(location.hash.slice(1));
+    const timer = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [location.hash]);
 
   const previewIncidents = useMemo(() => {
     const sorted = [...todayIncidents].sort((a, b) => {
@@ -278,16 +197,7 @@ export const LandingPage: React.FC = () => {
   };
 
   return (
-    <div className="oid-landing-page font-sans antialiased selection:bg-accent selection:text-white">
-      <a
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 z-[100] rounded-lg bg-[var(--water)] px-4 py-2 font-semibold text-white shadow-lg"
-        href="#contenu"
-      >
-        Aller au contenu principal
-      </a>
-
-      <LandingHeader activeSection={activeSection} agentPath={agentPath} />
-
+    <div className="oid-landing-page overflow-x-clip font-sans antialiased selection:bg-accent selection:text-white">
       <main id="contenu">
         {/* HERO */}
         <section className="relative overflow-hidden bg-[#0b1f33] text-white">
@@ -300,7 +210,7 @@ export const LandingPage: React.FC = () => {
             <div className="landing-hero-overlay absolute inset-0" aria-hidden="true" />
           </div>
 
-          <div className="relative z-10 mx-auto max-w-[1200px] 2xl:max-w-[1320px] px-4 pb-[88px] pt-9 sm:px-6 sm:pb-[120px] sm:pt-[72px]">
+          <div className="relative z-10 mx-auto max-w-[1200px] 2xl:max-w-[1320px] px-4 pb-12 pt-9 sm:px-6 sm:py-[72px]">
             <div className="flex max-w-[720px] flex-col gap-4 sm:gap-5">
               <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#9cc8ff] sm:hidden">
                 Information citoyenne · Abidjan
@@ -325,17 +235,17 @@ export const LandingPage: React.FC = () => {
                 </span>
               </p>
 
-              <div className="flex flex-col items-stretch gap-3 pt-1 sm:flex-row sm:items-center">
-                <a
-                  href="#aujourdhui"
-                  className="inline-flex h-[52px] w-full items-center justify-center gap-2.5 rounded-xl bg-white px-6 text-[16px] font-bold text-[#0b1f33] transition-colors hover:bg-[#f3f6fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1f33] sm:w-auto"
+              <div className="grid grid-cols-2 gap-2 pt-1 sm:flex sm:flex-row sm:items-center sm:gap-3">
+                <Link
+                  to="/consulter"
+                  className="inline-flex h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-white px-2.5 text-center text-[13px] font-bold leading-tight text-[#0b1f33] transition-colors hover:bg-[#f3f6fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1f33] sm:h-[52px] sm:w-auto sm:gap-2.5 sm:px-6 sm:text-[16px]"
                 >
-                  Voir les incidents du jour
-                  <ArrowDown size={16} strokeWidth={2.5} aria-hidden="true" />
-                </a>
+                  <span>Consulter les incidents</span>
+                  <ArrowRight size={15} strokeWidth={2.5} className="shrink-0" aria-hidden="true" />
+                </Link>
                 <Link
                   to="/signaler"
-                  className="hidden h-[52px] items-center justify-center rounded-xl border border-white px-6 text-[16px] font-bold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1f33] sm:inline-flex"
+                  className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#b3261e] px-2.5 text-center text-[13px] font-bold leading-tight text-white transition-colors hover:bg-[#8f1e18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1f33] sm:h-[52px] sm:w-auto sm:px-6 sm:text-[16px]"
                 >
                   Signaler un incident
                 </Link>
@@ -354,120 +264,22 @@ export const LandingPage: React.FC = () => {
           </div>
         </section>
 
-        {/* BANDEAU DE SITUATION — MOBILE */}
-        <div className="landing-shadow-card relative z-10 mx-4 -mt-14 overflow-hidden rounded-2xl border border-line bg-surface sm:mx-6 xl:hidden">
-          <div className="flex items-center justify-between border-b border-line px-4 py-3.5">
-            <span className="text-[15px] font-extrabold text-ink">{dateLabel}</span>
-            <span className="flex items-center gap-1.5 text-[13px] text-ink2">
-              <span className="h-2 w-2 rounded-full bg-[var(--ok)]" aria-hidden="true" />
-              {loadingToday ? 'Chargement…' : lastUpdateRelative}
-            </span>
-          </div>
-          <div className="grid grid-cols-3 divide-x divide-line">
-            <div className="px-4 py-3.5">
-              <div className="font-mono text-[26px] font-bold leading-[1.1] text-ink">
-                {loadingToday ? '—' : stats.total}
-              </div>
-              <div className="mt-1 text-[12px] font-semibold text-ink2">Incidents actifs</div>
-            </div>
-            <div className="px-4 py-3.5">
-              <div className="font-mono text-[26px] font-bold leading-[1.1] text-ink">
-                {loadingToday ? '—' : stats.communes}
-              </div>
-              <div className="mt-1 text-[12px] font-semibold text-ink2">Communes</div>
-            </div>
-            <div className="px-4 py-3.5">
-              <div className="font-mono text-[26px] font-bold leading-[1.1] text-[#b3261e]">
-                {loadingToday ? '—' : stats.critical}
-              </div>
-              <div className="mt-1 text-[12px] font-semibold text-[#b3261e]">Critiques</div>
-            </div>
-          </div>
-        </div>
-
-        {/* BANDEAU DE SITUATION — DESKTOP */}
-        <div className="relative z-10 mx-auto -mt-14 hidden max-w-[1200px] 2xl:max-w-[1320px] px-6 xl:block">
-          <div className="landing-shadow-card grid grid-cols-5 divide-x divide-line overflow-hidden rounded-2xl border border-line bg-surface">
-            <div className="px-6 py-5">
-              <div className="text-[12px] font-bold uppercase tracking-[0.06em] text-ink2">
-                Aujourd&apos;hui
-              </div>
-              <div className="mt-1.5 text-[18px] font-extrabold text-ink">{dateLabel}</div>
-              <div className="mt-0.5 text-[13px] text-ink2">{currentYear}</div>
-            </div>
-            <div className="px-6 py-5">
-              <div className="text-[12px] font-bold uppercase tracking-[0.06em] text-ink2">
-                Incidents actifs
-              </div>
-              <div className="mt-1.5 font-mono text-[32px] font-bold leading-[1.1] text-ink">
-                {loadingToday ? '—' : stats.total}
-              </div>
-            </div>
-            <div className="px-6 py-5">
-              <div className="text-[12px] font-bold uppercase tracking-[0.06em] text-ink2">
-                Communes touchées
-              </div>
-              <div className="mt-1.5 font-mono text-[32px] font-bold leading-[1.1] text-ink">
-                {loadingToday ? '—' : stats.communes}
-              </div>
-            </div>
-            <div className="px-6 py-5">
-              <div className="text-[12px] font-bold uppercase tracking-[0.06em] text-[#b3261e]">
-                Situations critiques
-              </div>
-              <div className="mt-1.5 font-mono text-[32px] font-bold leading-[1.1] text-[#b3261e]">
-                {loadingToday ? '—' : stats.critical}
-              </div>
-            </div>
-            <div className="px-6 py-5">
-              <div className="text-[12px] font-bold uppercase tracking-[0.06em] text-ink2">
-                Dernière mise à jour
-              </div>
-              <div className="mt-1.5 flex items-center gap-2 text-[18px] font-extrabold text-ink">
-                <span className="h-2.5 w-2.5 rounded-full bg-[var(--ok)]" aria-hidden="true" />
-                {loadingToday ? 'Chargement…' : lastUpdateRelative}
-              </div>
-              <div className="mt-0.5 font-mono text-[13px] text-ink2">
-                {loadingToday ? '—' : lastUpdateTime}
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* INCIDENTS DU JOUR (APERÇU 3 INCIDENTS EN ACCORDÉON) */}
         <section
           id="aujourdhui"
           className="mx-auto max-w-[1200px] 2xl:max-w-[1320px] px-4 pb-12 pt-10 sm:px-6 lg:pb-[72px] lg:pt-16"
         >
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-4 lg:mb-7">
-            <div className="flex max-w-[640px] flex-col gap-2">
-              <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[var(--water)]">
-                Situation terrain en direct
-              </span>
-              <h2 className="font-display text-[26px] font-extrabold leading-[1.2] tracking-[-0.02em] text-ink sm:text-[36px] sm:leading-[1.15]">
-                Les incidents du jour
-              </h2>
-              <p className="text-[15px] leading-[1.6] text-ink2 sm:text-[16px]">
-                Cliquez sur un incident pour dérouler le détail : hauteur d&apos;eau, routes
-                coupées et risques.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <Link
-                to="/consulter"
-                className="inline-flex h-11 items-center rounded-[10px] border border-[var(--water)] bg-[#e6f0fb] px-4 text-[14px] font-bold text-[var(--water)] transition-colors hover:bg-[var(--water)] hover:text-white sm:h-12 sm:px-5"
-              >
-                Consulter les incidents
-                <ArrowRight size={16} className="ml-2" aria-hidden="true" />
-              </Link>
-              <Link
-                to="/signaler"
-                className="inline-flex h-11 items-center rounded-[10px] border border-line2 bg-surface px-4 text-[14px] font-bold text-ink transition-colors hover:border-[var(--water)] hover:text-[var(--water)] sm:h-12 sm:px-5"
-              >
-                Déclarer un incident
-                <ArrowRight size={16} className="ml-2" aria-hidden="true" />
-              </Link>
-            </div>
+          <div className="mb-6 flex max-w-[640px] flex-col gap-2 lg:mb-7">
+            <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[var(--water)]">
+              Situation terrain en direct
+            </span>
+            <h2 className="font-display text-[26px] font-extrabold leading-[1.2] tracking-[-0.02em] text-ink sm:text-[36px] sm:leading-[1.15]">
+              Les incidents du jour
+            </h2>
+            <p className="text-[15px] leading-[1.6] text-ink2 sm:text-[16px]">
+              Cliquez sur un incident pour dérouler le détail : hauteur d&apos;eau, routes
+              coupées et risques.
+            </p>
           </div>
 
           <div className="flex flex-col gap-3">
@@ -513,6 +325,16 @@ export const LandingPage: React.FC = () => {
                 />
               ))
             )}
+          </div>
+
+          <div className="mt-6 flex justify-center sm:justify-end">
+            <Link
+              to="/consulter"
+              className="inline-flex h-11 w-full items-center justify-center rounded-[10px] border border-[var(--water)] bg-[#e6f0fb] px-4 text-[14px] font-bold text-[var(--water)] transition-colors hover:bg-[var(--water)] hover:text-white sm:h-12 sm:w-auto sm:px-5"
+            >
+              <span>Consulter les incidents</span>
+              <ArrowRight size={16} className="ml-2 shrink-0" aria-hidden="true" />
+            </Link>
           </div>
         </section>
 
@@ -732,63 +554,6 @@ export const LandingPage: React.FC = () => {
         </section>
       </main>
 
-      {/* FOOTER */}
-      <footer className="border-t border-[#1c3452] bg-[#07162a] text-[#cbd8e6]">
-        <div className="mx-auto flex max-w-[1200px] 2xl:max-w-[1320px] flex-wrap justify-between gap-8 px-4 pb-28 pt-12 sm:px-6 xl:pb-8">
-          <div className="flex max-w-[460px] flex-1 basis-[320px] flex-col gap-3">
-            <div className="text-[18px] font-extrabold text-white">
-              OID · Observatoire Inondations &amp; Dommages
-            </div>
-            <p className="text-[13px] leading-[1.6]">
-              Outil d&apos;intérêt général développé avec les collectivités locales, les services
-              de secours et la protection civile pour faire remonter les données de crues.
-            </p>
-          </div>
-
-          <nav aria-label="Plateforme" className="flex flex-col gap-1 text-[14px]">
-            <div className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-white">
-              Plateforme
-            </div>
-            <a href="#aujourdhui" className="py-2 transition-colors hover:text-white">
-              Incidents du jour
-            </a>
-            <a href="#quoi" className="py-2 transition-colors hover:text-white">
-              Que signaler ?
-            </a>
-            <a href="#etapes" className="py-2 transition-colors hover:text-white">
-              Comment ça marche
-            </a>
-            <a href="#securite" className="py-2 transition-colors hover:text-white">
-              Sécurité
-            </a>
-          </nav>
-
-          <nav aria-label="Informations" className="flex flex-col gap-1 text-[14px]">
-            <div className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-white">
-              Informations
-            </div>
-            <a href="#" className="py-2 transition-colors hover:text-white">
-              Mentions légales
-            </a>
-            <a href="#" className="py-2 transition-colors hover:text-white">
-              Confidentialité
-            </a>
-            <a href="#contenu" className="py-2 transition-colors hover:text-white">
-              Accessibilité
-            </a>
-            <Link to={agentPath} className="py-2 transition-colors hover:text-white">
-              Espace agent
-            </Link>
-          </nav>
-        </div>
-
-        <div className="border-t border-[#1c3452]">
-          <div className="mx-auto max-w-[1200px] 2xl:max-w-[1320px] px-4 py-5 text-[13px] sm:px-6">
-            © {currentYear} Observatoire Inondations &amp; Dommages. Service public citoyen.
-          </div>
-        </div>
-      </footer>
-
       {/* VISIONNEUSE PHOTO */}
       {lightbox && (
         <div
@@ -872,22 +637,6 @@ export const LandingPage: React.FC = () => {
         </div>
       )}
 
-      {/* BARRE D'ACTION MOBILE */}
-      <div className="dock-safe fixed inset-x-0 bottom-0 z-50 flex gap-2.5 border-t border-line bg-surface px-3 pt-3 xl:hidden">
-        <Link
-          to="/signaler"
-          className="flex h-12 flex-1 items-center justify-center rounded-xl bg-[var(--water)] text-[15px] font-bold text-white active:bg-[var(--water-hi)]"
-        >
-          Signaler un danger
-        </Link>
-        <a
-          href="tel:180"
-          className="flex h-12 items-center justify-center rounded-xl bg-[#b3261e] px-[18px] text-[15px] font-bold text-white active:bg-[#8f1e18]"
-          aria-label="Appeler le 180, sapeurs-pompiers"
-        >
-          Urgence
-        </a>
-      </div>
     </div>
   );
 };

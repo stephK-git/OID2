@@ -1,8 +1,8 @@
 import React from 'react';
-import { PublicHeader } from './shell';
+import { SiteHeader } from './site';
 
 export const Navbar: React.FC = () => {
-  return <PublicHeader />;
+  return <SiteHeader />;
 };
 
 export default Navbar;

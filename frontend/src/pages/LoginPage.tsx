@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api/client';
-import { PublicHeader } from '../components/shell';
+import { SiteHeader } from '../components/site';
 
 interface LoginResponse {
   access_token: string;
@@ -135,7 +135,7 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="oid-auth-shell">
       {/* Top Security Header Bar */}
-      <PublicHeader isAuth />
+      <SiteHeader variant="auth" />
 
       {/* Main Form Center Area */}
       <main className="auth-main-area">

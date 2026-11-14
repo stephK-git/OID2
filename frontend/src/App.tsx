@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { PublicHeader } from './components/shell';
+import { SiteHeader, SiteFooter } from './components/site';
 import { ProtectedRoute, CitizenOnlyRoute } from './components/ProtectedRoute';
 
 import { LandingPage } from './pages/LandingPage';
@@ -21,12 +21,15 @@ const AppShell: React.FC = () => {
     location.pathname.startsWith('/verification') ||
     location.pathname.startsWith('/enquete') ||
     location.pathname === '/login';
-  const hideDefaultChrome = isCommandScreen || isLandingPage;
+  const hideDefaultChrome = isCommandScreen;
 
   return (
     <div className={`app-root ${isCommandScreen ? 'is-command' : ''}`}>
-      {!hideDefaultChrome && <PublicHeader />}
-      <div className={isCommandScreen ? 'command-screen-wrap' : isLandingPage ? '' : 'main-content'}>
+      {!hideDefaultChrome && <SiteHeader />}
+      <div
+        id={isCommandScreen || isLandingPage ? undefined : 'contenu'}
+        className={isCommandScreen ? 'command-screen-wrap' : 'main-content'}
+      >
         <Routes>
           {/* Routes publiques */}
           <Route path="/" element={<LandingPage />} />
@@ -74,18 +77,7 @@ const AppShell: React.FC = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
-      {!hideDefaultChrome && (
-        <footer className="footer">
-          <div className="container footer-content">
-            <div className="footer-brand-row">
-              <span className="material-symbols-outlined footer-brand-icon">tsunami</span>
-              <strong>O.I.D — Observatoire Inondations &amp; Dommages</strong>
-              <span className="footer-sep">•</span>
-              <span>District Autonome d'Abidjan</span>
-            </div>
-          </div>
-        </footer>
-      )}
+      {!hideDefaultChrome && <SiteFooter />}
     </div>
   );
 };
