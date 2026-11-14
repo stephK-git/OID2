@@ -229,3 +229,38 @@ def test_recents_incidents_anonymises(client, db_session) -> None:
 
 
 
+
+
+def _png_data_url(n: int = 0) -> str:
+    import base64
+
+    raw = b"\x89PNG\r\n\x1a\n" + bytes([n]) * 16
+    return "data:image/png;base64," + base64.b64encode(raw).decode()
+
+
+def test_creer_signalement_avec_trois_photos(client, db_session, tmp_path, monkeypatch) -> None:
+    from app.models.photo import Photo
+    from app.routers import public
+
+    monkeypatch.setattr(public, "PHOTO_UPLOAD_DIR", tmp_path)
+    payload = {
+        "type": "rue",
+        "lat": 5.35,
+        "lon": -3.98,
+        "photos_data_urls": [_png_data_url(i) for i in range(3)],
+    }
+    r = client.post("/signalements", json=payload)
+    assert r.status_code == 201
+    assert db_session.query(Photo).count() == 3
+    assert len(list(tmp_path.iterdir())) == 3
+
+
+def test_creer_signalement_refuse_quatre_photos(client) -> None:
+    payload = {
+        "type": "rue",
+        "lat": 5.35,
+        "lon": -3.98,
+        "photos_data_urls": [_png_data_url(i) for i in range(4)],
+    }
+    r = client.post("/signalements", json=payload)
+    assert r.status_code == 422

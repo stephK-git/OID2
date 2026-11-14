@@ -4634,6 +4634,21 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   gap: 0.35rem;
 }
 
+.oid-peril-call {
+  margin: 0 0 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(179, 38, 30, 0.1);
+  color: var(--oid-on-surface);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.oid-peril-call a {
+  color: var(--oid-error);
+  font-weight: 700;
+}
+
 .oid-peril-textarea {
   width: 100%;
   background: var(--oid-surface-lowest);
@@ -4797,6 +4812,8 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   color: var(--oid-on-surface);
   font-family: "Plus Jakarta Sans", var(--font-sans);
   font-size: 0.88rem;
+  line-height: 1.4;
+  resize: vertical;
 }
 
 .oid-landmark-input:focus {
@@ -13267,4 +13284,79 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 
 .oid-consulter-list-col {
   scroll-margin-top: 84px;
+}
+
+/* Signalement : confirmation en fenêtre superposée */
+.oid-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(11, 31, 51, 0.6);
+  overflow-y: auto;
+}
+
+.oid-overlay .oid-confirm-panel {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  margin: 0;
+}
+
+/* Signalement : prise de photo ou import, jusqu'à 3 photos */
+.oid-photo-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.oid-camera-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.oid-photo-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.74rem;
+  color: var(--oid-on-surface-variant);
+}
+
+.oid-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.oid-photo-grid .oid-photo-thumb {
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 1;
+}
+
+/* Caméra en direct (signalement) */
+.oid-camera-modal {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.oid-camera-video {
+  width: 100%;
+  max-height: calc(100dvh - 140px);
+  border-radius: 14px;
+  background: #000;
+  object-fit: cover;
+}
+
+.oid-camera-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
 }

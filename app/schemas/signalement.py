@@ -1,8 +1,11 @@
 """Schemas Pydantic centralisés — signalement."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+MAX_PHOTOS = 3
+PhotoDataUrl = Annotated[str, StringConstraints(max_length=14_000_000)]
 
 
 class SignalementIn(BaseModel):
@@ -30,6 +33,7 @@ class SignalementIn(BaseModel):
     danger_type: Literal["trapped", "electric", "effondrement", "personnes_en_danger", "autre"] | None = None
     description: str | None = Field(default=None, max_length=1000)
     photo_data_url: str | None = Field(default=None, max_length=14_000_000)
+    photos_data_urls: list[PhotoDataUrl] = Field(default_factory=list, max_length=MAX_PHOTOS)
 
 
 class SignalementOut(BaseModel):
