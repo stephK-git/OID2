@@ -4,6 +4,7 @@ import { apiFetch, apiUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandMark, VigilancePill } from '../components/shell';
 import { EnqueteReportView } from '../components/EnqueteReportView';
+import { ItineraryMap } from '../components/ItineraryMap';
 
 interface PhotoMetaItem {
   url: string;
@@ -206,6 +207,8 @@ export const EnquetePage: React.FC = () => {
 
   // Onglet actif : 'dossiers' (missions affectées) ou 'historique' (dossiers traités)
   const [activeTab, setActiveTab] = useState<'dossiers' | 'historique'>('dossiers');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [itineraryOpen, setItineraryOpen] = useState(false);
 
   // Tri & Filtres pour "Dossiers affectés"
   const [sortAffectes, setSortAffectes] = useState<
@@ -871,15 +874,14 @@ export const EnquetePage: React.FC = () => {
                           </div>
 
                           <div className="oid-enq-coords-actions">
-                            <a
-                              href={`https://maps.google.com/?q=${selectedDossier.coords.lat},${selectedDossier.coords.lon}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => setItineraryOpen(true)}
                               className="oid-enq-gps-btn"
                             >
                               <span className="material-symbols-outlined text-primary">navigation</span>
                               <span>Itinéraire GPS</span>
-                            </a>
+                            </button>
                             <a
                               href={`https://www.openstreetmap.org/#map=17/${selectedDossier.coords.lat}/${selectedDossier.coords.lon}`}
                               target="_blank"
@@ -1406,6 +1408,14 @@ export const EnquetePage: React.FC = () => {
 
   return (
     <div className="app-shell page-enqueteur" id="appShell">
+      {itineraryOpen && selectedDossier?.coords && (
+        <ItineraryMap
+          destination={{ lat: selectedDossier.coords.lat, lon: selectedDossier.coords.lon }}
+          label={`Dossier #${selectedDossier.id}`}
+          onClose={() => setItineraryOpen(false)}
+        />
+      )}
+
       {/* Lightbox Plein Écran */}
       {lightboxUrl && (
         <div className="verif-lightbox" onClick={() => setLightboxUrl(null)}>
@@ -1425,12 +1435,32 @@ export const EnquetePage: React.FC = () => {
       )}
 
       {/* ---------- SIDEBAR LATÉRALE FIXE (Issu du standard coordinateur/vérificateur) ---------- */}
-      <aside className="sidebar">
+      <div className="enq-mobile-bar">
+        <BrandMark subtitle="Investigations &amp; Évaluations" />
+        <button
+          type="button"
+          className="enq-burger"
+          aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+          aria-expanded={menuOpen}
+          aria-controls="enq-sidebar"
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          <span className="material-symbols-outlined">{menuOpen ? 'close' : 'menu'}</span>
+        </button>
+      </div>
+      {menuOpen && <div className="enq-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+
+      <aside className={`sidebar ${menuOpen ? 'is-open' : ''}`} id="enq-sidebar">
         <div className="sidebar-header">
           <BrandMark subtitle="Investigations &amp; Évaluations" />
         </div>
 
-        <nav className="sidebar-nav">
+        <nav
+          className="sidebar-nav"
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('.nav-item')) setMenuOpen(false);
+          }}
+        >
           <div className="nav-group">
             <div className="nav-label">Missions Terrain</div>
             <button

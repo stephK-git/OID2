@@ -115,6 +115,17 @@
   --deep-tx: #cbd8e6;
   --emergency: #b3261e;
   --emergency-hover: #8f1e18;
+  --deep-card: #112a45;
+  --deep-card-hi: #14304f;
+  --deep-tx-strong: #e3ecf6;
+  --deep-accent: #9cc8ff;
+  --deep-warn: #fbbf24;
+
+  /* Teintes douces (accueil) — surchargées en thème sombre */
+  --water-soft: #e6f0fb;
+  --emergency-soft: #fdecea;
+  --emergency-soft-line: #f0b8b4;
+  --emergency-soft-tx: #7a1a15;
 
   /* Rayons de bordure */
   --r-sm: 6px;
@@ -171,3 +182,10 @@
   --v-outline-variant: var(--line);
 }
 
+
+[data-theme="dark"] {
+  --water-soft: rgba(88, 166, 255, 0.14);
+  --emergency-soft: rgba(255, 180, 173, 0.10);
+  --emergency-soft-line: rgba(255, 180, 173, 0.35);
+  --emergency-soft-tx: #ffb4ad;
+}

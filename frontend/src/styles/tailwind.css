@@ -1,0 +1,3 @@
+/* Tailwind (sans preflight) : composants + utilitaires uniquement */
+@tailwind components;
+@tailwind utilities;

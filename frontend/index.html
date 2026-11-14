@@ -16,60 +16,17 @@
       rel="stylesheet"
     />
     <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
-      rel="stylesheet"
+      rel="preload"
+      href="/fonts/material-symbols-outlined.woff2?v=2"
+      as="font"
+      type="font/woff2"
+      crossorigin
     />
     <script>
       (function () {
         document.documentElement.setAttribute('data-theme', 'light');
         document.documentElement.style.colorScheme = 'light';
       })();
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      if (typeof tailwind !== 'undefined') {
-        tailwind.config = {
-          darkMode: 'class',
-          corePlugins: {
-            preflight: false,
-          },
-          theme: {
-            extend: {
-              fontFamily: {
-                sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
-                display: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
-              },
-              colors: {
-                surface: 'var(--s1)',
-                surface2: 'var(--s2)',
-                surface3: 'var(--s3)',
-                ink: 'var(--tx)',
-                ink2: 'var(--tx2)',
-                ink3: 'var(--tx3)',
-                line: 'var(--line)',
-                line2: 'var(--line2)',
-                accent: 'var(--water)',
-                'accent-hi': 'var(--water-hi)',
-                brand: {
-                  50: '#eff6ff',
-                  100: '#dbeafe',
-                  500: '#2563eb',
-                  600: '#1d4ed8',
-                  700: '#1d40b0',
-                  900: '#0f172a',
-                  950: '#060d1f',
-                },
-                alert: {
-                  red: '#ef4444',
-                  orange: '#f97316',
-                  amber: '#eab308',
-                  emerald: '#10b981',
-                },
-              },
-            },
-          },
-        };
-      }
     </script>
   </head>
   <body>

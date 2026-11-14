@@ -945,7 +945,7 @@ export const VerificationPage: React.FC = () => {
           <div className="avatar" style={{ backgroundColor: 'var(--water)', color: 'var(--water-ink)' }}>{userInitials}</div>
           <div className="user-info">
             <span className="user-name">{user?.nom || 'Opérateur triage'}</span>
-            <span className="user-role">VÉRIFICATEUR · PC INDÉNIÉ</span>
+            <span className="user-role">VÉRIFICATEUR</span>
           </div>
           <button
             type="button"

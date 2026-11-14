@@ -1697,7 +1697,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   display: inline-block;
 }
 
-.dot-danger { background-color: #dc2626; }
+.dot-danger { background-color: var(--crit); }
 .dot-open { background-color: #0284c7; }
 .dot-success { background-color: #16a34a; }
 .dot-closed { background-color: #64748b; }
@@ -1727,7 +1727,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 
 /* Bandeau Permanent d'Urgence (Exigence F-04) */
 .emergency-banner {
-  background: linear-gradient(90deg, #991b1b, #dc2626);
+  background: linear-gradient(90deg, #991b1b, var(--crit));
   color: #ffffff;
   padding: 0.55rem 1rem;
   font-size: 0.88rem;
@@ -1932,7 +1932,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 .silent-zone-card {
   background: #fff;
   border: 1px solid var(--border-color);
-  border-left: 6px solid #dc2626;
+  border-left: 6px solid var(--crit);
   border-radius: var(--radius-md);
   padding: 1.1rem;
   margin-bottom: 1rem;
@@ -2335,12 +2335,12 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 .btn-outline-danger {
   background: #ffffff;
   border: 1px solid #fecaca;
-  color: #dc2626;
+  color: var(--crit);
 }
 
 .btn-outline-danger:hover:not(:disabled) {
   background: #fef2f2;
-  border-color: #dc2626;
+  border-color: var(--crit);
 }
 
 .table-responsive {
@@ -2607,11 +2607,11 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 
 .coord-tab-badge.badge-urgent {
   background: #fee2e2;
-  color: #dc2626;
+  color: var(--crit);
 }
 
 .coord-tab.active .coord-tab-badge.badge-urgent {
-  background: #dc2626;
+  background: var(--crit);
   color: #ffffff;
 }
 
@@ -2680,7 +2680,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 .coord-kpi-card.accent-blue::after { background: linear-gradient(90deg, #0284c7, #38bdf8); }
 .coord-kpi-card.accent-amber::after { background: linear-gradient(90deg, #d97706, #fbbf24); }
 .coord-kpi-card.accent-green::after { background: linear-gradient(90deg, #16a34a, #4ade80); }
-.coord-kpi-card.accent-red::after { background: linear-gradient(90deg, #dc2626, #f87171); }
+.coord-kpi-card.accent-red::after { background: linear-gradient(90deg, var(--crit), #f87171); }
 
 .coord-skeleton-card {
   min-height: 148px;
@@ -2716,7 +2716,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 .coord-kpi-icon.icon-blue { background: #e0f2fe; color: #0284c7; }
 .coord-kpi-icon.icon-amber { background: #fef3c7; color: #d97706; }
 .coord-kpi-icon.icon-green { background: #dcfce7; color: #16a34a; }
-.coord-kpi-icon.icon-red { background: #fee2e2; color: #dc2626; }
+.coord-kpi-icon.icon-red { background: #fee2e2; color: var(--crit); }
 
 .coord-kpi-value {
   font-size: 2.35rem;
@@ -2922,7 +2922,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 
 .coord-impact-icon.tile-blue { background: #e0f2fe; color: #0284c7; }
 .coord-impact-icon.tile-amber { background: #fef3c7; color: #d97706; }
-.coord-impact-icon.tile-red { background: #fee2e2; color: #dc2626; }
+.coord-impact-icon.tile-red { background: #fee2e2; color: var(--crit); }
 
 .coord-impact-tag {
   font-size: 0.68rem;
@@ -3005,7 +3005,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 .coord-priority-item.is-danger {
   background: #fffafa;
   border-color: #fecaca;
-  border-left: 4px solid #dc2626;
+  border-left: 4px solid var(--crit);
 }
 
 .coord-priority-top {
@@ -3046,7 +3046,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 .coord-vital-pill {
   display: inline-flex;
   align-items: center;
-  background: #dc2626;
+  background: var(--crit);
   color: #ffffff;
   font-size: 0.66rem;
   font-weight: 800;
@@ -3269,8 +3269,8 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 }
 
 .coord-pill-btn.pill-danger.active {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: var(--crit);
+  border-color: var(--crit);
   color: #ffffff;
 }
 
@@ -3500,7 +3500,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   flex-shrink: 0;
 }
 
-.coord-sig-stat-icon.bg-red { background: #fee2e2; color: #dc2626; }
+.coord-sig-stat-icon.bg-red { background: #fee2e2; color: var(--crit); }
 .coord-sig-stat-icon.bg-amber { background: #ffedd5; color: #ea580c; }
 .coord-sig-stat-icon.bg-blue { background: #e0f2fe; color: #0284c7; }
 .coord-sig-stat-icon.bg-purple { background: #f3e8ff; color: #7e22ce; }
@@ -8909,7 +8909,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 /* 2-Column Layout (4 / 8 on desktop) */
 .oid-enq-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.25rem;
   align-items: start;
 }
@@ -8927,6 +8927,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 }
 
 .oid-enq-left-col {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -11515,8 +11516,8 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 }
 
 .oid-report-context-pills span.is-danger {
-  color: var(--danger, #ef4444);
-  border-color: color-mix(in srgb, var(--danger, #ef4444) 35%, transparent);
+  color: var(--danger, var(--crit));
+  border-color: color-mix(in srgb, var(--danger, var(--crit)) 35%, transparent);
 }
 
 .oid-report-coords-list {
@@ -11588,7 +11589,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 }
 
 .oid-report-kpi-card.tone-danger .material-symbols-outlined {
-  color: #dc2626;
+  color: var(--crit);
 }
 
 .oid-report-kpi-val {
@@ -12060,7 +12061,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 
 .oid-verif-hist-banner.is-crit {
   background: rgba(239, 68, 68, 0.12);
-  color: var(--crit, #ef4444);
+  color: var(--crit, var(--crit));
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
@@ -12197,8 +12198,8 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 }
 
 .app-shell .btn.oid-verif-rej-btn {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: var(--crit);
+  border-color: var(--crit);
   color: #ffffff;
   font-weight: 700;
   transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.14s ease, box-shadow 0.18s ease;

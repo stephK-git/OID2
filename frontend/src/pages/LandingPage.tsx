@@ -93,9 +93,9 @@ interface ReportCardProps {
 const ReportCard: React.FC<ReportCardProps> = ({ to, icon, title, text }) => (
   <Link
     to={to}
-    className="group flex flex-col gap-3 rounded-2xl border border-line bg-surface p-6 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--water)] focus-visible:ring-offset-2"
+    className="group flex flex-col gap-3 rounded-2xl border border-line2 bg-surface p-6 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--water)] focus-visible:ring-offset-2"
   >
-    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e6f0fb] text-[var(--water)]">
+    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--water-soft)] text-[var(--water)]">
       {icon}
     </span>
     <span className="text-[18px] font-bold text-ink">{title}</span>
@@ -200,7 +200,7 @@ export const LandingPage: React.FC = () => {
     <div className="oid-landing-page overflow-x-clip font-sans antialiased selection:bg-accent selection:text-white">
       <main id="contenu">
         {/* HERO */}
-        <section className="relative overflow-hidden bg-[#0b1f33] text-white">
+        <section className="relative overflow-hidden bg-[var(--deep)] text-white">
           <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
             <img
               src="/images/hero-abidjan.jpg"
@@ -212,7 +212,7 @@ export const LandingPage: React.FC = () => {
 
           <div className="relative z-10 mx-auto max-w-[1200px] 2xl:max-w-[1320px] px-4 pb-12 pt-9 sm:px-6 sm:py-[72px]">
             <div className="flex max-w-[720px] flex-col gap-4 sm:gap-5">
-              <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#9cc8ff] sm:hidden">
+              <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[var(--deep-accent)] sm:hidden">
                 Information citoyenne · Abidjan
               </span>
 
@@ -224,7 +224,7 @@ export const LandingPage: React.FC = () => {
                 <span className="text-[#58a6ff]">montées des eaux</span>.
               </h1>
 
-              <p className="max-w-[600px] text-[15px] leading-[1.6] text-[#e3ecf6] sm:text-[18px]">
+              <p className="max-w-[600px] text-[15px] leading-[1.6] text-[var(--deep-tx-strong)] sm:text-[18px]">
                 <span className="hidden sm:inline">
                   Consultez les incidents actifs commune par commune et sachez quoi faire. Un
                   danger près de vous ? Signalez-le en deux minutes, sans compte.
@@ -238,24 +238,24 @@ export const LandingPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 pt-1 sm:flex sm:flex-row sm:items-center sm:gap-3">
                 <Link
                   to="/consulter"
-                  className="inline-flex h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-white px-2.5 text-center text-[13px] font-bold leading-tight text-[#0b1f33] transition-colors hover:bg-[#f3f6fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1f33] sm:h-[52px] sm:w-auto sm:gap-2.5 sm:px-6 sm:text-[16px]"
+                  className="inline-flex h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-white px-2.5 text-center text-[13px] font-bold leading-tight text-[var(--deep)] transition-colors hover:bg-[var(--bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--deep)] sm:h-[52px] sm:w-auto sm:gap-2.5 sm:px-6 sm:text-[16px]"
                 >
                   <span>Consulter les incidents</span>
                   <ArrowRight size={15} strokeWidth={2.5} className="shrink-0" aria-hidden="true" />
                 </Link>
                 <Link
                   to="/signaler"
-                  className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#b3261e] px-2.5 text-center text-[13px] font-bold leading-tight text-white transition-colors hover:bg-[#8f1e18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1f33] sm:h-[52px] sm:w-auto sm:px-6 sm:text-[16px]"
+                  className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[var(--emergency)] px-2.5 text-center text-[13px] font-bold leading-tight text-white transition-colors hover:bg-[var(--emergency-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--deep)] sm:h-[52px] sm:w-auto sm:px-6 sm:text-[16px]"
                 >
                   Signaler un incident
                 </Link>
               </div>
 
-              <p className="hidden text-[14px] text-[#e3ecf6] sm:block">
+              <p className="hidden text-[14px] text-[var(--deep-tx-strong)] sm:block">
                 Personne en danger ? Appelez d&apos;abord les secours :{' '}
                 <a
                   href="tel:180"
-                  className="font-mono font-bold text-white underline underline-offset-2 hover:text-[#9cc8ff]"
+                  className="font-mono font-bold text-white underline underline-offset-2 hover:text-[var(--deep-accent)]"
                 >
                   180
                 </a>
@@ -330,7 +330,7 @@ export const LandingPage: React.FC = () => {
           <div className="mt-6 flex justify-center sm:justify-end">
             <Link
               to="/consulter"
-              className="inline-flex h-11 w-full items-center justify-center rounded-[10px] border border-[var(--water)] bg-[#e6f0fb] px-4 text-[14px] font-bold text-[var(--water)] transition-colors hover:bg-[var(--water)] hover:text-white sm:h-12 sm:w-auto sm:px-5"
+              className="inline-flex h-11 w-full items-center justify-center rounded-[10px] border border-[var(--water)] bg-[var(--water-soft)] px-4 text-[14px] font-bold text-[var(--water)] transition-colors hover:bg-[var(--water)] hover:text-white sm:h-12 sm:w-auto sm:px-5"
             >
               <span>Consulter les incidents</span>
               <ArrowRight size={16} className="ml-2 shrink-0" aria-hidden="true" />
@@ -383,22 +383,22 @@ export const LandingPage: React.FC = () => {
                 }
               />
 
-              <div className="flex flex-col gap-3 rounded-2xl border border-[#f0b8b4] bg-[#fdecea] p-6">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#b3261e]">
+              <div className="flex flex-col gap-3 rounded-2xl border border-[var(--emergency-soft-line)] bg-[var(--emergency-soft)] p-6">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[var(--emergency)]">
                   <ReportIcon>
                     <path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
                   </ReportIcon>
                 </span>
-                <span className="text-[18px] font-bold text-[#7a1a15]">
+                <span className="text-[18px] font-bold text-[var(--emergency-soft-tx)]">
                   Danger immédiat pour une personne
                 </span>
-                <span className="text-[14px] leading-[1.55] text-[#7a1a15]">
+                <span className="text-[14px] leading-[1.55] text-[var(--emergency-soft-tx)]">
                   Personne isolée, risque électrique, bâtiment menaçant. Appelez les secours, ne
                   passez pas par le formulaire.
                 </span>
                 <a
                   href="tel:180"
-                  className="mt-auto pt-1 font-mono text-[14px] font-bold text-[#7a1a15] underline underline-offset-2"
+                  className="mt-auto pt-1 font-mono text-[14px] font-bold text-[var(--emergency-soft-tx)] underline underline-offset-2"
                 >
                   180 — Sapeurs-pompiers
                 </a>
@@ -449,34 +449,34 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* SÉCURITÉ */}
-        <section id="securite" className="bg-[#0b1f33] text-white">
+        <section id="securite" className="bg-[var(--deep)] text-white">
           <div className="mx-auto flex max-w-[1200px] 2xl:max-w-[1320px] flex-col gap-12 px-4 py-12 sm:px-6 sm:py-[72px]">
             <div className="flex flex-col items-center gap-8 lg:flex-row">
               <div className="flex flex-1 flex-col gap-4">
                 <h2 className="font-display text-[26px] font-extrabold leading-[1.2] tracking-[-0.02em] sm:text-[36px] sm:leading-[1.15]">
-                  <span className="text-[#fbbf24]">30 centimètres d&apos;eau</span> suffisent
+                  <span className="text-[var(--deep-warn)]">30 centimètres d&apos;eau</span> suffisent
                   pour emporter une voiture.
                 </h2>
-                <p className="text-[15px] leading-[1.65] text-[#e3ecf6] sm:text-[16px]">
+                <p className="text-[15px] leading-[1.65] text-[var(--deep-tx-strong)] sm:text-[16px]">
                   Ne vous engagez jamais sur une route submergée, même en 4x4. Le courant
                   soulève le véhicule et en prend le contrôle. Faites demi-tour.
                 </p>
               </div>
 
-              <div className="w-full flex-1 rounded-2xl border border-[#1c3452] bg-[#07162a] p-4 sm:p-5">
+              <div className="w-full flex-1 rounded-2xl border border-[var(--deep-line)] bg-[var(--deep-2)] p-4 sm:p-5">
                 <svg
                   role="img"
                   aria-label="Schéma : une nappe d'eau de 30 centimètres autour des roues d'un véhicule"
                   className="h-auto w-full select-none"
                   viewBox="0 0 540 220"
                 >
-                  <rect x="0" y="180" width="540" height="40" fill="#0b1f33" />
+                  <rect x="0" y="180" width="540" height="40" fill="var(--deep)" />
                   <line x1="0" y1="180" x2="540" y2="180" stroke="#3b5878" strokeWidth="2" />
-                  <g fill="#14304f" stroke="#cbd5e1" strokeWidth="2.5" strokeLinejoin="round">
+                  <g fill="var(--deep-card-hi)" stroke="#cbd5e1" strokeWidth="2.5" strokeLinejoin="round">
                     <path d="M 120 110 L 160 65 L 320 65 L 380 110 Z" />
                     <rect x="60" y="105" width="370" height="55" rx="14" />
-                    <circle cx="130" cy="155" r="28" fill="#07162a" stroke="#94a3b8" strokeWidth="3" />
-                    <circle cx="360" cy="155" r="28" fill="#07162a" stroke="#94a3b8" strokeWidth="3" />
+                    <circle cx="130" cy="155" r="28" fill="var(--deep-2)" stroke="#94a3b8" strokeWidth="3" />
+                    <circle cx="360" cy="155" r="28" fill="var(--deep-2)" stroke="#94a3b8" strokeWidth="3" />
                   </g>
                   <path
                     className="animate-wave"
@@ -508,27 +508,27 @@ export const LandingPage: React.FC = () => {
               <h3 className="font-display text-[24px] font-extrabold text-white">
                 Les gestes réflexes
               </h3>
-              <p className="mb-5 mt-1.5 text-[14px] text-[#e3ecf6]">
+              <p className="mb-5 mt-1.5 text-[14px] text-[var(--deep-tx-strong)]">
                 Dès les premiers signaux de crue.
               </p>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {SAFETY_TIPS.map((tip) => (
                   <div
                     key={tip.n}
-                    className="rounded-2xl border border-[#1c3452] bg-[#112a45] p-6"
+                    className="rounded-2xl border border-[var(--deep-line)] bg-[var(--deep-card)] p-6"
                   >
-                    <div className="font-mono text-[14px] font-bold text-[#fbbf24]">
+                    <div className="font-mono text-[14px] font-bold text-[var(--deep-warn)]">
                       {tip.n}
                     </div>
                     <div className="mt-2 text-[18px] font-bold text-white">{tip.title}</div>
-                    <p className="mt-2 text-[14px] leading-[1.6] text-[#e3ecf6]">{tip.text}</p>
+                    <p className="mt-2 text-[14px] leading-[1.6] text-[var(--deep-tx-strong)]">{tip.text}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="border-t border-[#1c3452] pt-8">
-              <div className="mb-4 text-[12px] font-bold uppercase tracking-[0.08em] text-[#e3ecf6]">
+            <div className="border-t border-[var(--deep-line)] pt-8">
+              <div className="mb-4 text-[12px] font-bold uppercase tracking-[0.08em] text-[var(--deep-tx-strong)]">
                 Numéros d&apos;urgence
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -536,11 +536,11 @@ export const LandingPage: React.FC = () => {
                   <a
                     key={item.label}
                     href={item.href}
-                    className="rounded-[14px] border border-[#1c3452] bg-[#112a45] p-[18px] text-center transition-colors hover:bg-[#14304f]"
+                    className="rounded-[14px] border border-[var(--deep-line)] bg-[var(--deep-card)] p-[18px] text-center transition-colors hover:bg-[var(--deep-card-hi)]"
                   >
                     <div
                       className={`font-mono text-[22px] font-bold ${
-                        index === 0 ? 'text-[#ffb4ad]' : 'text-[#9cc8ff]'
+                        index === 0 ? 'text-[#ffb4ad]' : 'text-[var(--deep-accent)]'
                       }`}
                     >
                       {item.number}

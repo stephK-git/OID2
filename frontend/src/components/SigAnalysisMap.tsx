@@ -993,7 +993,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
     hotspots.forEach((h) => {
       const color =
         h.niveau_recurrence === 'critique'
-          ? '#dc2626'
+          ? '#b3261e'
           : h.niveau_recurrence === 'forte'
           ? '#ea580c'
           : '#d97706';
@@ -1503,7 +1503,7 @@ export const SigAnalysisMap: React.FC<SigAnalysisMapProps> = ({
                         onClick={() => setShowHotspots((prev) => !prev)}
                       >
                         <div className="oid-drawer-layer-left">
-                          <Flame size={15} color="#dc2626" />
+                          <Flame size={15} color="#b3261e" />
                           <span>Corridors &amp; Hotspots</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

@@ -1054,10 +1054,17 @@ export const PublicIncidentsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div
-                  ref={mapContainerRef}
-                  className={`oid-consulter-leaflet ${viewMode === 'map' ? 'is-tall' : ''}`}
-                />
+                <div className="relative">
+                  <div
+                    ref={mapContainerRef}
+                    className={`oid-consulter-leaflet ${viewMode === 'map' ? 'is-tall' : ''}`}
+                  />
+                  {filteredMapFeatures.length === 0 && (
+                    <div className="oid-consulter-map-empty" role="status">
+                      Aucun incident localisé pour le moment.
+                    </div>
+                  )}
+                </div>
 
                 <div className="oid-consulter-map-legend">
                   <span className="oid-consulter-legend-item">
