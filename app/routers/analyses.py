@@ -111,7 +111,7 @@ def api_rapport_retex_pdf(
     db: Session = Depends(get_db),
     _: Utilisateur = Depends(require_role("coordinateur")),
 ):
-    """Génère et télécharge le rapport officiel RETEX (Retour d'Expérience) en PDF."""
+    """Génère et télécharge le rapport RETEX (Retour d'Expérience) en PDF."""
     pdf_bytes = generer_rapport_retex_pdf(db)
     return Response(
         content=pdf_bytes,

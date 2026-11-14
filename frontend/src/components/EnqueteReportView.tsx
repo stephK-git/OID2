@@ -81,7 +81,7 @@ const formatDateTimeFr = (iso: string | null | undefined): string => {
 const formatStatutLabel = (dossier: ReportDossierItem, evaluation: ReportEvaluationData): string => {
   if (dossier.statut === 'cloture') return 'Dossier clôturé';
   if (evaluation.statut === 'soumise' || dossier.evaluation_statut === 'soumise') {
-    return 'Évaluation transmise au Centre Opérationnel';
+    return 'Évaluation transmise à la coordination';
   }
   return dossier.statut || 'Traité';
 };
@@ -355,7 +355,7 @@ export const EnqueteReportView: React.FC<EnqueteReportViewProps> = ({
             <div className="oid-report-action-card is-reco">
               <div className="oid-report-action-head">
                 <span className="material-symbols-outlined">assignment</span>
-                <h4>Recommandations au Centre Opérationnel</h4>
+                <h4>Recommandations à la coordination</h4>
               </div>
               <p className={!evaluation.recommandations ? 'is-empty' : ''}>
                 {evaluation.recommandations || 'Aucune recommandation particulière transmise.'}

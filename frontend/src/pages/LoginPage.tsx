@@ -30,8 +30,8 @@ const ROLE_CONFIGS: Record<RoleKey, RoleConfig> = {
     name: 'COORDINATEUR',
     title: 'Coordinateur',
     sub: 'Poste HQ',
-    email: 'coordinateur@oid.org',
-    pass: 'Demo1234!',
+    email: 'coordinateur@oid.demo',
+    pass: 'demo1234',
     icon: 'shield',
     colorClass: 'text-sky',
     btnText: 'Accéder au Poste de Commandement HQ',
@@ -41,8 +41,8 @@ const ROLE_CONFIGS: Record<RoleKey, RoleConfig> = {
     name: 'VÉRIFICATEUR',
     title: 'Vérificateur',
     sub: 'Triage Crise',
-    email: 'verificateur@oid.org',
-    pass: 'Demo1234!',
+    email: 'verificateur@oid.demo',
+    pass: 'demo1234',
     icon: 'fact_check',
     colorClass: 'text-amber',
     btnText: 'Accéder à la Salle de Triage & Qualification',
@@ -52,8 +52,8 @@ const ROLE_CONFIGS: Record<RoleKey, RoleConfig> = {
     name: 'ENQUÊTEUR',
     title: 'Enquêteur',
     sub: 'Terrain WGS84',
-    email: 'enqueteur@oid.org',
-    pass: 'Demo1234!',
+    email: 'enqueteur@oid.demo',
+    pass: 'demo1234',
     icon: 'directions_run',
     colorClass: 'text-mint',
     btnText: "Accéder au Terminal d'Évaluation Terrain",
@@ -62,10 +62,9 @@ const ROLE_CONFIGS: Record<RoleKey, RoleConfig> = {
 
 export const LoginPage: React.FC = () => {
   const [activeRole, setActiveRole] = useState<RoleKey>('coordinateur');
-  const [email, setEmail] = useState('coordinateur@oid.org');
-  const [password, setPassword] = useState('Demo1234!');
+  const [email, setEmail] = useState('coordinateur@oid.demo');
+  const [password, setPassword] = useState('demo1234');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberPost, setRememberPost] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,18 +117,11 @@ export const LoginPage: React.FC = () => {
     } catch (err: any) {
       setError(
         err.message ||
-          'Identifiants opérationnels invalides ou habilitation de poste révoquée.'
+          'Identifiants invalides.'
       );
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleForgotHelp = (e: React.MouseEvent) => {
-    e.preventDefault();
-    alert(
-      "Procédure de récupération opérationnelle :\nVeuillez contacter l'Officier de Sécurité des Systèmes d'Information (OSSI) au Poste de Commandement Central (District Indénié) ou via la liaison radio sécurisée canal 4."
-    );
   };
 
   return (
@@ -145,17 +137,12 @@ export const LoginPage: React.FC = () => {
             <div className="auth-glow-accent" />
 
             <div className="auth-card-head">
-              <h1>Authentification Opérationnelle</h1>
-              <p>
-                Accès réservé aux personnels de régulation, vérificateurs de crise et enquêteurs certifiés de terrain.
-              </p>
+              <h1>Connexion</h1>
+              <p>Espace réservé aux équipes OID.</p>
             </div>
 
             {/* Quick Role Presets (Cartes interactives HQ) */}
             <div className="role-presets-block">
-              <span className="role-presets-lbl">
-                Sélectionnez un rôle pour pré-remplir l'accès de démonstration :
-              </span>
               <div className="role-presets-grid">
                 {(Object.keys(ROLE_CONFIGS) as RoleKey[]).map((key) => {
                   const cfg = ROLE_CONFIGS[key];
@@ -203,10 +190,7 @@ export const LoginPage: React.FC = () => {
 
               <div className="auth-field">
                 <label className="auth-field-lbl" htmlFor="auth-email">
-                  <span>Identifiant / E-mail Institutionnel</span>
-                  <span className="role-tag">
-                    RÔLE : {ROLE_CONFIGS[activeRole].name}
-                  </span>
+                  <span>E-mail</span>
                 </label>
                 <div className="auth-input-box">
                   <span className="material-symbols-outlined icon-left">mail</span>
@@ -216,7 +200,7 @@ export const LoginPage: React.FC = () => {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="agent@oid.org"
+                    placeholder="agent@oid.demo"
                     autoComplete="username"
                   />
                 </div>
@@ -224,15 +208,7 @@ export const LoginPage: React.FC = () => {
 
               <div className="auth-field">
                 <div className="auth-field-lbl">
-                  <label htmlFor="auth-password">Mot de passe sécurisé</label>
-                  <a
-                    href="#forgot"
-                    onClick={handleForgotHelp}
-                    className="linkbtn"
-                    style={{ fontSize: '11px', textDecoration: 'none' }}
-                  >
-                    Mot de passe oublié ?
-                  </a>
+                  <label htmlFor="auth-password">Mot de passe</label>
                 </div>
                 <div className="auth-input-box">
                   <span className="material-symbols-outlined icon-left">lock</span>
@@ -259,22 +235,6 @@ export const LoginPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="auth-opt-row">
-                <label className="auth-remember-lbl">
-                  <input
-                    type="checkbox"
-                    checked={rememberPost}
-                    onChange={(e) => setRememberPost(e.target.checked)}
-                  />
-                  <span>Mémoriser le poste (24h)</span>
-                </label>
-
-                <span className="auth-enc-badge">
-                  <i />
-                  Chiffrement AES-256
-                </span>
-              </div>
-
               <button
                 type="submit"
                 disabled={loading}
@@ -287,38 +247,15 @@ export const LoginPage: React.FC = () => {
                   {loading ? 'refresh' : 'login'}
                 </span>
                 <span>
-                  {loading ? 'Connexion en cours...' : ROLE_CONFIGS[activeRole].btnText}
+                  {loading ? 'Connexion...' : 'Se connecter'}
                 </span>
               </button>
             </form>
           </div>
 
-          {/* Citizen Redirection Box */}
-          <div className="auth-citizen-card">
-            <div className="auth-citizen-left">
-              <p>
-                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--crit)' }}>
-                  emergency
-                </span>
-                Vous êtes un citoyen ou témoin d'une inondation ?
-              </p>
-              <small>Aucun compte n'est nécessaire pour déclarer un sinistre.</small>
-            </div>
-            <div className="auth-citizen-actions">
-              <Link to="/signaler" className="auth-citizen-btn report">
-                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                  warning
-                </span>
-                Signaler
-              </Link>
-            </div>
-          </div>
-
-          {/* Legal / Institutional Footer */}
-          <footer className="auth-legal-footer">
-            <p>République de Côte d'Ivoire • Ministère de la Sécurité &amp; de la Protection Civile</p>
-            <p>Plateforme O.I.D. — Version 2.4-PROD • Hébergement souverain certifié</p>
-          </footer>
+          <p className="auth-citizen-line">
+            Témoin d'une inondation ? <Link to="/signaler">Signaler un sinistre</Link>
+          </p>
         </div>
       </main>
     </div>

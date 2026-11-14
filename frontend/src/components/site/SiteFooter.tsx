@@ -26,8 +26,8 @@ export const SiteFooter: React.FC = () => {
           <div className="site-footer-about">
             <div className="site-footer-title">OID · Observatoire Inondations &amp; Dommages</div>
             <p>
-              Outil d&apos;intérêt général développé avec les collectivités locales, les services de
-              secours et la protection civile pour faire remonter les données de crues.
+              Outil citoyen indépendant pour faire remonter les données de crues et de dommages.
+              Il n&apos;est affilié à aucun organisme public.
             </p>
           </div>
 
@@ -54,8 +54,8 @@ export const SiteFooter: React.FC = () => {
 
         <div className="site-footer-bottom">
           <div className="site-wrap">
-            © {YEAR} Observatoire Inondations &amp; Dommages — District Autonome d&apos;Abidjan. Service
-            public citoyen.
+            © {YEAR} Observatoire Inondations &amp; Dommages — Abidjan. Projet citoyen indépendant,
+            non officiel.
           </div>
         </div>
       </footer>

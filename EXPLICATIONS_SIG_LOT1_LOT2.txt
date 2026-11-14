@@ -9,7 +9,7 @@ OBJECTIFS DU PROJET ET APPORTS OPERATIONNELS DE CHAQUE ELEMENT
 L'objectif fondamental d'O.I.D est de transformer en temps reel des signalements
 citoyens heterogenes a Abidjan en :
   1. Decisions operationnelles de secours immediates (affectation prioritaire des
-     enqueteurs et des equipes de secours ONPC/Protection Civile, estimation des
+     enqueteurs et des equipes de secours, estimation des
      vies humaines menacees, identification des quartiers enclaves).
   2. Detection precoce des ruptures reseau (identifier les secteurs inondables
      qui ne remontent plus d'alerte suite a des coupures de courant ou telecomes).

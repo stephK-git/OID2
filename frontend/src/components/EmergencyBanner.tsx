@@ -13,11 +13,11 @@ export const EmergencyBanner: React.FC = () => {
           </span>
         </div>
         <div className="emergency-numbers">
-          <a href="tel:180" className="emergency-btn emergency-btn-gspm" title="Appeler le GSPM (Sapeurs-pompiers)">
+          <a href="tel:180" className="emergency-btn emergency-btn-gspm" title="Appeler les sapeurs-pompiers (180)">
             <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
               call
             </span>
-            <span>GSPM 180</span>
+            <span>Pompiers 180</span>
           </a>
           <a href="tel:112" className="emergency-btn emergency-btn-112" title="Appeler le numéro d'urgence 112">
             <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>

@@ -370,7 +370,7 @@ body {
 }
 
 /* ==========================================================================
-   DIRECTION ARTISTIQUE O.I.D. OFFICIELLE : POSTE DE COMMANDEMENT (COORDINATEUR)
+   DIRECTION ARTISTIQUE O.I.D. : POSTE DE COMMANDEMENT (COORDINATEUR)
    ========================================================================== */
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .eyebrow { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; color: var(--tx3); }
@@ -678,7 +678,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 .d-top h2 { font: 600 16px var(--mono); margin: 0; color: var(--tx); }
 .d-in { padding: 18px 22px; display: grid; gap: 16px; align-content: start; }
 .d-in blockquote { border-left: 2px solid var(--water); padding: 10px 14px; margin: 0; background: var(--s2); border-radius: 0 var(--r-md) var(--r-md) 0; color: var(--tx2); font-size: 13.5px; line-height: 1.6; }
-.specs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.specs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .spec { padding: 13px 16px; border-left: 1px solid var(--line); min-width: 0; }
 .spec:first-child { border-left: 0; }
 .spec .v { font-weight: 800; font-size: 15px; margin-top: 3px; color: var(--tx); }
@@ -2284,7 +2284,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 
 
 /* ==========================================================================
-   REFONTE MODERNE — POSTE DE COMMANDEMENT COORDINATEUR (GOVTECH / SÉCURITÉ CIVILE)
+   REFONTE MODERNE — POSTE DE COMMANDEMENT COORDINATEUR
    ========================================================================== */
 
 .coord-shell {
@@ -3788,7 +3788,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   font-size: 18px;
 }
 
-/* Barre d'appel rapide GSPM 180 / 112 */
+/* Barre d'appel rapide 180 / 112 */
 .oid-emergency-strip {
   display: flex;
   align-items: center;
@@ -5434,7 +5434,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
     line-height: 1.35;
   }
 
-  /* Barre d'appel rapide GSPM 180 / 112 */
+  /* Barre d'appel rapide 180 / 112 */
   .oid-emergency-strip {
     gap: 0.5rem;
   }
@@ -6128,6 +6128,8 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   padding: 1.05rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  /* La file est une colonne flex à hauteur contrainte : sans cela, les cartes s'écrasent */
+  flex-shrink: 0;
 }
 
 .verif-qcard:hover {
@@ -6187,11 +6189,11 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   border-color: color-mix(in srgb, var(--water) 35%, transparent);
 }
 
-.text-cyan { color: var(--v-primary-container) !important; }
+.text-cyan { color: var(--water) !important; }
 .text-coral { color: var(--v-error) !important; }
 .text-amber { color: var(--warn) !important; }
 .text-sky { color: var(--v-secondary) !important; }
-.text-mint { color: var(--v-tertiary-container) !important; }
+.text-mint { color: var(--ok) !important; }
 
 .verif-qcard-badges {
   display: flex;
@@ -7246,9 +7248,6 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
     padding-bottom: 0.75rem;
   }
 
-  .verif-qcard {
-    flex-shrink: 0;
-  }
 
   /* Colonne droite : carte de qualification calée dans le viewport
      avec en-tête épinglé en haut, corps défilant au centre, et actions épinglées en bas */
@@ -10083,7 +10082,9 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
    O.I.D. POSTE DE COMMANDEMENT — PORTAIL D'AUTHENTIFICATION SÉCURISÉ (LOGIN)
    ========================================================================== */
 .oid-auth-shell {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background-color: var(--bg);
@@ -10092,7 +10093,6 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   color: var(--tx);
   font-family: var(--font-sans);
   position: relative;
-  overflow-x: hidden;
 }
 
 .auth-top-bar {
@@ -10167,22 +10167,23 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 36px 16px;
+  padding: 12px 16px;
+  min-height: 0;
 }
 
 .auth-center-wrap {
   width: 100%;
-  max-width: 540px;
+  max-width: 460px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
 .auth-hq-card {
   background: var(--s1);
   border: 1px solid var(--line2);
   border-radius: 18px;
-  padding: 30px;
+  padding: 24px 26px;
   box-shadow: 0 30px 60px -15px var(--shadow);
   position: relative;
   overflow: hidden;
@@ -10217,7 +10218,7 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 }
 
 .role-presets-block {
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .role-presets-lbl {
@@ -10285,10 +10286,10 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 }
 
 .auth-form-body {
-  margin-top: 22px;
+  margin-top: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .auth-field {
@@ -10507,6 +10508,22 @@ button.ph:hover { color: var(--tx); border-color: var(--water); }
 
 .auth-citizen-btn.track:hover {
   border-color: var(--water);
+}
+
+.auth-citizen-line {
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--tx3);
+}
+
+.auth-citizen-line a {
+  color: var(--crit);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-citizen-line a:hover {
+  text-decoration: underline;
 }
 
 .auth-legal-footer {

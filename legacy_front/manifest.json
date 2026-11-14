@@ -1,7 +1,7 @@
 {
   "name": "O.I.D Observatoire Inondations & Dommages",
   "short_name": "O.I.D",
-  "description": "Plateforme nationale de signalement, vérification et gestion des inondations en Côte d'Ivoire",
+  "description": "Plateforme citoyenne de signalement, vérification et gestion des inondations en Côte d'Ivoire",
   "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#f7fafd",
