@@ -99,6 +99,9 @@ export const resolveIncidentCommune = (inc: IncidentItem, zones: ZoneItem[]): st
   return 'District Autonome d’Abidjan';
 };
 
+/** Référence d'incident affichée partout de la même façon (Carte, Incidents, recherche). */
+export const formatIncidentRef = (inc: Pick<IncidentItem, 'id'>): string => `#INC-${inc.id}`;
+
 export const needsAssignment = (inc: IncidentItem): boolean =>
   ['ouvert', 'rouvert'].includes(inc.statut) && !inc.enqueteur_id;
 

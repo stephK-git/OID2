@@ -40,7 +40,8 @@ def test_gestion_utilisateurs_cycle_complet(client: TestClient, auth_coordinateu
 
     # 6. Réinitialisation mot de passe
     r_pwd = client.patch(
-        f"/coordination/utilisateurs/{uid}/mot-de-passe?nouveau_mot_de_passe=NouveauPass2026!",
+        f"/coordination/utilisateurs/{uid}/mot-de-passe",
+        json={"nouveau_mot_de_passe": "NouveauPass2026!"},
         headers=auth_coordinateur,
     )
     assert r_pwd.status_code == 200
@@ -91,3 +92,20 @@ def test_coordination_stats_enrichies(client: TestClient, auth_coordinateur: dic
     assert "par_statut" in data
     assert "par_type" in data
 
+
+
+def test_coordinateur_ne_peut_pas_modifier_son_propre_role(client: TestClient, auth_coordinateur: dict) -> None:
+    users = client.get("/coordination/utilisateurs", headers=auth_coordinateur).json()
+    moi = next(u for u in users if u["email"] == "coordinateur@test.local")
+    r = client.patch(f"/coordination/utilisateurs/{moi['id']}", json={"role": "enqueteur"}, headers=auth_coordinateur)
+    assert r.status_code == 409
+
+
+def test_mot_de_passe_trop_court_refuse(client: TestClient, auth_coordinateur: dict) -> None:
+    users = client.get("/coordination/utilisateurs", headers=auth_coordinateur).json()
+    r = client.patch(
+        f"/coordination/utilisateurs/{users[0]['id']}/mot-de-passe",
+        json={"nouveau_mot_de_passe": "court"},
+        headers=auth_coordinateur,
+    )
+    assert r.status_code == 422

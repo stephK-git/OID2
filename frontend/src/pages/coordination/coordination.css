@@ -966,3 +966,1323 @@
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   Carte : panneau des indicateurs, cartes prioritaires
+   ========================================================================== */
+.page-coordinateur .oid-map-kpi-sidebar-subtitle,
+.page-coordinateur .oid-map-kpi-sec-title,
+.page-coordinateur .oid-map-kpi-card-hint {
+  font-size: 11px;
+}
+
+.page-coordinateur .oid-map-kpi-card-label,
+.page-coordinateur .oid-map-kpi-impact-l {
+  font-size: 12px;
+}
+
+/* Bordure d'accent qui suit l'arrondi de la carte */
+.page-coordinateur .oid-coord-alpha-card {
+  border: 1px solid var(--line);
+  box-shadow: inset 4px 0 0 var(--water);
+  padding-left: calc(1.25rem + 4px);
+}
+
+.page-coordinateur .oid-coord-alpha-card.alpha-danger {
+  box-shadow: inset 4px 0 0 var(--crit);
+  border-color: color-mix(in srgb, var(--crit) 35%, var(--line));
+}
+
+/* Le point d'état ne chevauche plus le libellé */
+.page-coordinateur .oid-coord-alpha-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.page-coordinateur .oid-coord-alpha-badge .oid-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+}
+
+.page-coordinateur .oid-coord-alpha-links {
+  display: inline-flex;
+  gap: 14px;
+}
+
+/* ==========================================================================
+   Incidents : barre de filtres, file, détail
+   ========================================================================== */
+.page-coordinateur .oid-coord-incidents-wrap .oid-coord-map-filters-left {
+  flex: 1;
+}
+
+.page-coordinateur .oid-coord-incidents-wrap .oid-coord-filter-chip.search {
+  flex: 1 1 320px;
+  min-width: 260px;
+  max-width: 460px;
+}
+
+.page-coordinateur .oid-coord-incidents-wrap .oid-coord-filter-chip.search input {
+  width: 100%;
+}
+
+.page-coordinateur .oid-coord-export-menu .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Le compteur utilisait une couleur de fond (water-dim) : quasi invisible */
+.page-coordinateur .verif-queue-live-count {
+  color: var(--water-hi);
+  font-weight: 600;
+}
+
+.page-coordinateur .verif-section-head {
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+
+.page-coordinateur .verif-section-head .verif-spec-lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.page-coordinateur .verif-section-head .oid-coord-locate-link {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Comptes & Enquêteurs
+   ========================================================================== */
+.coord-comptes {
+  padding: 20px 20px 32px;
+}
+
+.coord-comptes-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.coord-comptes-kpi {
+  --kpi-accent: var(--tx2);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: inset 0 3px 0 var(--kpi-accent);
+}
+
+.coord-comptes-kpi.is-ok { --kpi-accent: var(--ok); }
+.coord-comptes-kpi.is-water { --kpi-accent: var(--water); }
+.coord-comptes-kpi.is-violet { --kpi-accent: #9b7be0; }
+
+.coord-comptes-kpi-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 22px;
+  color: var(--kpi-accent);
+  background: color-mix(in srgb, var(--kpi-accent) 14%, transparent);
+}
+
+.coord-comptes-kpi-lbl {
+  display: block;
+  font: 600 11px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+.coord-comptes-kpi strong {
+  font-size: 26px;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx);
+}
+
+.coord-comptes .oid-coord-table td {
+  vertical-align: middle;
+}
+
+.coord-agent-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.coord-agent-avatar {
+  --role: var(--tx3);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font: 700 12px var(--mono);
+  color: var(--role);
+  background: color-mix(in srgb, var(--role) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--role) 35%, transparent);
+}
+
+.coord-agent-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.coord-agent-id strong {
+  white-space: nowrap;
+}
+
+.coord-agent-id .mono {
+  font-size: 12px;
+  color: var(--tx3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Une couleur par rôle ; le rouge reste réservé aux comptes suspendus */
+.coord-agent-avatar.role-enqueteur,
+.coord-role-pill.role-enqueteur { --role: var(--ok); }
+.coord-agent-avatar.role-verificateur,
+.coord-role-pill.role-verificateur { --role: var(--water); }
+.coord-agent-avatar.role-coordinateur,
+.coord-role-pill.role-coordinateur { --role: #9b7be0; }
+
+.coord-role-pill {
+  --role: var(--tx3);
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font: 600 11px var(--mono);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--role);
+  background: color-mix(in srgb, var(--role) 13%, transparent);
+}
+
+.coord-account-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.coord-account-state i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.coord-account-state.is-active { color: var(--ok); }
+.coord-account-state.is-active i { background: var(--ok); }
+.coord-account-state.is-suspended { color: var(--crit); }
+.coord-account-state.is-suspended i { background: var(--crit); }
+
+.coord-row-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.coord-icon-action {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tx2);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.coord-icon-action .material-symbols-outlined {
+  font-size: 19px;
+}
+
+.coord-icon-action:hover {
+  background: var(--s2);
+  border-color: var(--line);
+  color: var(--tx);
+}
+
+.coord-icon-action.is-danger:hover {
+  color: var(--crit);
+  background: var(--crit-dim);
+}
+
+.coord-icon-action.is-ok:hover {
+  color: var(--ok);
+  background: var(--ok-dim);
+}
+
+.coord-icon-action:focus-visible {
+  outline: 2px solid var(--water);
+  outline-offset: 1px;
+}
+
+@media (max-width: 1024px) {
+  .coord-comptes-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ==========================================================================
+   Mobile : barre latérale compacte (marque + compte sur une ligne, onglets défilants)
+   ========================================================================== */
+@media (max-width: 860px) {
+  .page-coordinateur .sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    box-shadow: none;
+  }
+
+  .page-coordinateur .sidebar-header {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 16px;
+    border-bottom: 0;
+  }
+
+  .page-coordinateur .sidebar-footer {
+    order: 2;
+    margin-top: 0;
+    padding: 8px 16px;
+    border-top: 0;
+  }
+
+  .page-coordinateur .sidebar-footer .user-info {
+    display: none;
+  }
+
+  .page-coordinateur .sidebar-footer .avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .page-coordinateur .sidebar-nav {
+    order: 3;
+    flex: 0 0 100%;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    border-top: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+
+  .page-coordinateur .nav-group {
+    display: contents;
+  }
+
+  .page-coordinateur .nav-label {
+    display: none;
+  }
+
+  .page-coordinateur .nav-item {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .coord-comptes {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 560px) {
+  .coord-comptes-kpi {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .coord-comptes-kpi-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+  }
+
+  .coord-comptes-kpi strong {
+    font-size: 22px;
+  }
+}
+
+/* Tableau des comptes : plus compact, la colonne Secteur passe sous le nom quand la place manque */
+.coord-comptes .oid-coord-table th,
+.coord-comptes .oid-coord-table td {
+  padding-inline: 14px;
+}
+
+.coord-agent-zone {
+  display: none;
+  font-size: 12px;
+  color: var(--tx2);
+}
+
+@media (max-width: 1180px) {
+  .coord-comptes .coord-col-zone {
+    display: none;
+  }
+
+  .coord-agent-zone {
+    display: block;
+  }
+}
+
+.coord-agent-id {
+  max-width: 230px;
+}
+
+@media (max-width: 1180px) {
+  .coord-comptes .oid-coord-table th,
+  .coord-comptes .oid-coord-table td {
+    padding-inline: 10px;
+  }
+
+  .coord-agent-id {
+    max-width: 170px;
+  }
+}
+
+.page-coordinateur .oid-coord-alpha-foot {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.page-coordinateur .oid-coord-alpha-time {
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .coord-comptes .coord-role-pill {
+    white-space: normal;
+  }
+}
+
+/* ==========================================================================
+   Contrôles modernes : recherche, filtres en pastilles, tri segmenté (.cf-*)
+   Composants : FilterControls.tsx
+   ========================================================================== */
+.page-coordinateur .cf-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch !important;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.page-coordinateur .cf-bar-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.page-coordinateur .cf-bar > .cf-bar-row,
+.page-coordinateur .cf-bar > .cf-chips {
+  width: 100%;
+  max-width: 100%;
+}
+
+.page-coordinateur .cf-bar-row-grow {
+  flex: 1;
+}
+
+/* ---- Recherche ---- */
+.page-coordinateur .cf-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 8px 0 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: text;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.page-coordinateur .cf-search:hover {
+  border-color: var(--line2);
+}
+
+.page-coordinateur .cf-search:focus-within {
+  background: var(--s1);
+  border-color: var(--water);
+  box-shadow: 0 0 0 3px var(--water-dim);
+}
+
+.page-coordinateur .cf-search-grow {
+  flex: 1 1 280px;
+  min-width: 220px;
+  max-width: 520px;
+}
+
+.page-coordinateur .cf-search-icon {
+  font-size: 19px;
+  color: var(--tx3);
+  transition: color 0.15s ease;
+}
+
+.page-coordinateur .cf-search:focus-within .cf-search-icon {
+  color: var(--water);
+}
+
+.page-coordinateur .cf-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--tx);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.page-coordinateur .cf-search input::placeholder {
+  color: var(--tx3);
+}
+
+.page-coordinateur .cf-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.page-coordinateur .cf-search-clear {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--s3);
+  color: var(--tx2);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.page-coordinateur .cf-search-clear:hover {
+  background: var(--crit-dim);
+  color: var(--crit);
+}
+
+.page-coordinateur .cf-search-clear .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.page-coordinateur .cf-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--s1);
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  line-height: 1;
+}
+
+.page-coordinateur .cf-search:focus-within .cf-kbd {
+  opacity: 0;
+}
+
+/* ---- Pastilles de filtre ---- */
+.page-coordinateur .cf-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+  padding: 1px;
+}
+
+.page-coordinateur .cf-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.page-coordinateur .cf-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tx2);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.page-coordinateur .cf-chip:not(:has(.cf-chip-count)) {
+  padding-right: 12px;
+}
+
+.page-coordinateur .cf-chip:hover {
+  border-color: var(--line2);
+  background: var(--s2);
+  color: var(--tx);
+}
+
+.page-coordinateur .cf-chip:focus-visible,
+.page-coordinateur .cf-seg:focus-visible,
+.page-coordinateur .cf-search-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.page-coordinateur .cf-chip-icon {
+  font-size: 16px;
+  margin-left: -2px;
+}
+
+.page-coordinateur .cf-chip-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--s3);
+  color: var(--tx2);
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-coordinateur .cf-chip.is-active {
+  border-color: var(--water);
+  background: var(--water);
+  color: #fff;
+}
+
+.page-coordinateur .cf-chip.is-active .cf-chip-count {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+/* Les pastilles critiques gardent leur teinte même inactives, pour rester repérables */
+.page-coordinateur .cf-chip.tone-danger:not(.is-active) .cf-chip-icon,
+.page-coordinateur .cf-chip.tone-danger:not(.is-active) .cf-chip-count {
+  color: var(--crit);
+}
+
+.page-coordinateur .cf-chip.tone-danger:not(.is-active) .cf-chip-count {
+  background: var(--crit-dim);
+}
+
+.page-coordinateur .cf-chip.tone-danger.is-active {
+  border-color: var(--crit);
+  background: var(--crit);
+}
+
+.page-coordinateur .cf-chip.tone-warn:not(.is-active) .cf-chip-count {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+/* ---- Tri segmenté ---- */
+.page-coordinateur .cf-segmented-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-coordinateur .cf-segmented-prefix {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--tx3);
+}
+
+.page-coordinateur .cf-segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  background: var(--s2);
+  border: 1px solid var(--line);
+}
+
+.page-coordinateur .cf-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tx2);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.page-coordinateur .cf-seg .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.page-coordinateur .cf-seg:hover {
+  color: var(--tx);
+}
+
+.page-coordinateur .cf-seg.is-active {
+  background: var(--s1);
+  color: var(--water);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- Bouton Exports aligné sur la hauteur des contrôles ---- */
+.page-coordinateur .cf-bar .oid-coord-export-menu {
+  margin-left: auto;
+}
+
+.page-coordinateur .cf-btn {
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--s1);
+  color: var(--tx);
+  font-weight: 600;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.page-coordinateur .cf-btn:hover,
+.page-coordinateur .cf-btn[aria-expanded='true'] {
+  border-color: var(--line2);
+  background: var(--s2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-coordinateur .cf-search,
+  .page-coordinateur .cf-chip,
+  .page-coordinateur .cf-seg {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-coordinateur .cf-search-grow {
+    flex-basis: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .page-coordinateur .cf-segmented-prefix,
+  .page-coordinateur .cf-kbd {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   Incidents & Historique sur tablette / téléphone (≤ 900px)
+   La vue bureau a 2 colonnes à hauteur fixe ; ici tout s'empile et la page défile.
+   ========================================================================== */
+@media (max-width: 900px) {
+  /* L'en-tête de page ne reste plus épinglé : il prenait un quart de l'écran */
+  .page-coordinateur .top-bar {
+    position: static;
+  }
+
+  /* Sans ça, la zone est écrasée à la hauteur restante de l'écran (flex-shrink) */
+  .page-coordinateur .oid-coord-incidents-wrap {
+    flex-shrink: 0;
+    height: auto;
+    overflow: visible;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .verif-grid {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .verif-queue-col {
+    height: auto;
+    overflow: visible;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .verif-queue-list {
+    max-height: min(52vh, 440px) !important;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .verif-detail-col,
+  .page-coordinateur .oid-coord-incidents-wrap .verif-detail-card {
+    height: auto;
+    max-height: none !important;
+    overflow: visible;
+  }
+
+  /* Le détail s'affiche en entier dans le défilement de la page */
+  .page-coordinateur .oid-coord-incidents-wrap .verif-detail-scroll-body {
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* La mini-carte Leaflet (z-index 400 à 1000) passerait sinon par-dessus la barre d'actions */
+  .page-coordinateur .oid-coord-incidents-wrap .verif-minimap-wrap {
+    isolation: isolate;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .verif-queue-header {
+    gap: 12px;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .verif-queue-live-count {
+    white-space: nowrap;
+  }
+
+  /* Les actions (affecter, clôturer, rouvrir) restent accessibles en bas de l'écran */
+  .page-coordinateur .oid-coord-incidents-wrap .verif-actions-footer {
+    position: sticky;
+    bottom: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-coordinateur .top-bar {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+
+  .page-coordinateur .page-title {
+    font-size: 18px;
+  }
+
+  .page-coordinateur .page-subtitle {
+    font-size: 12px;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .oid-coord-map-filterbar.compact {
+    padding: 10px 16px;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .verif-detail-header.oid-coord-dhead-compact {
+    padding: 10px 16px;
+    row-gap: 4px;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .verif-detail-scroll-body {
+    padding: 14px 16px;
+  }
+
+  .page-coordinateur .oid-coord-incidents-wrap .verif-actions-footer.oid-coord-dfoot-compact {
+    padding: 10px 16px;
+  }
+
+  /* Grille d'infos essentielles sur une colonne */
+  .page-coordinateur .oid-coord-incidents-wrap .verif-specs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Affectation : liste déroulante pleine largeur, boutons côte à côte dessous */
+  .page-coordinateur .oid-coord-assign-row > .verif-reject-input-wrap {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+
+  .page-coordinateur .oid-coord-assign-row > button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  .page-coordinateur .verif-reject-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-coordinateur .verif-reject-row .verif-btn-validate {
+    width: 100% !important;
+    justify-content: center;
+  }
+}
+
+/* ==========================================================================
+   Historique : tableau des incidents clôturés + rapport en pleine page
+   Composant : HistoriqueTab.tsx
+   ========================================================================== */
+.page-coordinateur .coord-hist {
+  padding: 20px 20px 32px;
+}
+
+.page-coordinateur .coord-hist-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.page-coordinateur .coord-hist-count {
+  font-size: 0.8125rem;
+  color: var(--tx2);
+}
+
+.page-coordinateur .coord-hist-count b {
+  color: var(--tx);
+  font-variant-numeric: tabular-nums;
+}
+
+.page-coordinateur .coord-hist-row {
+  cursor: pointer;
+}
+
+.page-coordinateur .coord-hist-row:focus-within td {
+  background: var(--s2);
+}
+
+.page-coordinateur .coord-hist-date {
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--tx2);
+}
+
+.page-coordinateur .coord-hist-danger {
+  color: var(--crit);
+  font-weight: 600;
+}
+
+.page-coordinateur .coord-hist-bilan {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.page-coordinateur .coord-hist-bilan b {
+  font-variant-numeric: tabular-nums;
+}
+
+.page-coordinateur .coord-hist-bilan .is-crit {
+  font-size: 11.5px;
+  color: var(--crit);
+}
+
+.page-coordinateur .coord-hist-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  white-space: nowrap;
+}
+
+.page-coordinateur .coord-hist-open .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.page-coordinateur .coord-hist-row:hover .coord-hist-open {
+  border-color: var(--water);
+  color: var(--water);
+}
+
+.page-coordinateur .coord-hist-empty-row:hover td {
+  background: transparent;
+}
+
+.page-coordinateur .coord-hist-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--tx3);
+}
+
+.page-coordinateur .coord-hist-empty .material-symbols-outlined {
+  font-size: 32px;
+  opacity: 0.6;
+}
+
+.page-coordinateur .coord-hist-empty b {
+  color: var(--tx);
+}
+
+.page-coordinateur .coord-hist-empty .cf-btn {
+  margin-top: 8px;
+  height: 32px;
+}
+
+.page-coordinateur .coord-hist-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--tx2);
+}
+
+.page-coordinateur .coord-hist-pagination .cf-btn {
+  height: 32px;
+}
+
+/* ---- Rapport en pleine page ---- */
+.page-coordinateur .coord-hist-report {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 20px 32px;
+  scroll-margin-top: 80px;
+}
+
+.page-coordinateur .coord-hist-report-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 14px;
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.page-coordinateur .coord-hist-report-bar .cf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+}
+
+.page-coordinateur .coord-hist-report-bar .cf-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.page-coordinateur .coord-hist-report-bar .cf-btn.is-pressed {
+  border-color: var(--water);
+  background: var(--water-dim);
+  color: var(--water);
+}
+
+.page-coordinateur .coord-hist-report-meta {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.page-coordinateur .coord-hist-report-id {
+  font-size: 13px;
+  color: var(--tx2);
+}
+
+.page-coordinateur .coord-hist-report-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.page-coordinateur .coord-hist-reopen {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.page-coordinateur .coord-hist-reopen-input {
+  flex: 1 1 280px;
+}
+
+.page-coordinateur .coord-hist-reopen-input.is-error {
+  border-color: var(--crit);
+  box-shadow: 0 0 0 3px var(--crit-dim);
+}
+
+.page-coordinateur .coord-hist-reopen-btn {
+  width: auto !important;
+  height: 38px;
+  padding: 0 18px !important;
+  border-radius: 999px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ---- Incident clôturé sans rapport ---- */
+.page-coordinateur .coord-hist-noreport {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.page-coordinateur .coord-hist-noreport > .material-symbols-outlined {
+  font-size: 28px;
+  color: var(--tx3);
+}
+
+.page-coordinateur .coord-hist-noreport h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--tx);
+}
+
+.page-coordinateur .coord-hist-noreport p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tx2);
+}
+
+.page-coordinateur .coord-hist-facts {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 10px 0 0;
+}
+
+.page-coordinateur .coord-hist-facts div {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+
+.page-coordinateur .coord-hist-facts dt {
+  font: 600 10.5px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+.page-coordinateur .coord-hist-facts dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+  color: var(--tx);
+}
+
+.page-coordinateur .coord-hist-noreport blockquote {
+  margin: 6px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--line2);
+  color: var(--tx2);
+  font-size: 13px;
+}
+
+/* ---- Téléphone : chaque ligne du tableau devient une fiche compacte ---- */
+@media (max-width: 720px) {
+  .page-coordinateur .coord-hist,
+  .page-coordinateur .coord-hist-report {
+    padding: 14px 12px 24px;
+  }
+
+  .page-coordinateur .coord-hist-panel {
+    padding: 14px;
+  }
+
+  .page-coordinateur .coord-hist-table {
+    border: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .page-coordinateur .coord-hist-table thead {
+    display: none;
+  }
+
+  .page-coordinateur .coord-hist-table table {
+    display: block;
+  }
+
+  .page-coordinateur .coord-hist-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .page-coordinateur .coord-hist-table tr.coord-hist-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--s1);
+  }
+
+  .page-coordinateur .coord-hist-table tr.coord-hist-row td {
+    display: block;
+    padding: 0;
+    border: none;
+    background: transparent !important;
+  }
+
+  /* Ligne 1 : réf + date ; ligne 2 : type et commune ; ligne 3 : enquêteur + rapport ; puis bilan et bouton */
+  .page-coordinateur .coord-hist-row td[data-label="Réf."] {
+    grid-column: 1;
+    display: flex !important;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .page-coordinateur .coord-hist-row td[data-label="Réf."] .sub {
+    display: inline;
+  }
+
+  .page-coordinateur .coord-hist-row td[data-label="Clôturé le"] {
+    grid-column: 2;
+    text-align: right;
+  }
+
+  .page-coordinateur .coord-hist-row td[data-label="Type"] {
+    grid-column: 1 / -1;
+  }
+
+  .page-coordinateur .coord-hist-row td[data-label="Enquêteur"] {
+    grid-column: 1;
+    font-size: 12.5px;
+    color: var(--tx2);
+  }
+
+  .page-coordinateur .coord-hist-row td[data-label="Enquêteur"]::before {
+    content: "Enquêteur : ";
+    color: var(--tx3);
+  }
+
+  .page-coordinateur .coord-hist-row td[data-label="Rapport"] {
+    grid-column: 2;
+    grid-row: 3;
+    text-align: right;
+  }
+
+  .page-coordinateur .coord-hist-row td[data-label="Bilan"] {
+    grid-column: 1 / -1;
+  }
+
+  .page-coordinateur .coord-hist-row td[data-label="Bilan"] .coord-hist-bilan {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  .page-coordinateur .coord-hist-row td[data-label="Bilan"]:has(> .sub) {
+    display: none;
+  }
+
+  .page-coordinateur .coord-hist-row .coord-hist-actions {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    text-align: left;
+  }
+
+  .page-coordinateur .coord-hist-open {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .page-coordinateur .coord-hist-empty-row,
+  .page-coordinateur .coord-hist-empty-row td {
+    display: block;
+    border: none;
+  }
+
+  .page-coordinateur .coord-hist-report-bar {
+    padding: 10px 12px;
+  }
+
+  .page-coordinateur .coord-hist-report-bar > .cf-btn span:last-child {
+    display: none;
+  }
+
+  .page-coordinateur .coord-hist-report-meta {
+    flex-basis: 0;
+    flex-grow: 1;
+  }
+
+  .page-coordinateur .coord-hist-report-meta .chip {
+    display: none;
+  }
+
+  .page-coordinateur .coord-hist-report-actions {
+    flex-basis: 100%;
+  }
+
+  .page-coordinateur .coord-hist-report-actions .cf-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .page-coordinateur .coord-hist-reopen-btn {
+    flex: 1 1 100%;
+  }
+
+  .page-coordinateur .coord-hist-pagination {
+    flex-direction: column;
+  }
+}
+
+.page-coordinateur .coord-hist-ref {
+  font-family: var(--mono);
+  font-size: 11px !important;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  /* Le tri segmenté prend toute la largeur : chaque option se partage l'espace */
+  .page-coordinateur .cf-bar-row .cf-segmented-wrap {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .page-coordinateur .cf-bar-row .cf-segmented {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .page-coordinateur .cf-bar-row .cf-seg {
+    flex: 1;
+    justify-content: center;
+    padding: 0 8px;
+    min-width: 0;
+  }
+}

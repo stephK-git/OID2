@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../api/client';
+import { FilterChips } from './FilterControls';
 import {
   SigAnalysisMap,
   type PointChaud,
@@ -11,6 +12,7 @@ import type { CoordData, IncidentItem, IncidentStatusFilter, MapQuickFilter } fr
 import {
   IncidentStatusBadge,
   WaterGauge,
+  formatIncidentRef,
   formatRelativeTime,
   getIncidentTypeMeta,
   resolveIncidentCommune,
@@ -21,7 +23,7 @@ const EMPTY_HOTSPOTS: PointChaud[] = [];
 const EMPTY_VULNERABILITIES: IndiceVulnerabilite[] = [];
 const EMPTY_SILENT_ZONES: ZoneSilencieuse[] = [];
 const NOOP_HEX_THEME = () => {};
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 
 interface CarteTabProps {
   data: CoordData;
@@ -158,6 +160,13 @@ export const CarteTab: React.FC<CarteTabProps> = ({
 
   const renderActionCell = (inc: IncidentItem) => {
     if (affectingId === inc.id) {
+      const commune = resolveIncidentCommune(inc, zones).toLowerCase();
+      const isSameZone = (zoneNom?: string | null) => Boolean(zoneNom) && zoneNom!.toLowerCase() === commune;
+      const sortedEnqueteurs = [...enqueteurs].sort((a, b) => {
+        const za = isSameZone(a.zone_nom) ? 0 : 1;
+        const zb = isSameZone(b.zone_nom) ? 0 : 1;
+        return za - zb || a.dossiers_actifs - b.dossiers_actifs;
+      });
       return (
         <div className="oid-coord-inline-assign">
           <select
@@ -167,8 +176,9 @@ export const CarteTab: React.FC<CarteTabProps> = ({
             aria-label="Sélectionner un enquêteur"
           >
             <option value="">Choisir un enquêteur...</option>
-            {enqueteurs.map((enq) => (
+            {sortedEnqueteurs.map((enq) => (
               <option key={enq.id} value={enq.id}>
+                {isSameZone(enq.zone_nom) ? '★ ' : ''}
                 {enq.nom} ({enq.dossiers_actifs} actifs)
               </option>
             ))}
@@ -190,25 +200,30 @@ export const CarteTab: React.FC<CarteTabProps> = ({
       );
     }
 
+    const startAffecting = () => {
+      setAffectingId(inc.id);
+      setSelectedEnqueteurId(inc.enqueteur_id || '');
+    };
+
+    // Une seule action principale par statut, l'action secondaire reste discrète.
     return (
       <div className="oid-coord-actions-group">
-        {['ouvert', 'rouvert', 'affecte'].includes(inc.statut) && (
-          <button
-            type="button"
-            onClick={() => {
-              setAffectingId(inc.id);
-              setSelectedEnqueteurId(inc.enqueteur_id || '');
-            }}
-            className="oid-coord-btn-action primary"
-          >
+        {['ouvert', 'rouvert'].includes(inc.statut) && !inc.enqueteur_id && (
+          <button type="button" onClick={startAffecting} className="oid-coord-btn-action primary">
             Affecter
           </button>
         )}
-        {inc.statut !== 'cloture' ? (
-          <button type="button" onClick={() => handleCloturer(inc.id)} className="oid-coord-btn-action neutral">
+        {(inc.statut === 'affecte' || (['ouvert', 'rouvert'].includes(inc.statut) && inc.enqueteur_id)) && (
+          <button type="button" onClick={startAffecting} className="oid-coord-btn-action neutral">
+            Réaffecter
+          </button>
+        )}
+        {inc.statut === 'evalue' && (
+          <button type="button" onClick={() => handleCloturer(inc.id)} className="oid-coord-btn-action primary">
             Clôturer
           </button>
-        ) : (
+        )}
+        {inc.statut === 'cloture' && (
           <button type="button" onClick={() => handleRouvrir(inc.id)} className="oid-coord-btn-action reopen">
             Rouvrir
           </button>
@@ -305,8 +320,8 @@ export const CarteTab: React.FC<CarteTabProps> = ({
                   { icon: 'groups', label: 'Personnes', v: stats?.personnes_affectees, cls: '' },
                   { icon: 'personal_injury', label: 'Blessés', v: stats?.blesses, cls: 'text-warn' },
                   { icon: 'night_shelter', label: 'Déplacés', v: stats?.deplaces, cls: 'text-warn' },
-                  { icon: 'person_search', label: 'Disparus', v: stats?.disparus, cls: 'text-coral', pad: true },
-                  { icon: 'sentiment_very_dissatisfied', label: 'Décès', v: stats?.deces, cls: 'text-coral', pad: true },
+                  { icon: 'person_search', label: 'Disparus', v: stats?.disparus, cls: 'text-coral' },
+                  { icon: 'sentiment_very_dissatisfied', label: 'Décès', v: stats?.deces, cls: 'text-coral' },
                 ].map((it) => (
                   <div key={it.label} className="oid-map-kpi-impact-chip">
                     <div className="oid-map-kpi-impact-l">
@@ -319,7 +334,7 @@ export const CarteTab: React.FC<CarteTabProps> = ({
                       <span>{it.label}</span>
                     </div>
                     <span className={`oid-map-kpi-impact-v ${it.cls}`}>
-                      {it.pad ? String(it.v ?? 0).padStart(2, '0') : (it.v ?? 0).toLocaleString('fr-FR')}
+                      {(it.v ?? 0).toLocaleString('fr-FR')}
                     </span>
                   </div>
                 ))}
@@ -360,14 +375,14 @@ export const CarteTab: React.FC<CarteTabProps> = ({
       {topCriticalIncidents.length > 0 && (
         <div className="oid-coord-alpha-grid">
           {topCriticalIncidents.map((inc) => {
-            const zoneName = zones.find((z) => z.id === inc.zone_id)?.nom || 'District Abidjan';
+            const zoneName = resolveIncidentCommune(inc, zones);
             return (
-              <div key={inc.id} className="oid-coord-alpha-card">
+              <div key={inc.id} className={`oid-coord-alpha-card ${inc.danger_immediat ? 'alpha-danger' : 'alpha-primary'}`}>
                 <div className="oid-coord-alpha-top">
                   <div className="oid-coord-alpha-badge">
                     <span className={`oid-dot ${inc.danger_immediat ? 'bg-coral pulse' : 'bg-cyan'}`} />
                     <span className={inc.danger_immediat ? 'text-coral' : 'text-cyan'}>
-                      {inc.danger_immediat ? `URGENCE ALPHA #${inc.id}` : `INTERVENTION EN COURS #${inc.id}`}
+                      {inc.danger_immediat ? 'Urgence alpha' : 'Intervention en cours'} · {formatIncidentRef(inc)}
                     </span>
                   </div>
                   <span className="oid-coord-alpha-zone">{zoneName}</span>
@@ -381,6 +396,16 @@ export const CarteTab: React.FC<CarteTabProps> = ({
 
                 <div className="oid-coord-alpha-foot">
                   <span className="oid-coord-alpha-time">{formatRelativeTime(inc.cree_le)}</span>
+                  <div className="oid-coord-alpha-links">
+                  <button
+                    type="button"
+                    onClick={() => onOpenIncident(inc.id)}
+                    className="oid-coord-locate-link"
+                    title="Ouvrir le dossier dans l'onglet Incidents"
+                  >
+                    <span className="material-symbols-outlined">folder_open</span>
+                    <span>Dossier</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => onFocusIncident(inc.id)}
@@ -390,6 +415,7 @@ export const CarteTab: React.FC<CarteTabProps> = ({
                     <span className="material-symbols-outlined">my_location</span>
                     <span>Localiser</span>
                   </button>
+                  </div>
                 </div>
               </div>
             );
@@ -405,26 +431,28 @@ export const CarteTab: React.FC<CarteTabProps> = ({
             <h2>File priorisée des incidents ({filteredIncidents.length})</h2>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <div className="oid-coord-filter-chip">
-              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>filter_list</span>
-              <select
-                value={incidentFilter}
-                onChange={(e) => {
-                  onChangeIncidentFilter(e.target.value as IncidentStatusFilter);
-                  setTablePage(1);
-                }}
-                className="oid-coord-transparent-select"
-                aria-label="Filtrer par statut"
-              >
-                <option value="tous">Tous les incidents ({incidents.length})</option>
-                <option value="danger">Urgences vitales ({urgentCount(incidents)})</option>
-                <option value="a_affecter">À affecter sans enquêteur</option>
-                <option value="ouverts">Ouverts</option>
-                <option value="affectes">Affectés</option>
-                <option value="evalues">Évalués</option>
-                <option value="clotures">Clôturés</option>
-              </select>
-            </div>
+            <FilterChips<IncidentStatusFilter>
+              ariaLabel="Filtrer par statut"
+              value={incidentFilter}
+              onChange={(v) => {
+                onChangeIncidentFilter(v);
+                setTablePage(1);
+              }}
+              options={[
+                { value: 'tous', label: 'Tous', count: incidents.length },
+                { value: 'danger', label: 'Urgences', icon: 'emergency', tone: 'danger', count: urgentCount(incidents) },
+                {
+                  value: 'a_affecter',
+                  label: 'À affecter',
+                  tone: 'warn',
+                  count: incidents.filter((i) => ['ouvert', 'rouvert'].includes(i.statut) && !i.enqueteur_id).length,
+                },
+                { value: 'ouverts', label: 'Ouverts', count: incidents.filter((i) => ['ouvert', 'rouvert'].includes(i.statut)).length },
+                { value: 'affectes', label: 'Affectés', count: incidents.filter((i) => i.statut === 'affecte').length },
+                { value: 'evalues', label: 'Évalués', count: incidents.filter((i) => i.statut === 'evalue').length },
+                { value: 'clotures', label: 'Clôturés', count: incidents.filter((i) => i.statut === 'cloture').length },
+              ]}
+            />
           </div>
         </div>
 
@@ -460,7 +488,7 @@ export const CarteTab: React.FC<CarteTabProps> = ({
                           className={`oid-coord-ref-link ${inc.statut === 'cloture' ? 'is-closed' : ''}`}
                           title="Ouvrir le dossier dans la vue Gestion des Incidents"
                         >
-                          <span className="code">OID-ABJ-{inc.reference_publique.slice(0, 8).toUpperCase()}</span>
+                          <span className="code">{formatIncidentRef(inc)}</span>
                         </button>
                         <span className="sub">{formatRelativeTime(inc.cree_le)}</span>
                       </td>

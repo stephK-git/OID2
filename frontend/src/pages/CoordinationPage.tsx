@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { apiFetch, apiUrl, getToken } from '../api/client';
+import { apiFetch } from '../api/client';
 import { BrandMark, VigilancePill } from '../components/shell';
 import type { CommunesGeoJsonCollection } from '../components/SigAnalysisMap';
 import type {
@@ -19,6 +19,7 @@ import { LiveClockDisplay, RefreshControl } from './coordination/TopBarStatus';
 import { KpisTab } from './coordination/KpisTab';
 import { CarteTab } from './coordination/CarteTab';
 import { IncidentsTab } from './coordination/IncidentsTab';
+import { HistoriqueTab } from './coordination/HistoriqueTab';
 import { ComptesTab } from './coordination/ComptesTab';
 import './coordination/coordination.css';
 
@@ -35,6 +36,10 @@ const TAB_HEADERS: Record<CoordTab, { title: string; subtitle: string }> = {
     title: 'Gestion Opérationnelle des Incidents',
     subtitle: 'Triage, affectation des enquêteurs et suivi des résolutions',
   },
+  historique: {
+    title: 'Historique des incidents traités',
+    subtitle: 'Incidents clôturés et rapports d’enquête terrain associés',
+  },
   utilisateurs: {
     title: 'Comptes & Accréditations',
     subtitle: 'Gestion des accès et supervision des équipes terrain',
@@ -45,7 +50,8 @@ const NAV_ITEMS: { tab: CoordTab; icon: string; label: string; group: 'pilotage'
   { tab: 'kpis', icon: 'dashboard', label: 'Vue stratégique', group: 'pilotage' },
   { tab: 'carte', icon: 'map', label: 'Carte', group: 'pilotage' },
   { tab: 'incidents', icon: 'assignment_late', label: 'Incidents', group: 'pilotage' },
-  { tab: 'utilisateurs', icon: 'manage_accounts', label: 'Comptes & Enquêteurs', group: 'admin' },
+  { tab: 'historique', icon: 'history', label: 'Historique', group: 'pilotage' },
+  { tab: 'utilisateurs', icon: 'badge', label: 'Comptes & Enquêteurs', group: 'admin' },
 ];
 
 export const CoordinationPage: React.FC = () => {
@@ -68,9 +74,10 @@ export const CoordinationPage: React.FC = () => {
   const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(null);
   const [mapFocusIncidentId, setMapFocusIncidentId] = useState<number | null>(null);
 
+  // Onglet Historique : incident dont le rapport est ouvert en pleine page (null : tableau)
+  const [historiqueReportId, setHistoriqueReportId] = useState<number | null>(null);
+
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -119,46 +126,42 @@ export const CoordinationPage: React.FC = () => {
     window.setTimeout(() => setToastMsg((prev) => (prev === msg ? null : prev)), 3200);
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-        setExportMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const downloadFile = (endpoint: string, filename: string) => {
-    const token = getToken();
-    fetch(apiUrl(endpoint), { headers: { Authorization: token ? `Bearer ${token}` : '' } })
-      .then((res) => res.blob())
-      .then((blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      })
-      .catch((err) => alert(`Erreur de téléchargement : ${err.message}`));
-  };
-
   // --- Navigation entre onglets ---
-  const openIncident = useCallback((id: number) => {
-    setIncidentFilter('tous');
-    setIncidentSearch('');
-    setSelectedIncidentId(id);
-    setActiveTab('incidents');
+  const goToTab = useCallback((tab: CoordTab) => {
+    // Les clôturés vivent dans l'Historique : le filtre « Clôturés » de la carte n'a pas de sens dans Incidents
+    if (tab === 'incidents') setIncidentFilter((f) => (f === 'clotures' ? 'tous' : f));
+    // Cliquer sur « Historique » dans le menu ramène toujours au tableau
+    if (tab === 'historique') setHistoriqueReportId(null);
+    setActiveTab(tab);
   }, []);
 
+  const openIncident = useCallback(
+    (id: number) => {
+      const inc = incidents.find((i) => i.id === id);
+      if (inc?.statut === 'cloture') {
+        setHistoriqueReportId(id);
+        setActiveTab('historique');
+        return;
+      }
+      setIncidentFilter('tous');
+      setIncidentSearch('');
+      setSelectedIncidentId(id);
+      setActiveTab('incidents');
+    },
+    [incidents]
+  );
+
   const openIncidentList = useCallback((filter: IncidentStatusFilter) => {
+    if (filter === 'clotures') {
+      setHistoriqueReportId(null);
+      setActiveTab('historique');
+      return;
+    }
     setIncidentFilter(filter);
     setIncidentSearch('');
     setSelectedIncidentId(null);
@@ -170,9 +173,30 @@ export const CoordinationPage: React.FC = () => {
     setActiveTab('carte');
   }, []);
 
+  // Recherche texte commune aux onglets Carte / Incidents
+  const matchesSearch = useCallback(
+    (inc: IncidentItem, rawQuery: string) => {
+      const q = rawQuery.trim().toLowerCase();
+      if (!q) return true;
+      const enqNom = enqueteurs.find((e) => e.id === inc.enqueteur_id)?.nom || inc.enqueteur_nom || '';
+      const zoneNom = inc.zone_id ? zones.find((zn) => zn.id === inc.zone_id)?.nom || '' : '';
+      const communeName = (inc.commune || zoneNom).toLowerCase();
+      const idStr = String(inc.id);
+      return (
+        idStr.includes(q.replace(/^#/, '')) ||
+        `#${idStr}`.includes(q) ||
+        inc.reference_publique.toLowerCase().includes(q) ||
+        inc.type.toLowerCase().includes(q) ||
+        inc.statut.toLowerCase().includes(q) ||
+        communeName.includes(q) ||
+        enqNom.toLowerCase().includes(q)
+      );
+    },
+    [enqueteurs, zones]
+  );
+
   // Filtrage & tri de la file des incidents (partagé Carte / Incidents)
   const filteredIncidents = useMemo(() => {
-    const q = incidentSearch.trim().toLowerCase();
     return [...incidents]
       .filter((inc) => {
         if (incidentFilter === 'a_affecter' && !(['ouvert', 'rouvert'].includes(inc.statut) && !inc.enqueteur_id)) {
@@ -183,21 +207,7 @@ export const CoordinationPage: React.FC = () => {
         if (incidentFilter === 'evalues' && inc.statut !== 'evalue') return false;
         if (incidentFilter === 'clotures' && inc.statut !== 'cloture') return false;
         if (incidentFilter === 'danger' && !inc.danger_immediat) return false;
-
-        if (!q) return true;
-        const enq = enqueteurs.find((e) => e.id === inc.enqueteur_id);
-        const zoneNom = inc.zone_id ? zones.find((zn) => zn.id === inc.zone_id)?.nom || '' : '';
-        const communeName = (inc.commune || zoneNom).toLowerCase();
-        const idStr = String(inc.id);
-        return (
-          idStr.includes(q.replace(/^#/, '')) ||
-          `#${idStr}`.includes(q) ||
-          inc.reference_publique.toLowerCase().includes(q) ||
-          inc.type.toLowerCase().includes(q) ||
-          inc.statut.toLowerCase().includes(q) ||
-          communeName.includes(q) ||
-          (enq && enq.nom.toLowerCase().includes(q))
-        );
+        return matchesSearch(inc, incidentSearch);
       })
       .sort((a, b) => {
         if (incidentSort === 'date') {
@@ -208,7 +218,13 @@ export const CoordinationPage: React.FC = () => {
         if (a.danger_immediat !== b.danger_immediat) return a.danger_immediat ? -1 : 1;
         return b.score_priorite - a.score_priorite;
       });
-  }, [incidents, enqueteurs, zones, incidentSearch, incidentFilter, incidentSort]);
+  }, [incidents, matchesSearch, incidentSearch, incidentFilter, incidentSort]);
+
+  // Onglet Incidents : uniquement les dossiers encore en cours (les clôturés partent dans l'Historique)
+  const activeIncidents = useMemo(
+    () => filteredIncidents.filter((inc) => inc.statut !== 'cloture'),
+    [filteredIncidents]
+  );
 
   const aTraiter = aTraiterCount(incidents);
   const hasUrgent = urgentCount(incidents) > 0;
@@ -219,7 +235,7 @@ export const CoordinationPage: React.FC = () => {
       key={item.tab}
       type="button"
       className={`nav-item ${activeTab === item.tab ? 'actif' : ''}`}
-      onClick={() => setActiveTab(item.tab)}
+      onClick={() => goToTab(item.tab)}
       aria-current={activeTab === item.tab ? 'page' : undefined}
     >
       <span className="material-symbols-outlined">{item.icon}</span>
@@ -294,41 +310,6 @@ export const CoordinationPage: React.FC = () => {
           </div>
 
           <div className="top-actions">
-            <div className="menu" ref={exportMenuRef} style={{ position: 'relative' }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                aria-haspopup="true"
-                aria-expanded={exportMenuOpen}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>download</span>
-                <span>Exports &amp; SITREP</span>
-              </button>
-              {exportMenuOpen && (
-                <div className="menu-pop" role="menu">
-                  {[
-                    { tag: 'PDF', label: 'Générer le rapport de situation (SITREP)', url: '/rapports/sitrep.pdf', file: 'OID-SITREP.pdf' },
-                    { tag: 'GEOJSON', label: 'Exporter les données SIG', url: '/rapports/incidents.geojson', file: 'OID-Incidents.geojson' },
-                    { tag: 'CSV', label: 'Exporter le registre (Excel)', url: '/rapports/incidents.csv', file: 'OID-Incidents.csv' },
-                  ].map((exp) => (
-                    <button
-                      key={exp.tag}
-                      type="button"
-                      onClick={() => {
-                        downloadFile(exp.url, exp.file);
-                        setExportMenuOpen(false);
-                      }}
-                    >
-                      <span className="tag">{exp.tag}</span>
-                      <b>{exp.label}</b>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
             <RefreshControl lastSyncAt={lastSyncAt} loading={loading} onRefresh={handleRefreshAll} />
 
             <div className="status" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
@@ -368,7 +349,7 @@ export const CoordinationPage: React.FC = () => {
         {activeTab === 'incidents' && (
           <IncidentsTab
             data={data}
-            filteredIncidents={filteredIncidents}
+            filteredIncidents={activeIncidents}
             loading={loading}
             incidentSearch={incidentSearch}
             onChangeIncidentSearch={setIncidentSearch}
@@ -384,8 +365,26 @@ export const CoordinationPage: React.FC = () => {
           />
         )}
 
+        {activeTab === 'historique' && (
+          <HistoriqueTab
+            data={data}
+            loading={loading}
+            openReportId={historiqueReportId}
+            onChangeOpenReportId={setHistoriqueReportId}
+            onShowOnMap={showOnMap}
+            onDataChanged={loadData}
+            showToast={showToast}
+          />
+        )}
+
         {activeTab === 'utilisateurs' && (
-          <ComptesTab zones={zones} onDataChanged={loadData} onError={handleError} refreshKey={refreshKey} />
+          <ComptesTab
+            zones={zones}
+            onDataChanged={loadData}
+            onError={handleError}
+            showToast={showToast}
+            refreshKey={refreshKey}
+          />
         )}
       </main>
     </div>

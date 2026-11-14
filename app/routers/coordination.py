@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from geoalchemy2.shape import to_shape
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -442,17 +442,23 @@ class UtilisateurUpdateIn(BaseModel):
     zone_id: int | None = None
 
 
+class MotDePasseIn(BaseModel):
+    nouveau_mot_de_passe: str = Field(..., min_length=8)
+
+
 @router.patch("/utilisateurs/{uid}")
 def modifier_utilisateur(
     uid: int,
     data: UtilisateurUpdateIn,
     db: Session = Depends(get_db),
-    _: Utilisateur = Depends(require_role("coordinateur")),
+    current_user: Utilisateur = Depends(require_role("coordinateur")),
 ):
     """Modifie le nom, rôle ou la zone d'un utilisateur."""
     user = db.get(Utilisateur, uid)
     if user is None:
         raise HTTPException(404, "Utilisateur introuvable.")
+    if user.id == current_user.id and data.role is not None and data.role != user.role:
+        raise HTTPException(409, "Vous ne pouvez pas modifier votre propre rôle.")
     if data.nom is not None and data.nom.strip():
         user.nom = data.nom.strip()
     if data.role is not None:
@@ -513,7 +519,7 @@ def toggle_actif(
 @router.patch("/utilisateurs/{uid}/mot-de-passe")
 def changer_mot_de_passe(
     uid: int,
-    nouveau_mot_de_passe: str = Query(..., min_length=8),
+    data: MotDePasseIn,
     db: Session = Depends(get_db),
     _: Utilisateur = Depends(require_role("coordinateur")),
 ):
@@ -521,9 +527,7 @@ def changer_mot_de_passe(
     user = db.get(Utilisateur, uid)
     if user is None:
         raise HTTPException(404, "Utilisateur introuvable.")
-    if len(nouveau_mot_de_passe) < 8:
-        raise HTTPException(422, "Le mot de passe doit contenir au moins 8 caractères.")
-    user.mot_de_passe_hash = hash_password(nouveau_mot_de_passe)
+    user.mot_de_passe_hash = hash_password(data.nouveau_mot_de_passe)
     db.commit()
     return {"ok": True}
 

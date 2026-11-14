@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiFetch, apiUrl } from '../../api/client';
+import { apiFetch, apiUrl, getToken } from '../../api/client';
 import { EnqueteReportView } from '../../components/EnqueteReportView';
 import { IncidentMiniMap } from './IncidentMiniMap';
+import { FilterChips, SearchField, SegmentedControl, type ChipOption } from './FilterControls';
 import type {
   CoordData,
   IncidentItem,
@@ -11,6 +12,7 @@ import type {
 } from './types';
 import {
   IncidentStatusBadge,
+  formatIncidentRef,
   formatIncidentType,
   formatRelativeTime,
   formatShortDate,
@@ -54,13 +56,40 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
   onDataChanged,
   showToast,
 }) => {
-  const { incidents, enqueteurs, zones } = data;
+  const { enqueteurs, zones } = data;
+  // Compteurs du filtre : uniquement les dossiers en cours (les clôturés sont dans l'Historique)
+  const incidents = useMemo(() => data.incidents.filter((i) => i.statut !== 'cloture'), [data.incidents]);
   const [panelEnqueteurId, setPanelEnqueteurId] = useState<number | ''>('');
   const [reopenMotif, setReopenMotif] = useState('');
   const [reopenRingError, setReopenRingError] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [showFullReportModal, setShowFullReportModal] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  const statusChips: ChipOption<IncidentStatusFilter>[] = useMemo(
+    () => [
+      { value: 'tous', label: 'Tous', count: incidents.length },
+      {
+        value: 'danger',
+        label: 'Danger immédiat',
+        icon: 'emergency',
+        tone: 'danger',
+        count: incidents.filter((i) => i.danger_immediat).length,
+      },
+      {
+        value: 'a_affecter',
+        label: 'À affecter',
+        tone: 'warn',
+        count: incidents.filter((i) => ['ouvert', 'rouvert'].includes(i.statut) && !i.enqueteur_id).length,
+      },
+      { value: 'ouverts', label: 'Ouverts', count: incidents.filter((i) => ['ouvert', 'rouvert'].includes(i.statut)).length },
+      { value: 'affectes', label: 'Affectés', count: incidents.filter((i) => i.statut === 'affecte').length },
+      { value: 'evalues', label: 'Évalués', count: incidents.filter((i) => i.statut === 'evalue').length },
+    ],
+    [incidents]
+  );
 
   const detailScrollRef = useRef<HTMLDivElement>(null);
   const detailColRef = useRef<HTMLDivElement>(null);
@@ -98,6 +127,46 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Échap ferme la visionneuse photo, puis le rapport complet, puis le menu d'export
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (lightboxUrl) setLightboxUrl(null);
+      else if (showFullReportModal) setShowFullReportModal(false);
+      else setExportMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [lightboxUrl, showFullReportModal]);
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) setExportMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [exportMenuOpen]);
+
+  const downloadExport = async (endpoint: string, filename: string) => {
+    setExportMenuOpen(false);
+    try {
+      const token = getToken();
+      const res = await fetch(apiUrl(endpoint), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const url = window.URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      showToast(`Échec du téléchargement : ${err.message}`);
+    }
+  };
 
   const handleSelectIncident = useCallback(
     (inc: IncidentItem, scrollCardIntoView = false) => {
@@ -213,61 +282,67 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
 
           <div className="oid-coord-incidents-wrap">
             {/* Barre de recherche, filtrage et tri en haut de la vue 2 colonnes */}
-            <div className="oid-coord-map-filterbar compact">
-              <div className="oid-coord-map-filters-left">
-                <div className="oid-coord-filter-chip search">
-                  <span className="material-symbols-outlined">search</span>
-                  <input
-                    type="text"
-                    value={incidentSearch}
-                    onChange={(e) => setIncidentSearch(e.target.value)}
-                    placeholder="Rechercher #ID, réf, type, commune, enquêteur..."
-                    className="oid-coord-map-search-input"
-                  />
-                </div>
+            <div className="oid-coord-map-filterbar compact cf-bar">
+              <div className="cf-bar-row">
+                <SearchField
+                  value={incidentSearch}
+                  onChange={setIncidentSearch}
+                  placeholder="Rechercher : #ID, réf, type, commune, enquêteur…"
+                  className="cf-search-grow"
+                />
 
-                <div className="oid-coord-filter-chip">
-                  <span className="material-symbols-outlined">filter_list</span>
-                  <select
-                    value={incidentFilter}
-                    onChange={(e) => setIncidentFilter(e.target.value as IncidentStatusFilter)}
-                    className="oid-coord-transparent-select"
-                    aria-label="Filtrer par statut d'incident"
-                  >
-                    <option value="tous">Tous les incidents ({incidents.length})</option>
-                    <option value="a_affecter">
-                      À affecter ({incidents.filter((i) => ['ouvert', 'rouvert'].includes(i.statut) && !i.enqueteur_id).length})
-                    </option>
-                    <option value="danger">
-                      Danger immédiat ({incidents.filter((i) => i.danger_immediat && i.statut !== 'cloture').length})
-                    </option>
-                    <option value="ouverts">Ouverts ({incidents.filter((i) => ['ouvert', 'rouvert'].includes(i.statut)).length})</option>
-                    <option value="affectes">Affectés ({incidents.filter((i) => i.statut === 'affecte').length})</option>
-                    <option value="evalues">Évalués ({incidents.filter((i) => i.statut === 'evalue').length})</option>
-                    <option value="clotures">Clôturés ({incidents.filter((i) => i.statut === 'cloture').length})</option>
-                  </select>
-                </div>
+                <SegmentedControl<IncidentSortKey>
+                  prefix="Trier"
+                  ariaLabel="Trier les incidents"
+                  value={incidentSort}
+                  onChange={setIncidentSort}
+                  options={[
+                    { value: 'priorite', label: 'Priorité', icon: 'crisis_alert' },
+                    { value: 'date', label: 'Plus récents', icon: 'history' },
+                  ]}
+                />
 
-                <div className="oid-coord-filter-chip">
-                  <span className="material-symbols-outlined">sort</span>
-                  <select
-                    value={incidentSort}
-                    onChange={(e) => setIncidentSort(e.target.value as IncidentSortKey)}
-                    className="oid-coord-transparent-select"
-                    aria-label="Trier les incidents"
-                  >
-                    <option value="priorite">Tri : Priorité décroissante</option>
-                    <option value="date">Tri : Plus récents</option>
-                  </select>
-                </div>
+              <div className="menu oid-coord-export-menu" ref={exportMenuRef}>
+                <button
+                  type="button"
+                  className="btn btn-sm cf-btn"
+                  onClick={() => setExportMenuOpen((o) => !o)}
+                  aria-haspopup="true"
+                  aria-expanded={exportMenuOpen}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>download</span>
+                  <span>Exports</span>
+                </button>
+                {exportMenuOpen && (
+                  <div className="menu-pop" role="menu">
+                    {[
+                      { tag: 'PDF', label: 'Rapport de situation (SITREP)', url: '/rapports/sitrep.pdf', file: 'OID-SITREP.pdf' },
+                      { tag: 'CSV', label: 'Registre des incidents (Excel)', url: '/rapports/incidents.csv', file: 'OID-Incidents.csv' },
+                      { tag: 'GEOJSON', label: 'Données SIG', url: '/rapports/incidents.geojson', file: 'OID-Incidents.geojson' },
+                    ].map((exp) => (
+                      <button key={exp.tag} type="button" role="menuitem" onClick={() => downloadExport(exp.url, exp.file)}>
+                        <span className="tag">{exp.tag}</span>
+                        <b>{exp.label}</b>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+              </div>
+
+              <FilterChips<IncidentStatusFilter>
+                ariaLabel="Filtrer par statut d'incident"
+                value={incidentFilter}
+                onChange={setIncidentFilter}
+                options={statusChips}
+              />
             </div>
 
             <div className="verif-grid">
               {/* COLONNE GAUCHE : FILE PRIORISÉE DES INCIDENTS (5 colonnes) */}
               <div className="verif-queue-col">
                 <div className="verif-queue-header">
-                  <span className="verif-queue-eyebrow">REGISTRE DES INCIDENTS (TRI PRIORISÉ)</span>
+                  <span className="verif-queue-eyebrow">INCIDENTS EN COURS (TRI PRIORISÉ)</span>
                   <span className="verif-queue-live-count">{filteredIncidents.length} INCIDENT(S)</span>
                 </div>
 
@@ -319,9 +394,7 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
 
                           {/* Réf & Localisation PostGIS */}
                           <div className="verif-qcard-refrow">
-                            <span className="verif-ref-code">
-                              #INC-{inc.id}
-                            </span>
+                            <span className="verif-ref-code">{formatIncidentRef(inc)}</span>
                             <span className="verif-loc-tag">
                               <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
                                 location_on
@@ -404,12 +477,108 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
                           }))
                     );
 
+                    // Rapport d'évaluation terrain de l'enquêteur (si soumis)
+                    const evaluationSection = selectedIncident.evaluation ? (
+
+                            <div className="verif-section-box">
+                              <div className="verif-section-head">
+                                <span className="verif-spec-lbl">
+                                  <span className="material-symbols-outlined verif-spec-icon text-mint">
+                                    assignment_turned_in
+                                  </span>
+                                  <span>Rapport d'évaluation terrain (Enquêteur) :</span>
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                  <span className="verif-exif-tag">
+                                    {selectedIncident.evaluation.statut.toUpperCase()}
+                                    {selectedIncident.evaluation.soumise_le
+                                      ? ` · ${formatShortDate(selectedIncident.evaluation.soumise_le)}`
+                                      : ''}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="oid-coord-locate-link"
+                                    onClick={() => setShowFullReportModal(true)}
+                                  >
+                                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                                      description
+                                    </span>
+                                    <span>Rapport complet</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="oid-coord-impact-grid" style={{ marginBottom: '0.75rem' }}>
+                                <div className="oid-coord-impact-box border-b-secondary">
+                                  <span className="oid-coord-impact-lbl">Ménages touchés</span>
+                                  <span className="oid-coord-impact-val">
+                                    {selectedIncident.evaluation.menages_touches}
+                                  </span>
+                                </div>
+                                <div className="oid-coord-impact-box border-b-primary">
+                                  <span className="oid-coord-impact-lbl">Personnes affectées</span>
+                                  <span className="oid-coord-impact-val">
+                                    {selectedIncident.evaluation.personnes_affectees}
+                                  </span>
+                                </div>
+                                <div className="oid-coord-impact-box border-b-danger">
+                                  <span className="oid-coord-impact-lbl">Blessés / Déplacés</span>
+                                  <span className="oid-coord-impact-val">
+                                    {selectedIncident.evaluation.blesses} / {selectedIncident.evaluation.deplaces}
+                                  </span>
+                                </div>
+                                <div className="oid-coord-impact-box border-b-danger">
+                                  <span className="oid-coord-impact-lbl">Décès / Disparus</span>
+                                  <span className="oid-coord-impact-val">
+                                    {selectedIncident.evaluation.deces} / {selectedIncident.evaluation.disparus}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {(selectedIncident.evaluation.degats ||
+                                selectedIncident.evaluation.routes_coupees ||
+                                selectedIncident.evaluation.risques_sanitaires ||
+                                selectedIncident.evaluation.besoins ||
+                                selectedIncident.evaluation.recommandations) && (
+                                <div className="verif-quote-box">
+                                  {selectedIncident.evaluation.degats && (
+                                    <p style={{ margin: '0 0 0.35rem' }}>
+                                      <strong>Dégâts constatés :</strong> {selectedIncident.evaluation.degats}
+                                    </p>
+                                  )}
+                                  {selectedIncident.evaluation.routes_coupees && (
+                                    <p style={{ margin: '0 0 0.35rem' }}>
+                                      <strong>Routes coupées :</strong> {selectedIncident.evaluation.routes_coupees}
+                                    </p>
+                                  )}
+                                  {selectedIncident.evaluation.risques_sanitaires && (
+                                    <p style={{ margin: '0 0 0.35rem' }}>
+                                      <strong>Risques sanitaires :</strong>{' '}
+                                      {selectedIncident.evaluation.risques_sanitaires}
+                                    </p>
+                                  )}
+                                  {selectedIncident.evaluation.besoins && (
+                                    <p style={{ margin: '0 0 0.35rem' }}>
+                                      <strong>Besoins prioritaires :</strong> {selectedIncident.evaluation.besoins}
+                                    </p>
+                                  )}
+                                  {selectedIncident.evaluation.recommandations && (
+                                    <p style={{ margin: 0 }}>
+                                      <strong>Recommandations :</strong>{' '}
+                                      {selectedIncident.evaluation.recommandations}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                    ) : null;
+
                     return (
                       <div className="verif-detail-card">
                         {/* 1. En-tête compact sur 1 ligne */}
                         <div className="verif-detail-header oid-coord-dhead-compact">
                           <div className="oid-coord-dhead-left">
-                            <h2 className="verif-detail-title">Incident #{selectedIncident.id}</h2>
+                            <h2 className="verif-detail-title">Incident {formatIncidentRef(selectedIncident)}</h2>
                             <IncidentStatusBadge statut={selectedIncident.statut} />
                             <span className="chip water">{selCommune}</span>
                           </div>
@@ -478,7 +647,7 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
 
                             <div className="verif-spec-box">
                               <span className="verif-spec-lbl">
-                                <span>Secteur &amp; Enquêteur assigné</span>
+                                <span>Enquêteur assigné &amp; charge</span>
                                 <span className="material-symbols-outlined verif-spec-icon text-mint">
                                   person_pin_circle
                                 </span>
@@ -487,7 +656,9 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
                                 {selEnq ? selEnq.nom : 'Non affecté'}
                               </div>
                               <div className="verif-spec-sub text-mint">
-                                {selCommune}
+                                {selEnq
+                                  ? `${selEnq.dossiers_actifs} dossier(s) actif(s)${selEnq.zone_nom ? ` · ${selEnq.zone_nom}` : ''}`
+                                  : 'En attente d’affectation'}
                               </div>
                             </div>
                           </div>
@@ -518,14 +689,14 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
                                   <span className="material-symbols-outlined verif-spec-icon text-cyan">
                                     my_location
                                   </span>
-                                  <span>Localisation tactique de l'incident (Périmètre 400 m)</span>
+                                  <span>Localisation · périmètre 400 m</span>
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => onShowOnMap(selectedIncident.id)}
                                   className="oid-coord-locate-link"
                                 >
-                                  <span>Ouvrir sur la Carte Interactive</span>
+                                  <span>Voir sur la carte</span>
                                   <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
                                     open_in_new
                                   </span>
@@ -658,7 +829,7 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
                                           <span>Plein écran</span>
                                         </button>
                                         <a
-                                          href={pMeta.url}
+                                          href={apiUrl(pMeta.url)}
                                           download={pMeta.filename}
                                           target="_blank"
                                           rel="noopener noreferrer"
@@ -683,104 +854,12 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
                           </div>
 
                           {/* 7. Bilan d'évaluation terrain de l'enquêteur (si soumis) */}
-                          {selectedIncident.evaluation && (
-                            <div className="verif-section-box">
-                              <div className="verif-section-head">
-                                <span className="verif-spec-lbl">
-                                  <span className="material-symbols-outlined verif-spec-icon text-mint">
-                                    assignment_turned_in
-                                  </span>
-                                  <span>Rapport d'évaluation terrain (Enquêteur) :</span>
-                                </span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                  <span className="verif-exif-tag">
-                                    {selectedIncident.evaluation.statut.toUpperCase()}
-                                    {selectedIncident.evaluation.soumise_le
-                                      ? ` · ${formatShortDate(selectedIncident.evaluation.soumise_le)}`
-                                      : ''}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="oid-coord-locate-link"
-                                    onClick={() => setShowFullReportModal(true)}
-                                  >
-                                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                                      description
-                                    </span>
-                                    <span>Rapport complet</span>
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="oid-coord-impact-grid" style={{ marginBottom: '0.75rem' }}>
-                                <div className="oid-coord-impact-box border-b-secondary">
-                                  <span className="oid-coord-impact-lbl">Ménages touchés</span>
-                                  <span className="oid-coord-impact-val">
-                                    {selectedIncident.evaluation.menages_touches}
-                                  </span>
-                                </div>
-                                <div className="oid-coord-impact-box border-b-primary">
-                                  <span className="oid-coord-impact-lbl">Personnes affectées</span>
-                                  <span className="oid-coord-impact-val">
-                                    {selectedIncident.evaluation.personnes_affectees}
-                                  </span>
-                                </div>
-                                <div className="oid-coord-impact-box border-b-danger">
-                                  <span className="oid-coord-impact-lbl">Blessés / Déplacés</span>
-                                  <span className="oid-coord-impact-val">
-                                    {selectedIncident.evaluation.blesses} / {selectedIncident.evaluation.deplaces}
-                                  </span>
-                                </div>
-                                <div className="oid-coord-impact-box border-b-danger">
-                                  <span className="oid-coord-impact-lbl">Décès / Disparus</span>
-                                  <span className="oid-coord-impact-val">
-                                    {selectedIncident.evaluation.deces} / {selectedIncident.evaluation.disparus}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {(selectedIncident.evaluation.degats ||
-                                selectedIncident.evaluation.routes_coupees ||
-                                selectedIncident.evaluation.risques_sanitaires ||
-                                selectedIncident.evaluation.besoins ||
-                                selectedIncident.evaluation.recommandations) && (
-                                <div className="verif-quote-box">
-                                  {selectedIncident.evaluation.degats && (
-                                    <p style={{ margin: '0 0 0.35rem' }}>
-                                      <strong>Dégâts constatés :</strong> {selectedIncident.evaluation.degats}
-                                    </p>
-                                  )}
-                                  {selectedIncident.evaluation.routes_coupees && (
-                                    <p style={{ margin: '0 0 0.35rem' }}>
-                                      <strong>Routes coupées :</strong> {selectedIncident.evaluation.routes_coupees}
-                                    </p>
-                                  )}
-                                  {selectedIncident.evaluation.risques_sanitaires && (
-                                    <p style={{ margin: '0 0 0.35rem' }}>
-                                      <strong>Risques sanitaires :</strong>{' '}
-                                      {selectedIncident.evaluation.risques_sanitaires}
-                                    </p>
-                                  )}
-                                  {selectedIncident.evaluation.besoins && (
-                                    <p style={{ margin: '0 0 0.35rem' }}>
-                                      <strong>Besoins prioritaires :</strong> {selectedIncident.evaluation.besoins}
-                                    </p>
-                                  )}
-                                  {selectedIncident.evaluation.recommandations && (
-                                    <p style={{ margin: 0 }}>
-                                      <strong>Recommandations :</strong>{' '}
-                                      {selectedIncident.evaluation.recommandations}
-                                    </p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          {evaluationSection}
                         </div>
 
                         {/* 8. PIED DE PANNEAU COMPACT ÉPINGLÉ À DROITE */}
                         <div className="verif-actions-footer oid-coord-dfoot-compact">
-                          {['ouvert', 'rouvert'].includes(selectedIncident.statut) && (
+                          {['ouvert', 'rouvert', 'affecte'].includes(selectedIncident.statut) && (
                             <div className="oid-coord-assign-row">
                               <div className="verif-reject-input-wrap" style={{ flex: 1, minWidth: '200px' }}>
                                 <span className="material-symbols-outlined verif-reject-icon">
@@ -817,14 +896,24 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
                               <button
                                 id="btn-assign-incident"
                                 type="button"
-                                disabled={actionLoading || !panelEnqueteurId}
+                                disabled={
+                                  actionLoading ||
+                                  !panelEnqueteurId ||
+                                  panelEnqueteurId === selectedIncident.enqueteur_id
+                                }
                                 onClick={() => handlePanelAffecter(selectedIncident.id)}
                                 className="verif-btn-validate oid-coord-assign-btn"
                               >
                                 <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
                                   assignment_ind
                                 </span>
-                                <span>{actionLoading ? 'Affectation…' : 'Affecter'}</span>
+                                <span>
+                                  {actionLoading
+                                    ? 'Affectation…'
+                                    : selectedIncident.enqueteur_id
+                                      ? 'Réaffecter'
+                                      : 'Affecter'}
+                                </span>
                               </button>
 
                               <button
@@ -841,7 +930,7 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
                             </div>
                           )}
 
-                          {['affecte', 'evalue'].includes(selectedIncident.statut) && (
+                          {selectedIncident.statut === 'evalue' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                               <div
                                 style={{

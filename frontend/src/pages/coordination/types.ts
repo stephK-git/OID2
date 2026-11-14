@@ -108,7 +108,7 @@ export interface UtilisateurItem {
   dossiers_actifs: number;
 }
 
-export type CoordTab = 'kpis' | 'carte' | 'incidents' | 'utilisateurs';
+export type CoordTab = 'kpis' | 'carte' | 'incidents' | 'historique' | 'utilisateurs';
 export type MapQuickFilter = 'tous' | 'danger' | 'ouverts' | 'evalues' | 'clotures';
 export type IncidentStatusFilter =
   | 'tous'
