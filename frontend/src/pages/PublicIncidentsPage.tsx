@@ -27,7 +27,7 @@ import {
 import { SEVERITY_META, severityOf, type Severity } from '../components/landing/severity';
 
 const PAGE_SIZE = 10;
-const FETCH_LIMIT = 100;
+const FETCH_LIMIT = 30;
 
 type SeverityFilter = Severity | 'all';
 type ViewMode = 'split' | 'list' | 'map';

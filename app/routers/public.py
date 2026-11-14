@@ -403,7 +403,7 @@ def public_communes_actives(db: Session = Depends(get_db)):
 
 @router.get("/recents")
 def public_recents_incidents(
-    limit: int = Query(3, ge=1, le=100),
+    limit: int = Query(3, ge=1, le=30),
     offset: int = Query(0, ge=0),
     zone_id: int | None = Query(None, ge=1),
     today_only: bool = Query(False),
@@ -411,7 +411,7 @@ def public_recents_incidents(
 ):
     """Retourne les derniers incidents actifs (avec détails non sensibles et photos).
 
-    `limit` plafonne la taille d'une page (100) ; `offset` permet de charger les suivantes.
+    `limit` plafonne la taille d'une page (30) ; `offset` permet de charger les suivantes.
     `total` est toujours le nombre d'incidents correspondant aux filtres, toutes pages confondues.
     """
     _zones, zones_by_id, zone_shapes = _resolve_zones_context(db)
