@@ -1,0 +1,500 @@
+/* ==========================================================================
+   OID — HEADER, FOOTER ET BARRE MOBILE PUBLICS (partagés par toutes les pages)
+   CSS autonome : ne dépend ni de Tailwind ni du reset de la landing.
+   ========================================================================== */
+
+.site-header,
+.site-footer,
+.site-dock,
+.site-drawer {
+  font-family: var(--font);
+  box-sizing: border-box;
+}
+
+.site-header *,
+.site-footer *,
+.site-dock *,
+.site-drawer * {
+  box-sizing: border-box;
+}
+
+.site-header a,
+.site-footer a,
+.site-dock a,
+.site-drawer a {
+  text-decoration: none;
+}
+
+.site-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--water);
+  color: var(--water-ink);
+  padding: 0.6rem 1rem;
+  border-radius: 0 0 var(--r-md) 0;
+  font-weight: 700;
+}
+
+.site-skip:focus {
+  left: 0;
+}
+
+.site-wrap {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+@media (min-width: 640px) {
+  .site-wrap {
+    padding: 0 24px;
+  }
+}
+
+@media (min-width: 1536px) {
+  .site-wrap {
+    max-width: 1320px;
+  }
+}
+
+/* ---------- Header ---------- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--s1);
+  border-bottom: 1px solid var(--line);
+}
+
+.site-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 64px;
+}
+
+@media (min-width: 640px) {
+  .site-header-row {
+    height: 68px;
+  }
+}
+
+.site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--tx);
+  flex-shrink: 0;
+}
+
+.site-brand-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--water);
+  color: var(--water-ink);
+  flex-shrink: 0;
+}
+
+.site-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.site-brand-name {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--tx);
+}
+
+.site-brand-sub {
+  display: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tx2);
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) and (max-width: 1023px), (min-width: 1280px) {
+  .site-brand-sub {
+    display: block;
+  }
+}
+
+.site-nav {
+  display: none;
+  align-items: center;
+  gap: 2px;
+}
+
+@media (min-width: 1024px) {
+  .site-nav {
+    display: flex;
+  }
+}
+
+.site-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tx2);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.site-nav-link:hover {
+  background: var(--s2);
+  color: var(--water);
+}
+
+.site-nav-link.is-active {
+  background: var(--water-dim);
+  color: var(--water);
+  font-weight: 700;
+}
+
+.site-actions {
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (min-width: 1024px) {
+  .site-actions {
+    display: flex;
+  }
+}
+
+.site-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.site-btn:focus-visible,
+.site-nav-link:focus-visible,
+.site-burger:focus-visible,
+.site-footer a:focus-visible,
+.site-drawer a:focus-visible,
+.site-drawer button:focus-visible {
+  outline: 2px solid var(--water);
+  outline-offset: 2px;
+}
+
+.site-btn-primary {
+  background: var(--water);
+  color: var(--water-ink);
+}
+
+.site-btn-primary:hover {
+  background: var(--water-hi);
+}
+
+.site-btn-outline {
+  background: transparent;
+  border-color: var(--line2);
+  color: var(--tx);
+}
+
+.site-btn-outline:hover {
+  background: var(--s2);
+}
+
+.site-btn-emergency {
+  background: var(--emergency);
+  color: #fff;
+}
+
+.site-btn-emergency:hover {
+  background: var(--emergency-hover);
+}
+
+.site-btn-icon {
+  width: 42px;
+  padding: 0;
+}
+
+.site-burger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line2);
+  background: transparent;
+  color: var(--tx);
+  cursor: pointer;
+}
+
+.site-burger:hover {
+  background: var(--s2);
+}
+
+@media (min-width: 1024px) {
+  .site-burger {
+    display: none;
+  }
+}
+
+/* Variante auth : juste la marque et le retour */
+.site-auth-back {
+  display: inline-flex;
+}
+
+/* ---------- Tiroir mobile ---------- */
+.site-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(2, 10, 18, 0.55);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.24s ease, visibility 0s linear 0.24s;
+}
+
+.site-backdrop.is-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.24s ease, visibility 0s linear 0s;
+}
+
+.site-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  width: min(85vw, 320px);
+  background: var(--s1);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 32px var(--shadow);
+  transform: translateX(100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.28s;
+}
+
+.site-drawer.is-open {
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0s;
+}
+
+@media (min-width: 1024px) {
+  .site-backdrop,
+  .site-drawer {
+    display: none;
+  }
+}
+
+.site-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.site-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 12px;
+}
+
+.site-drawer-label {
+  padding: 0 12px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+.site-drawer-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: var(--r-lg);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tx);
+}
+
+.site-drawer-link:hover {
+  background: var(--s2);
+}
+
+.site-drawer-link.is-active {
+  background: var(--water-dim);
+  color: var(--water);
+  font-weight: 700;
+}
+
+.site-drawer-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.site-drawer-foot .site-btn {
+  width: 100%;
+  height: 46px;
+}
+
+/* ---------- Barre d'action mobile (Signaler / Urgence) ---------- */
+.site-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  gap: 10px;
+  padding: 12px 12px max(12px, env(safe-area-inset-bottom));
+  background: var(--s1);
+  border-top: 1px solid var(--line);
+}
+
+.site-dock .site-btn {
+  height: 48px;
+  font-size: 15px;
+}
+
+.site-dock .site-btn:first-child {
+  flex: 1;
+}
+
+@media (min-width: 1024px) {
+  .site-dock {
+    display: none;
+  }
+}
+
+/* ---------- Footer ---------- */
+.site-footer {
+  background: var(--deep-2);
+  border-top: 1px solid var(--deep-line);
+  color: var(--deep-tx);
+  margin-top: auto;
+}
+
+.site-footer-main {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 32px;
+  padding-top: 48px;
+  padding-bottom: 32px;
+}
+
+.site-footer-about {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 1 320px;
+  max-width: 460px;
+}
+
+.site-footer-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.site-footer-about p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.site-footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.site-footer-col h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.site-footer-col a {
+  padding: 8px 0;
+  color: var(--deep-tx);
+  transition: color 0.15s;
+}
+
+.site-footer-col a:hover {
+  color: #fff;
+}
+
+.site-footer-tel {
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.site-footer-bottom {
+  border-top: 1px solid var(--deep-line);
+}
+
+.site-footer-bottom .site-wrap {
+  padding-top: 20px;
+  padding-bottom: 20px;
+  font-size: 13px;
+}
+
+/* Réserve la place de la barre mobile */
+@media (max-width: 1023px) {
+  .site-footer.has-dock .site-footer-bottom .site-wrap {
+    padding-bottom: 88px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-backdrop,
+  .site-drawer {
+    transition: none;
+  }
+}

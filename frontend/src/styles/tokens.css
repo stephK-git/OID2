@@ -108,6 +108,14 @@
   --font-sans: var(--font);
   --font-mono: var(--mono);
 
+  /* Chrome public (footer sombre, urgence) — identiques dans les deux thèmes */
+  --deep: #0b1f33;
+  --deep-2: #07162a;
+  --deep-line: #1c3452;
+  --deep-tx: #cbd8e6;
+  --emergency: #b3261e;
+  --emergency-hover: #8f1e18;
+
   /* Rayons de bordure */
   --r-sm: 6px;
   --r-md: 10px;
