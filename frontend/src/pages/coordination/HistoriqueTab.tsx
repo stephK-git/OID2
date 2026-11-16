@@ -9,6 +9,7 @@ import {
   formatIncidentType,
   formatShortDate,
   getIncidentTypeMeta,
+  resolveIncidentAddress,
   resolveIncidentCommune,
 } from './helpers';
 
@@ -123,7 +124,7 @@ export const HistoriqueTab: React.FC<HistoriqueTabProps> = ({
     return (
       <HistoriqueReport
         incident={openIncident}
-        communeLabel={resolveIncidentCommune(openIncident, zones)}
+        communeLabel={resolveIncidentAddress(openIncident, zones)}
         onBack={() => onChangeOpenReportId(null)}
         onShowOnMap={onShowOnMap}
         onDataChanged={onDataChanged}
@@ -215,7 +216,7 @@ export const HistoriqueTab: React.FC<HistoriqueTabProps> = ({
                   </td>
                 </tr>
               ) : (
-                pageRows.map(({ inc, commune: c }) => {
+                pageRows.map(({ inc }) => {
                   const ev = inc.evaluation;
                   return (
                     <tr
@@ -233,7 +234,7 @@ export const HistoriqueTab: React.FC<HistoriqueTabProps> = ({
                       <td data-label="Type">
                         <b>{getIncidentTypeMeta(inc.type).title}</b>
                         <span className="sub">
-                          {c}
+                          {resolveIncidentAddress(inc, zones)}
                           {inc.danger_immediat && <span className="coord-hist-danger"> · danger vital</span>}
                         </span>
                       </td>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { apiUrl } from '../api/client';
+import { useResolvedAddress } from '../utils/address';
 
 export interface ReportPhotoMetaItem {
   url: string;
@@ -24,6 +25,9 @@ export interface ReportDossierItem {
   danger_immediat: boolean;
   coords: { lat: number; lon: number; utm_e?: number; utm_n?: number } | null;
   commune?: string | null;
+  quartier?: string | null;
+  rue?: string | null;
+  adresse?: string | null;
   code_adm?: string | null;
   description_citoyenne?: string | null;
   hauteur_eau_cm?: number | null;
@@ -93,7 +97,14 @@ export const EnqueteReportView: React.FC<EnqueteReportViewProps> = ({
   loading = false,
   onOpenLightbox,
 }) => {
-  const commune = dossier.commune || "District d'Abidjan";
+  const fullAddress = useResolvedAddress(
+    dossier.commune,
+    dossier.coords,
+    dossier.adresse,
+    dossier.quartier,
+    dossier.rue
+  );
+  const commune = fullAddress || dossier.commune || "District d'Abidjan";
   const refCode = `OID-ABJ-${dossier.reference_publique.slice(0, 10).toUpperCase()}`;
   const evalPhotos = evaluation.photos || [];
   const citizenPhotos = dossier.photos_citoyennes || [];
@@ -184,7 +195,7 @@ export const EnqueteReportView: React.FC<EnqueteReportViewProps> = ({
             <strong className="oid-report-meta-val mono">{refCode}</strong>
           </div>
           <div className="oid-report-meta-item">
-            <span className="oid-report-meta-label">Commune / Zone</span>
+            <span className="oid-report-meta-label">Adresse / Commune</span>
             <strong className="oid-report-meta-val">{commune}</strong>
           </div>
           <div className="oid-report-meta-item">

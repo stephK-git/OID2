@@ -20,8 +20,10 @@ import {
   getFiabilitePresentation,
   getIncidentTypeMeta,
   getWaterHeightContext,
+  resolveIncidentAddress,
   resolveIncidentCommune,
 } from './helpers';
+import { useResolvedAddress } from '../../utils/address';
 
 interface IncidentsTabProps {
   data: CoordData;
@@ -106,6 +108,14 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
     }
     return filteredIncidents[0];
   }, [filteredIncidents, selectedIncidentId]);
+
+  const selectedIncidentAddress = useResolvedAddress(
+    selectedIncident ? resolveIncidentCommune(selectedIncident, zones) : null,
+    selectedIncident?.coords,
+    selectedIncident?.adresse,
+    selectedIncident?.quartier,
+    selectedIncident?.rue
+  );
 
   useEffect(() => {
     setPanelEnqueteurId(selectedIncident?.enqueteur_id || '');
@@ -384,7 +394,7 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
                   {filteredIncidents.map((inc) => {
                     const isSelected = selectedIncident?.id === inc.id;
                     const typeMeta = getIncidentTypeMeta(inc.type);
-                    const communeName = resolveIncidentCommune(inc, zones);
+                    const communeName = resolveIncidentAddress(inc, zones);
                     const enq = enqueteurs.find((e) => e.id === inc.enqueteur_id);
                     const fiab = getFiabilitePresentation(inc.niveau_fiabilite, inc.statut);
                     const needsAssignment = ['ouvert', 'rouvert'].includes(inc.statut) && !inc.enqueteur_id;
@@ -478,7 +488,7 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
               <div ref={detailColRef} className="verif-detail-col">
                 {selectedIncident ? (
                   (() => {
-                    const selCommune = resolveIncidentCommune(selectedIncident, zones);
+                    const selCommune = selectedIncidentAddress || resolveIncidentAddress(selectedIncident, zones);
                     const selEnq =
                       enqueteurs.find((e) => e.id === selectedIncident.enqueteur_id) ||
                       (selectedIncident.enqueteur_nom

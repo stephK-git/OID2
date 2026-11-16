@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { apiFetch, apiUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandMark, VigilancePill } from '../components/shell';
+import { resolveAddressLabel, useResolvedAddress } from '../utils/address';
 
 interface DoublonItem {
   id: number;
@@ -16,6 +17,9 @@ interface DoublonItem {
   nb_signalements_lies?: number;
   coords?: { lat: number; lon: number } | null;
   commune?: string | null;
+  quartier?: string | null;
+  rue?: string | null;
+  adresse?: string | null;
   cree_le?: string | null;
   description?: string | null;
 }
@@ -42,6 +46,9 @@ interface SignalementItem {
   description: string | null;
   coords: { lat: number; lon: number } | null;
   commune?: string | null;
+  quartier?: string | null;
+  rue?: string | null;
+  adresse?: string | null;
   code_adm?: string | null;
   photos?: string[];
   photos_meta?: PhotoMetaItem[];
@@ -62,6 +69,9 @@ interface HistoriqueItem {
   cree_le?: string | null;
   coords?: { lat: number; lon: number } | null;
   commune?: string | null;
+  quartier?: string | null;
+  rue?: string | null;
+  adresse?: string | null;
   code_adm?: string | null;
 }
 
@@ -81,7 +91,7 @@ const ABIDJAN_COMMUNES_REF = [
   { nom: 'Songon', lat: 5.3192, lon: -4.2389 },
 ];
 
-const resolveCommuneLabel = (
+const resolveCommuneOnly = (
   communePostgis: string | null | undefined,
   coords: { lat: number; lon: number } | null | undefined
 ): string => {
@@ -98,7 +108,17 @@ const resolveCommuneLabel = (
       best = c;
     }
   }
-  return minD <= 0.45 ? best.nom : `${coords.lat.toFixed(3)}°N, ${coords.lon.toFixed(3)}°W`;
+  return minD <= 0.45 ? best.nom : 'District d’Abidjan';
+};
+
+const resolveCommuneLabel = (
+  communePostgis: string | null | undefined,
+  coords: { lat: number; lon: number } | null | undefined,
+  adresse?: string | null,
+  quartier?: string | null,
+  rue?: string | null
+): string => {
+  return resolveAddressLabel(communePostgis, coords, adresse, quartier, rue);
 };
 
 const TYPE_HEADLINES: Record<string, { title: string; label: string; sub: string }> = {
@@ -500,7 +520,7 @@ export const VerificationPage: React.FC = () => {
   const queueCommunes = useMemo(() => {
     const set = new Set<string>();
     fileItems.forEach((item) => {
-      set.add(resolveCommuneLabel(item.commune, item.coords));
+      set.add(resolveCommuneOnly(item.commune, item.coords));
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
   }, [fileItems]);
@@ -508,8 +528,9 @@ export const VerificationPage: React.FC = () => {
   const filteredFileItems = useMemo(() => {
     const q = queueSearch.trim().toLowerCase();
     return fileItems.filter((item) => {
-      const communeName = resolveCommuneLabel(item.commune, item.coords);
-      if (queueCommune !== 'all' && communeName !== queueCommune) return false;
+      const communeOnly = resolveCommuneOnly(item.commune, item.coords);
+      const addrLabel = resolveCommuneLabel(item.commune, item.coords, item.adresse, item.quartier, item.rue);
+      if (queueCommune !== 'all' && communeOnly !== queueCommune) return false;
       if (
         queueFilter === 'crit' &&
         !item.danger_immediat &&
@@ -520,7 +541,7 @@ export const VerificationPage: React.FC = () => {
       if (queueFilter === 'sla' && !item.en_retard) return false;
       if (queueFilter === 'doublon' && item.doublons_suggeres.length === 0) return false;
       if (q) {
-        const hay = `${item.reference_suivi} ${communeName} ${item.type} ${item.description || ''}`.toLowerCase();
+        const hay = `${item.reference_suivi} ${communeOnly} ${addrLabel} ${item.type} ${item.description || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -810,8 +831,16 @@ export const VerificationPage: React.FC = () => {
     ] as Array<{ s: string; l: string }>;
   }, [selectedSignalement, currentPhotosMeta]);
 
+  const selectedSignalementAddress = useResolvedAddress(
+    selectedSignalement?.commune,
+    selectedSignalement?.coords,
+    selectedSignalement?.adresse,
+    selectedSignalement?.quartier,
+    selectedSignalement?.rue
+  );
+
   const activeSectorLabel = selectedSignalement
-    ? resolveCommuneLabel(selectedSignalement.commune, selectedSignalement.coords)
+    ? selectedSignalementAddress
     : 'District d’Abidjan';
 
   const userInitials = React.useMemo(() => {
@@ -1064,7 +1093,13 @@ export const VerificationPage: React.FC = () => {
                   : item.en_retard
                   ? 'SLA dépassé'
                   : 'Standard';
-                const communeName = resolveCommuneLabel(item.commune, item.coords);
+                const communeName = resolveCommuneLabel(
+                  item.commune,
+                  item.coords,
+                  item.adresse,
+                  item.quartier,
+                  item.rue
+                );
                 const typeMeta = getTypeMeta(item.type);
                 const refCode = item.reference_suivi.slice(0, 14).toUpperCase();
                 const shortDesc =
@@ -1132,8 +1167,8 @@ export const VerificationPage: React.FC = () => {
                     Signalement #{selectedSignalement.id} ·{' '}
                     {selectedSignalement.reference_suivi.slice(0, 14).toUpperCase()}
                   </h2>
-                  <span className="chip water">
-                    {resolveCommuneLabel(selectedSignalement.commune, selectedSignalement.coords)}
+                  <span className="chip water" title={selectedSignalementAddress}>
+                    {selectedSignalementAddress}
                   </span>
                 </div>
                 <span className="mono oid-verif-dtop-time">
@@ -1858,7 +1893,7 @@ export const VerificationPage: React.FC = () => {
                           <td>
                             <div style={{ fontWeight: 600 }}>{getTypeMeta(h.type).label}</div>
                             <div style={{ fontSize: '12px', color: 'var(--tx3)' }}>
-                              {resolveCommuneLabel(h.commune, h.coords)}
+                              {resolveCommuneLabel(h.commune, h.coords, h.adresse, h.quartier, h.rue)}
                             </div>
                           </td>
                           <td>

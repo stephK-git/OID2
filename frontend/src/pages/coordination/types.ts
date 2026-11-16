@@ -73,6 +73,9 @@ export interface IncidentItem {
   cloture_le?: string | null;
   zone_id?: number | null;
   commune?: string | null;
+  quartier?: string | null;
+  rue?: string | null;
+  adresse?: string | null;
   code_adm?: string | null;
   coords?: { lat: number; lon: number } | null;
   nb_signalements?: number;

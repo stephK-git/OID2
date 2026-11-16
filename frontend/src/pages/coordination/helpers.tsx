@@ -1,5 +1,6 @@
 import React from 'react';
 import type { IncidentItem, ZoneItem } from './types';
+import { resolveAddressLabel } from '../../utils/address';
 
 export const ROLE_LABELS: Record<string, string> = {
   coordinateur: 'Coordinateur',
@@ -97,6 +98,11 @@ export const resolveIncidentCommune = (inc: IncidentItem, zones: ZoneItem[]): st
     if (z) return z.nom;
   }
   return 'District Autonome d’Abidjan';
+};
+
+export const resolveIncidentAddress = (inc: IncidentItem, zones: ZoneItem[]): string => {
+  const commune = resolveIncidentCommune(inc, zones);
+  return resolveAddressLabel(commune, inc.coords, inc.adresse, inc.quartier, inc.rue);
 };
 
 /** Référence d'incident affichée partout de la même façon (Carte, Incidents, recherche). */

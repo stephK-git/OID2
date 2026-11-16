@@ -16,6 +16,7 @@ from app.models.photo import Photo
 from app.models.signalement import Signalement
 from app.models.zone import Zone
 from app.schemas.signalement import MAX_PHOTOS, SignalementIn, SignalementOut
+from app.services.geocodage import resoudre_adresse_rapide
 from app.services.photos import PhotoError, delete_stored_photo, save_photo_data_url
 
 router = APIRouter(prefix="/signalements", tags=["public"])
@@ -184,6 +185,7 @@ def public_carte_situation(db: Session = Depends(get_db)):
         categorie = _categoriser_incident(inc)
         z_id = _resolve_incident_zone_id(inc, zone_shapes)
         commune = zones_by_id.get(z_id, "District d'Abidjan") if z_id else "District d'Abidjan"
+        geo_addr = resoudre_adresse_rapide(float(pt.y), float(pt.x), commune if z_id else None)
 
         counts[categorie] += 1
         features.append(
@@ -196,7 +198,10 @@ def public_carte_situation(db: Session = Depends(get_db)):
                     "statut": inc.statut,
                     "danger_immediat": bool(inc.danger_immediat),
                     "categorie": categorie,
-                    "commune": commune,
+                    "commune": geo_addr["commune"] if not z_id else commune,
+                    "quartier": geo_addr["quartier"],
+                    "rue": geo_addr["rue"],
+                    "adresse": geo_addr["adresse"],
                     "niveau_fiabilite": inc.niveau_fiabilite,
                     "cree_le": inc.cree_le.isoformat() if inc.cree_le else None,
                 },
@@ -341,6 +346,8 @@ def _serialize_public_incidents(
             lat = float(pt.y)
             lon = float(pt.x)
 
+        geo_addr = resoudre_adresse_rapide(lat, lon, commune if z_id else None)
+
         items.append(
             {
                 "id": inc.id,
@@ -349,7 +356,10 @@ def _serialize_public_incidents(
                 "niveau_fiabilite": inc.niveau_fiabilite,
                 "danger_immediat": bool(inc.danger_immediat),
                 "categorie": _categoriser_incident(inc),
-                "commune": commune,
+                "commune": geo_addr["commune"] if not z_id else commune,
+                "quartier": geo_addr["quartier"],
+                "rue": geo_addr["rue"],
+                "adresse": geo_addr["adresse"],
                 "zone_id": z_id,
                 "lat": lat,
                 "lon": lon,

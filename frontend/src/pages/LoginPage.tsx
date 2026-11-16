@@ -29,18 +29,18 @@ const ROLE_CONFIGS: Record<RoleKey, RoleConfig> = {
     key: 'coordinateur',
     name: 'COORDINATEUR',
     title: 'Coordinateur',
-    sub: 'Poste HQ',
+    sub: 'Tableau de bord',
     email: 'coordinateur@oid.demo',
     pass: 'demo1234',
     icon: 'shield',
     colorClass: 'text-sky',
-    btnText: 'Accéder au Poste de Commandement HQ',
+    btnText: 'Accéder au tableau de bord',
   },
   verificateur: {
     key: 'verificateur',
     name: 'VÉRIFICATEUR',
     title: 'Vérificateur',
-    sub: 'Triage Crise',
+    sub: 'Contrôle qualité',
     email: 'verificateur@oid.demo',
     pass: 'demo1234',
     icon: 'fact_check',
@@ -51,12 +51,12 @@ const ROLE_CONFIGS: Record<RoleKey, RoleConfig> = {
     key: 'enqueteur',
     name: 'ENQUÊTEUR',
     title: 'Enquêteur',
-    sub: 'Terrain WGS84',
+    sub: 'Equipe terrain',
     email: 'enqueteur@oid.demo',
     pass: 'demo1234',
     icon: 'directions_run',
     colorClass: 'text-mint',
-    btnText: "Accéder au Terminal d'Évaluation Terrain",
+    btnText: "Accéder aux  données Terrain",
   },
 };
 
@@ -117,7 +117,7 @@ export const LoginPage: React.FC = () => {
     } catch (err: any) {
       setError(
         err.message ||
-          'Identifiants invalides.'
+        'Identifiants invalides.'
       );
     } finally {
       setLoading(false);
@@ -156,13 +156,12 @@ export const LoginPage: React.FC = () => {
                     >
                       <div className="role-preset-top">
                         <span
-                          className={`material-symbols-outlined ${
-                            key === 'coordinateur'
+                          className={`material-symbols-outlined ${key === 'coordinateur'
                               ? 'text-sky'
                               : key === 'verificateur'
-                              ? 'text-amber'
-                              : 'text-mint'
-                          }`}
+                                ? 'text-amber'
+                                : 'text-mint'
+                            }`}
                           style={{ fontSize: '20px' }}
                         >
                           {cfg.icon}

@@ -8,6 +8,7 @@ import { INCIDENT_TYPE_LABELS, formatRelativeTime } from '../components/incident
 import { LandingMap, type LandingMapPoint } from '../components/landing/LandingMap';
 import { HeroWaves } from '../components/landing/HeroWaves';
 import { useCountUp, useReveal, useStepsProgress } from '../components/landing/useLandingMotion';
+import { resolveAddressLabel } from '../utils/address';
 import './LandingPage.css';
 
 type SeverityFilter = Severity | 'all';
@@ -425,7 +426,14 @@ export const LandingPage: React.FC = () => {
                                 />
                                 <span className="min-w-0">
                                   <span className="block text-[15px] font-bold tracking-[-0.01em] text-ink">
-                                    {incidentTitle(incident)} · {incident.commune}
+                                    {incidentTitle(incident)} ·{' '}
+                                    {resolveAddressLabel(
+                                      incident.commune,
+                                      { lat: incident.lat, lon: incident.lon },
+                                      incident.adresse,
+                                      incident.quartier,
+                                      incident.rue
+                                    )}
                                   </span>
                                   {detail && <span className="block truncate text-[13px] text-ink2">{detail}</span>}
                                   <span className="mt-0.5 block text-[12px] text-ink3">

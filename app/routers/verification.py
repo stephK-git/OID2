@@ -19,6 +19,7 @@ from app.models.signalement import Signalement
 from app.models.utilisateur import Utilisateur
 from app.models.zone import Zone
 from app.services.doublons import haversine_distance_m, suggerer_doublons
+from app.services.geocodage import resoudre_adresse_rapide
 from app.services.photos import inspect_photo_metadata
 from app.services.priorite import score_priorite
 from app.services.statuts import transition_signalement
@@ -93,6 +94,11 @@ def _serialize_doublon(db: Session | None, sig_coords: dict | None, inc: Inciden
             )
 
     commune, _ = _resolve_commune(db, inc.geom)
+    geo_addr = resoudre_adresse_rapide(
+        inc_coords["lat"] if inc_coords else None,
+        inc_coords["lon"] if inc_coords else None,
+        commune,
+    )
 
     return {
         "id": inc.id,
@@ -103,7 +109,10 @@ def _serialize_doublon(db: Session | None, sig_coords: dict | None, inc: Inciden
         "distance_m": distance_m,
         "nb_signalements_lies": nb_lies,
         "coords": inc_coords,
-        "commune": commune,
+        "commune": commune or geo_addr["commune"],
+        "quartier": geo_addr["quartier"],
+        "rue": geo_addr["rue"],
+        "adresse": geo_addr["adresse"],
         "cree_le": inc.cree_le.isoformat() if inc.cree_le else None,
         "description": first_desc,
     }
@@ -139,6 +148,11 @@ def _signalement_to_dict(s: Signalement, suggestions: list, db: Session | None =
 
     doublons_enrichis = [_serialize_doublon(db, coords, i) for i in suggestions]
     doublons_enrichis.sort(key=lambda d: d["distance_m"] if d["distance_m"] is not None else 999999)
+    geo_addr = resoudre_adresse_rapide(
+        coords["lat"] if coords else None,
+        coords["lon"] if coords else None,
+        commune,
+    )
 
     return {
         "id": s.id,
@@ -151,7 +165,10 @@ def _signalement_to_dict(s: Signalement, suggestions: list, db: Session | None =
         "danger_type": s.danger_type,
         "description": s.description,
         "coords": coords,
-        "commune": commune,
+        "commune": commune or geo_addr["commune"],
+        "quartier": geo_addr["quartier"],
+        "rue": geo_addr["rue"],
+        "adresse": geo_addr["adresse"],
         "code_adm": code_adm,
         "photos": photos,
         "photos_meta": photos_meta,
@@ -202,6 +219,11 @@ def historique_traites(
             except Exception:
                 pass
         commune, code_adm = _resolve_commune(db, s.geom)
+        geo_addr = resoudre_adresse_rapide(
+            coords["lat"] if coords else None,
+            coords["lon"] if coords else None,
+            commune,
+        )
         out.append({
             "id": s.id,
             "type": s.type,
@@ -212,7 +234,10 @@ def historique_traites(
             "verifie_le": s.verifie_le.isoformat() if s.verifie_le else None,
             "cree_le": s.cree_le.isoformat() if s.cree_le else None,
             "coords": coords,
-            "commune": commune,
+            "commune": commune or geo_addr["commune"],
+            "quartier": geo_addr["quartier"],
+            "rue": geo_addr["rue"],
+            "adresse": geo_addr["adresse"],
             "code_adm": code_adm,
         })
     return out

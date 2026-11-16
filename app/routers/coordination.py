@@ -24,6 +24,7 @@ from app.routers.verification import _resolve_commune
 from app.schemas.incident import IncidentAffecterIn as AffectationIn
 from app.schemas.incident import IncidentRouvrirIn as RouverturIn
 from app.schemas.utilisateur import UtilisateurCreateIn as UtilisateurIn
+from app.services.geocodage import resoudre_adresse_rapide
 from app.services.photos import inspect_photo_metadata
 from app.services.statuts import transition_incident
 
@@ -145,6 +146,12 @@ def _serialize_incident(db: Session, inc: Incident, include_details: bool = True
                     "photos_meta": eval_photos_meta,
                 }
 
+    geo_addr = resoudre_adresse_rapide(
+        coords["lat"] if coords else None,
+        coords["lon"] if coords else None,
+        commune,
+    )
+
     return {
         "id": inc.id,
         "reference_publique": inc.reference_publique,
@@ -156,7 +163,10 @@ def _serialize_incident(db: Session, inc: Incident, include_details: bool = True
         "enqueteur_nom": enqueteur.nom if enqueteur else None,
         "danger_immediat": inc.danger_immediat,
         "zone_id": inc.zone_id,
-        "commune": commune,
+        "commune": commune or geo_addr["commune"],
+        "quartier": geo_addr["quartier"],
+        "rue": geo_addr["rue"],
+        "adresse": geo_addr["adresse"],
         "code_adm": code_adm,
         "coords": coords,
         "nb_signalements": max(len(signalements_lies), 1),

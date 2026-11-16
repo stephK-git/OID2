@@ -6,6 +6,7 @@ import {
   INCIDENT_TYPE_LABELS,
 } from '../incidentLabels';
 import type { PublicIncident } from '../PublicIncidentCard';
+import { resolveAddressLabel } from '../../utils/address';
 
 function formatTime(isoDate: string | null): string {
   if (!isoDate) return '—';
@@ -141,6 +142,13 @@ export const LandingIncidentDetail: React.FC<LandingIncidentDetailProps> = ({
     INCIDENT_FIABILITE_LABELS[incident.niveau_fiabilite] || incident.niveau_fiabilite;
   const height = formatHeight(incident.hauteur_eau_max_cm);
   const lastUpdate = formatTime(incident.maj_le || incident.cree_le);
+  const fullLocation = resolveAddressLabel(
+    incident.commune,
+    { lat: incident.lat, lon: incident.lon },
+    incident.adresse,
+    incident.quartier,
+    incident.rue
+  );
 
   if (variant === 'inline') {
     return (
@@ -186,7 +194,7 @@ export const LandingIncidentDetail: React.FC<LandingIncidentDetailProps> = ({
           {typeLabel}
         </h3>
         <div className="text-[15px] text-ink2">
-          <strong className="text-ink">{incident.commune}</strong> · signalé à{' '}
+          <strong className="text-ink">{fullLocation}</strong> · signalé à{' '}
           <span className="font-mono text-ink">{formatTime(incident.cree_le)}</span>
         </div>
       </div>

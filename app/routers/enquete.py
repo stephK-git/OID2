@@ -20,6 +20,7 @@ from app.models.signalement import Signalement
 from app.models.utilisateur import Utilisateur
 from app.models.zone import Zone
 from app.routers.verification import _resolve_commune
+from app.services.geocodage import resoudre_adresse_rapide
 from app.services.photos import PhotoError, delete_stored_photo, inspect_photo_metadata, save_photo_data_url
 from app.services.statuts import transition_incident
 
@@ -160,6 +161,12 @@ def _incident_to_dict(inc: Incident, db: Session | None = None) -> dict:
                     photos_citoyennes.append(p.url)
                     photos_citoyennes_meta.append(inspect_photo_metadata(p.url, PHOTO_UPLOAD_DIR))
 
+    geo_addr = resoudre_adresse_rapide(
+        coords["lat"] if coords else None,
+        coords["lon"] if coords else None,
+        commune,
+    )
+
     return {
         "id": inc.id,
         "reference_publique": inc.reference_publique,
@@ -170,7 +177,10 @@ def _incident_to_dict(inc: Incident, db: Session | None = None) -> dict:
         "danger_immediat": inc.danger_immediat,
         "enqueteur_id": inc.enqueteur_id,
         "coords": coords,
-        "commune": commune,
+        "commune": geo_addr["commune"] if not commune else commune,
+        "quartier": geo_addr["quartier"],
+        "rue": geo_addr["rue"],
+        "adresse": geo_addr["adresse"],
         "code_adm": code_adm,
         "description_citoyenne": description_citoyenne,
         "hauteur_eau_cm": hauteur_eau_cm,

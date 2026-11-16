@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, Camera, MapPin, Droplets, AlertTriangle, Route, LocateFixed } from 'lucide-react';
 import { apiUrl } from '../api/client';
+import { resolveAddressLabel } from '../utils/address';
 import {
   INCIDENT_FIABILITE_LABELS,
   INCIDENT_STATUT_LABELS,
@@ -16,6 +17,9 @@ export interface PublicIncident {
   danger_immediat: boolean;
   categorie: 'critique' | 'vigilance' | 'route_coupee';
   commune: string;
+  quartier?: string | null;
+  rue?: string | null;
+  adresse?: string | null;
   zone_id: number | null;
   nb_signalements: number;
   hauteur_eau_max_cm: number | null;
@@ -94,6 +98,13 @@ export const PublicIncidentCard: React.FC<PublicIncidentCardProps> = ({
   };
   const fiabiliteLabel =
     INCIDENT_FIABILITE_LABELS[incident.niveau_fiabilite] || incident.niveau_fiabilite;
+  const fullLocation = resolveAddressLabel(
+    incident.commune,
+    { lat: incident.lat, lon: incident.lon },
+    incident.adresse,
+    incident.quartier,
+    incident.rue
+  );
 
   return (
     <article
@@ -130,7 +141,7 @@ export const PublicIncidentCard: React.FC<PublicIncidentCardProps> = ({
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-ink2">
               <span className="inline-flex items-center gap-1 font-medium text-ink">
                 <MapPin size={13} className="text-accent shrink-0" aria-hidden="true" />
-                {incident.commune}
+                {fullLocation}
               </span>
               <span aria-hidden="true">·</span>
               <span>{formatRelativeTime(incident.cree_le)}</span>

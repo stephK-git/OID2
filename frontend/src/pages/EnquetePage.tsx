@@ -6,6 +6,7 @@ import { useDialog } from '../context/DialogContext';
 import { BrandMark, VigilancePill } from '../components/shell';
 import { EnqueteReportView } from '../components/EnqueteReportView';
 import { ItineraryMap } from '../components/ItineraryMap';
+import { resolveAddressLabel, useResolvedAddress } from '../utils/address';
 
 interface PhotoMetaItem {
   url: string;
@@ -30,6 +31,9 @@ interface DossierItem {
   danger_immediat: boolean;
   coords: { lat: number; lon: number; utm_e?: number; utm_n?: number } | null;
   commune?: string | null;
+  quartier?: string | null;
+  rue?: string | null;
+  adresse?: string | null;
   code_adm?: string | null;
   description_citoyenne?: string | null;
   hauteur_eau_cm?: number | null;
@@ -202,7 +206,6 @@ export const EnquetePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draftSavedPulse, setDraftSavedPulse] = useState(false);
-  const [lastSavedLabel, setLastSavedLabel] = useState<string>('Prêt pour saisie contradictoire');
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -276,16 +279,6 @@ export const EnquetePage: React.FC = () => {
           photos: res.photos || [],
           photos_meta: res.photos_meta || [],
         });
-        if (res.soumise_le) {
-          setLastSavedLabel(
-            `Transmise le ${new Date(res.soumise_le).toLocaleTimeString('fr-FR', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}`
-          );
-        } else {
-          setLastSavedLabel('Brouillon chargé depuis le serveur O.I.D');
-        }
       } else {
         // Vérifier s'il existe un brouillon local non synchronisé pour cet incident
         const localRaw = localStorage.getItem(`${LOCAL_DRAFT_PREFIX}${incidentId}`);
@@ -306,14 +299,12 @@ export const EnquetePage: React.FC = () => {
               besoins: parsed.besoins || '',
               recommandations: parsed.recommandations || '',
             });
-            setLastSavedLabel('Restauré depuis le cache hors-ligne local');
             return;
           } catch {
             // Ignore malformed local draft
           }
         }
         setEvalForm(defaultEvaluation);
-        setLastSavedLabel('Aucune évaluation enregistrée pour ce dossier');
       }
     } catch (err: any) {
       setError(err.message);
@@ -484,13 +475,6 @@ export const EnquetePage: React.FC = () => {
 
     if (syncedCount > 0) {
       setSuccessMsg(`${syncedCount} paquet(s) hors-ligne synchronisé(s) avec le serveur O.I.D.`);
-      setLastSavedLabel(
-        `Synchro auto réussie à ${new Date().toLocaleTimeString('fr-FR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        })}`
-      );
       loadDossiers(true);
       if (selectedDossier) {
         loadEvaluation(selectedDossier.id);
@@ -561,13 +545,6 @@ export const EnquetePage: React.FC = () => {
       }
       return next;
     });
-    setLastSavedLabel(
-      `Sauvegarde locale auto à ${new Date().toLocaleTimeString('fr-FR', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      })}`
-    );
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -698,7 +675,6 @@ export const EnquetePage: React.FC = () => {
       saveLocalDraftBackup(selectedDossier.id, evalForm);
       setDraftSavedPulse(true);
       window.setTimeout(() => setDraftSavedPulse(false), 1800);
-      setLastSavedLabel('Mis en file hors-ligne (synchronisation auto dès reconnexion)');
       setSuccessMsg(
         'Mode hors-ligne : Brouillon enregistré dans la Queue Locale et prêt pour synchronisation automatique.'
       );
@@ -723,13 +699,6 @@ export const EnquetePage: React.FC = () => {
       }));
       setDraftSavedPulse(true);
       window.setTimeout(() => setDraftSavedPulse(false), 1800);
-      setLastSavedLabel(
-        `Dernière sauvegarde à ${new Date().toLocaleTimeString('fr-FR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        })}`
-      );
       setSuccessMsg('Brouillon et photos enregistrés avec succès.');
       loadDossiers(true);
     } catch (err: any) {
@@ -795,12 +764,6 @@ export const EnquetePage: React.FC = () => {
         photos: res.photos || prev.photos,
         photos_meta: res.photos_meta || prev.photos_meta,
       }));
-      setLastSavedLabel(
-        `Transmis au PC Central à ${new Date(submittedAt).toLocaleTimeString('fr-FR', {
-          hour: '2-digit',
-          minute: '2-digit',
-        })}`
-      );
       setSuccessMsg(
         "Évaluation et photographies transmises avec succès ! L'incident est désormais marqué comme évalué."
       );
@@ -823,30 +786,39 @@ export const EnquetePage: React.FC = () => {
     (selectedDossier != null &&
       (selectedDossier.statut !== 'affecte' || evalForm.statut === 'soumise'));
 
+  const selectedDossierAddress = useResolvedAddress(
+    selectedDossier?.commune,
+    selectedDossier?.coords,
+    selectedDossier?.adresse,
+    selectedDossier?.quartier,
+    selectedDossier?.rue
+  );
+
   const renderEvaluationCard = () => {
     return (
       <>
         {selectedDossier ? (
               (() => {
                 const selCommune = selectedDossier.commune || "District d'Abidjan";
+                const selAddress = selectedDossierAddress || selCommune;
                 const savedPhotos = evalForm.photos || [];
                 const citizenPhotos = selectedDossier.photos_citoyennes || [];
                 const citizenPhotosMeta = selectedDossier.photos_citoyennes_meta || [];
 
                 return (
                   <div className="oid-enq-eval-card-shell">
-                    {/* 1. EN-TÊTE FICHE D'ÉVALUATION (ÉPINGLÉ EN HAUT) */}
+                    {/* 1. EN-TÊTE FICHE D'ÉVALUATION COMPACT (ÉPINGLÉ EN HAUT) */}
                     <div className="oid-enq-eval-head">
                       <div className="oid-enq-eval-head-left">
-                        <div className="oid-enq-eval-title-row">
-                          <span className="material-symbols-outlined text-cyan">
-                            assignment_turned_in
-                          </span>
-                          <h2>Évaluation de Terrain — Dossier #{selectedDossier.id}</h2>
-                        </div>
-                        <span className="oid-enq-eval-ref">
-                          Réf : OID-ABJ-{selectedDossier.reference_publique.slice(0, 10).toUpperCase()} ·{' '}
-                          {formatTypeSubtitle(selectedDossier.type)} ({selCommune})
+                        <span className="material-symbols-outlined text-cyan oid-enq-eval-head-icon">
+                          assignment_turned_in
+                        </span>
+                        <h2>
+                          Dossier #{selectedDossier.id} · OID-ABJ-
+                          {selectedDossier.reference_publique.slice(0, 10).toUpperCase()}
+                        </h2>
+                        <span className="oid-enq-eval-ref" title={selAddress}>
+                          {formatTypeSubtitle(selectedDossier.type)} · {selAddress}
                         </span>
                       </div>
 
@@ -875,7 +847,7 @@ export const EnquetePage: React.FC = () => {
                             </div>
                             <div className="oid-enq-coords-text">
                               <span className="oid-enq-coords-eyebrow">
-                                Position Tactique Signalée (EPSG:4326 / EPSG:32630)
+                                Localisation &amp; Adresse · {selAddress}
                               </span>
                               <span className="oid-enq-coords-val">
                                 WGS84 : {selectedDossier.coords.lat.toFixed(4)}° N,{' '}
@@ -1356,7 +1328,7 @@ export const EnquetePage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* 6. EVAL-ACTIONS-BAR (ÉPINGLÉE EN BAS DU PANNEAU DROIT) */}
+                    {/* 6. EVAL-ACTIONS-BAR COMPACTE (ÉPINGLÉE EN BAS DU PANNEAU DROIT) */}
                     <div className="oid-enq-actions-bar">
                       <div className="oid-enq-actions-left">
                         <button
@@ -1377,11 +1349,6 @@ export const EnquetePage: React.FC = () => {
                             {draftSavedPulse ? 'Brouillon synchronisé !' : 'Sauvegarder Brouillon'}
                           </span>
                         </button>
-
-                        <div className="oid-enq-save-timestamp">
-                          <span className="oid-enq-save-lbl">Horodatage local</span>
-                          <span className="oid-enq-save-val">{lastSavedLabel}</span>
-                        </div>
                       </div>
 
                       <div className="oid-enq-actions-right">
@@ -1744,7 +1711,13 @@ export const EnquetePage: React.FC = () => {
                   {filteredAndSortedAffectes.map((d) => {
                     const isSelected = selectedDossier?.id === d.id;
                     const isHighRisk = d.danger_immediat || d.score_priorite >= 80;
-                    const communeLabel = d.commune || "District d'Abidjan";
+                    const addressLabel = resolveAddressLabel(
+                      d.commune,
+                      d.coords,
+                      d.adresse,
+                      d.quartier,
+                      d.rue
+                    );
                     const evalStatut = d.evaluation_statut || 'aucune';
 
                     return (
@@ -1803,7 +1776,9 @@ export const EnquetePage: React.FC = () => {
                           >
                             location_on
                           </span>
-                          <span className="oid-enq-loc-name">{communeLabel}</span>
+                          <span className="oid-enq-loc-name" title={addressLabel}>
+                            {addressLabel}
+                          </span>
                           {d.hauteur_eau_cm != null && d.hauteur_eau_cm > 0 && (
                             <span className="oid-enq-loc-sub">({d.hauteur_eau_cm} cm)</span>
                           )}
@@ -1980,7 +1955,14 @@ export const EnquetePage: React.FC = () => {
                       RAPPORT D'ENQUÊTE · LECTURE SEULE
                     </span>
                     <span style={{ fontSize: '13px', color: 'var(--tx2)' }}>
-                      Dossier #{inspectingDossier.id} · {inspectingDossier.commune || "District d'Abidjan"}
+                      Dossier #{inspectingDossier.id} ·{' '}
+                      {resolveAddressLabel(
+                        inspectingDossier.commune,
+                        inspectingDossier.coords,
+                        inspectingDossier.adresse,
+                        inspectingDossier.quartier,
+                        inspectingDossier.rue
+                      )}
                     </span>
                   </div>
                 </div>
@@ -2198,7 +2180,13 @@ export const EnquetePage: React.FC = () => {
                               </td>
                               <td>
                                 <div style={{ fontWeight: 600, fontSize: '13px' }}>
-                                  {h.commune || "District d'Abidjan"}
+                                  {resolveAddressLabel(
+                                    h.commune,
+                                    h.coords,
+                                    h.adresse,
+                                    h.quartier,
+                                    h.rue
+                                  )}
                                 </div>
                                 {h.hauteur_eau_cm != null && h.hauteur_eau_cm > 0 && (
                                   <div className="sub" style={{ fontSize: '11.5px', color: 'var(--water)' }}>
