@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch, apiUrl } from '../../api/client';
+import { useDialog } from '../../context/DialogContext';
 import { EnqueteReportView } from '../../components/EnqueteReportView';
 import { FilterChips, SearchField, SegmentedControl, type ChipOption } from './FilterControls';
 import type { CoordData, IncidentItem } from './types';
@@ -341,6 +342,7 @@ const HistoriqueReport: React.FC<HistoriqueReportProps> = ({
   onDataChanged,
   showToast,
 }) => {
+  const { showAlert } = useDialog();
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [motif, setMotif] = useState('');
@@ -404,7 +406,12 @@ const HistoriqueReport: React.FC<HistoriqueReportProps> = ({
       onBack();
       await onDataChanged();
     } catch (err: any) {
-      alert(`Erreur : ${err.message}`);
+      await showAlert({
+        eyebrow: 'Réouverture de dossier',
+        title: `Impossible de rouvrir l'incident #${incident.id}`,
+        message: err.message || 'Une erreur est survenue lors de la réouverture.',
+        tone: 'danger',
+      });
     } finally {
       setSaving(false);
     }

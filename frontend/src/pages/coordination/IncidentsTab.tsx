@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch, apiUrl, getToken } from '../../api/client';
+import { useDialog } from '../../context/DialogContext';
 import { EnqueteReportView } from '../../components/EnqueteReportView';
 import { IncidentMiniMap } from './IncidentMiniMap';
 import { FilterChips, SearchField, SegmentedControl, type ChipOption } from './FilterControls';
@@ -56,6 +57,7 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
   onDataChanged,
   showToast,
 }) => {
+  const { showAlert, showConfirm } = useDialog();
   const { enqueteurs, zones } = data;
   // Compteurs du filtre : uniquement les dossiers en cours (les clôturés sont dans l'Historique)
   const incidents = useMemo(() => data.incidents.filter((i) => i.statut !== 'cloture'), [data.incidents]);
@@ -217,21 +219,40 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
       showToast(`Incident #${incidentId} affecté à ${enq ? enq.nom : `Enquêteur #${panelEnqueteurId}`}.`);
       await onDataChanged();
     } catch (err: any) {
-      alert(`Erreur d'affectation : ${err.message}`);
+      await showAlert({
+        eyebrow: 'Affectation terrain',
+        title: `Impossible d'affecter l'incident #${incidentId}`,
+        message: err.message || 'Une erreur est survenue lors de l’affectation.',
+        tone: 'danger',
+      });
     } finally {
       setActionLoading(false);
     }
   };
 
   const handlePanelCloturer = async (incidentId: number) => {
-    if (!window.confirm(`Confirmer la clôture de l'incident #${incidentId} ?`)) return;
+    const confirmed = await showConfirm({
+      eyebrow: 'Clôture de dossier',
+      title: `Clôturer l'incident #${incidentId} ?`,
+      message: "L'incident sera archivé dans l'historique et retiré de la file active.",
+      confirmLabel: 'Clôturer',
+      cancelLabel: 'Annuler',
+      tone: 'primary',
+      icon: 'task_alt',
+    });
+    if (!confirmed) return;
     setActionLoading(true);
     try {
       await apiFetch(`/coordination/incidents/${incidentId}/cloturer`, { method: 'POST' });
       showToast(`Incident #${incidentId} clôturé avec succès.`);
       await onDataChanged();
     } catch (err: any) {
-      alert(`Erreur : ${err.message}`);
+      await showAlert({
+        eyebrow: 'Clôture de dossier',
+        title: `Impossible de clôturer l'incident #${incidentId}`,
+        message: err.message || 'Une erreur est survenue lors de la clôture.',
+        tone: 'danger',
+      });
     } finally {
       setActionLoading(false);
     }
@@ -254,7 +275,12 @@ export const IncidentsTab: React.FC<IncidentsTabProps> = ({
       showToast(`Incident #${incidentId} rouvert et remis en file active.`);
       await onDataChanged();
     } catch (err: any) {
-      alert(`Erreur : ${err.message}`);
+      await showAlert({
+        eyebrow: 'Réouverture de dossier',
+        title: `Impossible de rouvrir l'incident #${incidentId}`,
+        message: err.message || 'Une erreur est survenue lors de la réouverture.',
+        tone: 'danger',
+      });
     } finally {
       setActionLoading(false);
     }

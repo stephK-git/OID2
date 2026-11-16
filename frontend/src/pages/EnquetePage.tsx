@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, apiUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useDialog } from '../context/DialogContext';
 import { BrandMark, VigilancePill } from '../components/shell';
 import { EnqueteReportView } from '../components/EnqueteReportView';
 import { ItineraryMap } from '../components/ItineraryMap';
@@ -177,6 +178,7 @@ const writeOfflineQueue = (packets: OfflineQueuePacket[]) => {
 
 export const EnquetePage: React.FC = () => {
   const { user, logout } = useAuth();
+  const { showConfirm } = useDialog();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -612,7 +614,16 @@ export const EnquetePage: React.FC = () => {
 
   const handleDeleteSavedPhoto = async (photoUrl: string) => {
     if (!selectedDossier) return;
-    if (!window.confirm('Supprimer cette photographie du brouillon d’évaluation ?')) return;
+    const confirmed = await showConfirm({
+      eyebrow: 'Preuve terrain',
+      title: 'Supprimer cette photographie ?',
+      message: 'La photographie sera définitivement retirée du brouillon d’évaluation.',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Conserver',
+      tone: 'danger',
+      icon: 'delete',
+    });
+    if (!confirmed) return;
     setSaving(true);
     setError(null);
     try {
@@ -739,11 +750,17 @@ export const EnquetePage: React.FC = () => {
   const handleSubmitEvaluation = async () => {
     if (!selectedDossier) return;
     if (!validateCoherence()) return;
-    if (
-      !window.confirm(
-        "Confirmer la transmission définitive de l'évaluation terrain à la coordination O.I.D ?\nStatut incident cible : ÉVALUÉ"
-      )
-    ) {
+    const confirmed = await showConfirm({
+      eyebrow: 'Transmission PC Central',
+      title: `Transmettre l'évaluation du dossier #${selectedDossier.id} ?`,
+      message:
+        "Confirmer la transmission définitive de l'évaluation terrain à la coordination O.I.D ?\nStatut incident cible : ÉVALUÉ",
+      confirmLabel: 'Transmettre',
+      cancelLabel: 'Annuler',
+      tone: 'primary',
+      icon: 'send',
+    });
+    if (!confirmed) {
       return;
     }
 

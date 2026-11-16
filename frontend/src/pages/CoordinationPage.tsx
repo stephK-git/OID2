@@ -77,7 +77,10 @@ export const CoordinationPage: React.FC = () => {
   // Onglet Historique : incident dont le rapport est ouvert en pleine page (null : tableau)
   const [historiqueReportId, setHistoriqueReportId] = useState<number | null>(null);
 
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    msg: string;
+    tone: 'success' | 'error' | 'warn' | 'info';
+  } | null>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -121,10 +124,16 @@ export const CoordinationPage: React.FC = () => {
 
   const handleError = useCallback((msg: string) => setError(msg), []);
 
-  const showToast = useCallback((msg: string) => {
-    setToastMsg(msg);
-    window.setTimeout(() => setToastMsg((prev) => (prev === msg ? null : prev)), 3200);
-  }, []);
+  const showToast = useCallback(
+    (msg: string, tone: 'success' | 'error' | 'warn' | 'info' = 'success') => {
+      setToast({ msg, tone });
+      window.setTimeout(
+        () => setToast((prev) => (prev?.msg === msg ? null : prev)),
+        3200
+      );
+    },
+    []
+  );
 
   const handleLogout = () => {
     logout();
@@ -254,11 +263,32 @@ export const CoordinationPage: React.FC = () => {
 
   return (
     <div className="app-shell page-coordinateur" id="appShell">
-      {toastMsg && (
+      {toast && (
         <div id="toasts" role="status">
-          <div className="toast success">
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check_circle</span>
-            <span>{toastMsg}</span>
+          <div className={`toast ${toast.tone}`}>
+            <span
+              className="material-symbols-outlined"
+              style={{
+                fontSize: '18px',
+                color:
+                  toast.tone === 'error'
+                    ? 'var(--crit)'
+                    : toast.tone === 'warn'
+                    ? 'var(--warn)'
+                    : toast.tone === 'info'
+                    ? 'var(--water)'
+                    : 'var(--ok)',
+              }}
+            >
+              {toast.tone === 'error'
+                ? 'error'
+                : toast.tone === 'warn'
+                ? 'warning'
+                : toast.tone === 'info'
+                ? 'info'
+                : 'check_circle'}
+            </span>
+            <span>{toast.msg}</span>
           </div>
         </div>
       )}
@@ -342,6 +372,7 @@ export const CoordinationPage: React.FC = () => {
             onOpenIncident={openIncident}
             onDataChanged={loadData}
             onError={handleError}
+            showToast={showToast}
             refreshKey={refreshKey}
           />
         )}

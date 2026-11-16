@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../api/client';
+import { useDialog } from '../../context/DialogContext';
 import type { UserRoleFilter, UtilisateurItem, ZoneItem } from './types';
 import { ROLE_LABELS } from './helpers';
 import { FilterChips, SearchField } from './FilterControls';
@@ -28,6 +29,7 @@ const ActionIcon: React.FC<{ name: keyof typeof ACTION_ICON_PATHS }> = ({ name }
 );
 
 export const ComptesTab: React.FC<ComptesTabProps> = ({ zones, onDataChanged, onError, showToast, refreshKey }) => {
+  const { showAlert, showConfirm, showPrompt } = useDialog();
   const [utilisateurs, setUtilisateurs] = useState<UtilisateurItem[]>([]);
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>('tous');
@@ -43,6 +45,7 @@ export const ComptesTab: React.FC<ComptesTabProps> = ({ zones, onDataChanged, on
   // Édition
   const [editingUser, setEditingUser] = useState<UtilisateurItem | null>(null);
   const [editNom, setEditNom] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState('enqueteur');
   const [editZoneId, setEditZoneId] = useState<number | ''>('');
 
@@ -102,11 +105,18 @@ export const ComptesTab: React.FC<ComptesTabProps> = ({ zones, onDataChanged, on
     if (actifActuel) {
       const charge =
         u.dossiers_actifs > 0
-          ? `
-
-${u.nom} a encore ${u.dossiers_actifs} dossier(s) actif(s) : pensez à les réaffecter.`
+          ? `\n\nAttention : ${u.nom} a encore ${u.dossiers_actifs} dossier(s) actif(s) — pensez à les réaffecter.`
           : '';
-      if (!window.confirm(`Suspendre le compte de ${u.nom} ? Il ne pourra plus se connecter.${charge}`)) return;
+      const confirmed = await showConfirm({
+        eyebrow: 'Accréditation agent',
+        title: `Suspendre le compte de ${u.nom} ?`,
+        message: `Il ne pourra plus se connecter à la plateforme O.I.D.${charge}`,
+        confirmLabel: 'Suspendre le compte',
+        cancelLabel: 'Annuler',
+        tone: 'danger',
+        icon: 'lock',
+      });
+      if (!confirmed) return;
     }
     try {
       await apiFetch(`/coordination/utilisateurs/${uid}/actif?actif=${!actifActuel}`, { method: 'PATCH' });
@@ -118,12 +128,22 @@ ${u.nom} a encore ${u.dossiers_actifs} dossier(s) actif(s) : pensez à les réaf
   };
 
   const handleResetPassword = async (uid: number, nom: string) => {
-    const newPass = window.prompt(`Entrez le nouveau mot de passe pour ${nom} (minimum 8 caractères) :`);
+    const newPass = await showPrompt({
+      eyebrow: 'Sécurité · Accès agent',
+      title: `Réinitialiser le mot de passe`,
+      message: `Définissez un nouveau mot de passe pour ${nom} (minimum 8 caractères).`,
+      label: 'Nouveau mot de passe',
+      placeholder: 'Minimum 8 caractères',
+      inputType: 'password',
+      minLength: 8,
+      required: true,
+      requiredMessage: 'Le mot de passe doit comporter au moins 8 caractères.',
+      confirmLabel: 'Réinitialiser',
+      cancelLabel: 'Annuler',
+      tone: 'primary',
+      icon: 'key',
+    });
     if (!newPass) return;
-    if (newPass.length < 8) {
-      showToast('Le mot de passe doit comporter au moins 8 caractères.');
-      return;
-    }
     try {
       await apiFetch(
         `/coordination/utilisateurs/${uid}/mot-de-passe`,
@@ -139,6 +159,7 @@ ${u.nom} a encore ${u.dossiers_actifs} dossier(s) actif(s) : pensez à les réaf
     setShowNewUser(false);
     setEditingUser(u);
     setEditNom(u.nom);
+    setEditEmail(u.email);
     setEditRole(u.role);
     setEditZoneId(u.zone_id || '');
   };
@@ -150,7 +171,8 @@ ${u.nom} a encore ${u.dossiers_actifs} dossier(s) actif(s) : pensez à les réaf
       await apiFetch(`/coordination/utilisateurs/${editingUser.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
-          nom: editNom,
+          nom: editNom.trim(),
+          email: editEmail.trim().toLowerCase(),
           role: editRole,
           // 0 = retirer la commune (null signifie « ne pas modifier » côté API)
           zone_id: editZoneId ? Number(editZoneId) : 0,
@@ -160,7 +182,12 @@ ${u.nom} a encore ${u.dossiers_actifs} dossier(s) actif(s) : pensez à les réaf
       await Promise.all([loadUtilisateurs(), onDataChanged()]);
       showToast('Profil mis à jour.');
     } catch (err: any) {
-      onError(err.message);
+      await showAlert({
+        eyebrow: 'Gestion des comptes',
+        title: 'Modification impossible',
+        message: err.message || 'Impossible de mettre à jour ce profil.',
+        tone: 'danger',
+      });
     }
   };
 
@@ -287,13 +314,21 @@ ${u.nom} a encore ${u.dossiers_actifs} dossier(s) actif(s) : pensez à les réaf
 
             {editingUser && (
               <form onSubmit={handleSaveEditUser} className="oid-coord-user-form">
-                <h4>Modifier le profil : {editingUser.email}</h4>
+                <h4>Modifier le profil : {editingUser.nom}</h4>
                 <div className="oid-coord-user-form-grid">
                   <input
                     type="text"
                     placeholder="Nom complet"
                     value={editNom}
                     onChange={(e) => setEditNom(e.target.value)}
+                    className="oid-coord-input"
+                    required
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email professionnel"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
                     className="oid-coord-input"
                     required
                   />

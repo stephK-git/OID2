@@ -2,6 +2,7 @@ import React, { useLayoutEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { DialogProvider } from './context/DialogContext';
 import { SiteHeader, SiteFooter } from './components/site';
 import { ProtectedRoute, CitizenOnlyRoute } from './components/ProtectedRoute';
 
@@ -110,8 +111,10 @@ export const App: React.FC = () => {
     <AuthProvider>
       <BrowserRouter>
         <ThemeProvider>
-          <ScrollToTop />
-          <AppShell />
+          <DialogProvider>
+            <ScrollToTop />
+            <AppShell />
+          </DialogProvider>
         </ThemeProvider>
       </BrowserRouter>
     </AuthProvider>

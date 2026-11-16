@@ -109,3 +109,43 @@ def test_mot_de_passe_trop_court_refuse(client: TestClient, auth_coordinateur: d
         headers=auth_coordinateur,
     )
     assert r.status_code == 422
+
+
+def test_modifier_email_utilisateur(client: TestClient, auth_coordinateur: dict) -> None:
+    r_create = client.post(
+        "/coordination/utilisateurs",
+        json={
+            "nom": "Agent Email Edit",
+            "email": "avant.edit@oid.ci",
+            "password": "Password123!",
+            "role": "enqueteur",
+        },
+        headers=auth_coordinateur,
+    )
+    assert r_create.status_code == 201
+    uid = r_create.json()["id"]
+
+    # Modification réussie avec normalisation espaces/majuscules
+    r_patch = client.patch(
+        f"/coordination/utilisateurs/{uid}",
+        json={"nom": "Agent Email Edit", "email": "  Apres.Edit@OID.CI "},
+        headers=auth_coordinateur,
+    )
+    assert r_patch.status_code == 200
+    assert r_patch.json()["email"] == "apres.edit@oid.ci"
+
+    # Doublon sur l'e-mail d'un autre utilisateur -> 409
+    r_dup = client.patch(
+        f"/coordination/utilisateurs/{uid}",
+        json={"email": "coordinateur@test.local"},
+        headers=auth_coordinateur,
+    )
+    assert r_dup.status_code == 409
+
+    # Format d'e-mail invalide -> 422
+    r_bad = client.patch(
+        f"/coordination/utilisateurs/{uid}",
+        json={"email": "pas-un-email"},
+        headers=auth_coordinateur,
+    )
+    assert r_bad.status_code == 422

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from geoalchemy2.shape import to_shape
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -438,8 +438,21 @@ def liste_utilisateurs(
 
 class UtilisateurUpdateIn(BaseModel):
     nom: str | None = None
+    email: str | None = Field(
+        default=None,
+        min_length=5,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
     role: str | None = None
     zone_id: int | None = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
 
 class MotDePasseIn(BaseModel):
@@ -453,7 +466,7 @@ def modifier_utilisateur(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(require_role("coordinateur")),
 ):
-    """Modifie le nom, rôle ou la zone d'un utilisateur."""
+    """Modifie le nom, l'e-mail, le rôle ou la zone d'un utilisateur."""
     user = db.get(Utilisateur, uid)
     if user is None:
         raise HTTPException(404, "Utilisateur introuvable.")
@@ -461,6 +474,18 @@ def modifier_utilisateur(
         raise HTTPException(409, "Vous ne pouvez pas modifier votre propre rôle.")
     if data.nom is not None and data.nom.strip():
         user.nom = data.nom.strip()
+    if data.email is not None:
+        normalized_email = data.email.strip().lower()
+        if normalized_email != user.email:
+            existant = db.scalar(
+                select(Utilisateur).where(
+                    Utilisateur.email == normalized_email,
+                    Utilisateur.id != user.id,
+                )
+            )
+            if existant:
+                raise HTTPException(409, "Un compte avec cet e-mail existe déjà.")
+            user.email = normalized_email
     if data.role is not None:
         if data.role not in ROLES_VALIDES:
             raise HTTPException(422, f"Rôle invalide: {data.role}")
@@ -469,7 +494,14 @@ def modifier_utilisateur(
         user.zone_id = data.zone_id if data.zone_id > 0 else None
     db.commit()
     db.refresh(user)
-    return {"id": user.id, "nom": user.nom, "role": user.role, "zone_id": user.zone_id, "actif": user.actif}
+    return {
+        "id": user.id,
+        "nom": user.nom,
+        "email": user.email,
+        "role": user.role,
+        "zone_id": user.zone_id,
+        "actif": user.actif,
+    }
 
 
 @router.post("/utilisateurs", status_code=201)

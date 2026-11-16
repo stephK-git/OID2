@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../api/client';
+import { useDialog } from '../../context/DialogContext';
 import { FilterChips } from './FilterControls';
 import {
   SigAnalysisMap,
@@ -38,6 +39,7 @@ interface CarteTabProps {
   /** Recharge les données partagées après une action (affectation, clôture…). */
   onDataChanged: () => Promise<void> | void;
   onError: (msg: string) => void;
+  showToast: (msg: string, tone?: 'success' | 'error' | 'warn' | 'info') => void;
   refreshKey: number;
 }
 
@@ -52,8 +54,10 @@ export const CarteTab: React.FC<CarteTabProps> = ({
   onOpenIncident,
   onDataChanged,
   onError,
+  showToast,
   refreshKey,
 }) => {
+  const { showAlert, showConfirm, showPrompt } = useDialog();
   const { stats, incidents, enqueteurs, zones } = data;
   const [isKpiSidebarOpen, setIsKpiSidebarOpen] = useState(true);
   const [carteGeoJson, setCarteGeoJson] = useState<any>(null);
@@ -126,35 +130,76 @@ export const CarteTab: React.FC<CarteTabProps> = ({
         method: 'POST',
         body: JSON.stringify({ enqueteur_id: Number(selectedEnqueteurId) }),
       });
+      const enq = enqueteurs.find((e) => e.id === Number(selectedEnqueteurId));
       setAffectingId(null);
       setSelectedEnqueteurId('');
+      showToast(`Incident #${incidentId} affecté à ${enq ? enq.nom : `Enquêteur #${selectedEnqueteurId}`}.`);
       await afterChange();
     } catch (err: any) {
-      alert(`Erreur d'affectation : ${err.message}`);
+      await showAlert({
+        eyebrow: 'Affectation terrain',
+        title: `Impossible d'affecter l'incident #${incidentId}`,
+        message: err.message || 'Une erreur est survenue lors de l’affectation.',
+        tone: 'danger',
+      });
     }
   };
 
   const handleCloturer = async (incidentId: number) => {
-    if (!window.confirm('Confirmer la clôture de cet incident ?')) return;
+    const confirmed = await showConfirm({
+      eyebrow: 'Clôture de dossier',
+      title: `Clôturer l'incident #${incidentId} ?`,
+      message: "L'incident sera archivé dans l'historique et retiré de la file active.",
+      confirmLabel: 'Clôturer',
+      cancelLabel: 'Annuler',
+      tone: 'primary',
+      icon: 'task_alt',
+    });
+    if (!confirmed) return;
     try {
       await apiFetch(`/coordination/incidents/${incidentId}/cloturer`, { method: 'POST' });
+      showToast(`Incident #${incidentId} clôturé avec succès.`);
       await afterChange();
     } catch (err: any) {
-      alert(`Erreur : ${err.message}`);
+      await showAlert({
+        eyebrow: 'Clôture de dossier',
+        title: `Impossible de clôturer l'incident #${incidentId}`,
+        message: err.message || 'Une erreur est survenue lors de la clôture.',
+        tone: 'danger',
+      });
     }
   };
 
   const handleRouvrir = async (incidentId: number) => {
-    const motif = window.prompt('Motif de la réouverture :');
+    const motif = await showPrompt({
+      eyebrow: 'Réouverture de dossier',
+      title: `Rouvrir l'incident #${incidentId}`,
+      message: 'Précisez le motif justifiant le retour de cet incident en file active.',
+      label: 'Motif de la réouverture',
+      placeholder: 'Ex. : Nouvelle montée des eaux signalée sur le secteur…',
+      multiline: true,
+      required: true,
+      requiredMessage: 'Veuillez saisir un motif de réouverture.',
+      confirmLabel: 'Rouvrir',
+      cancelLabel: 'Annuler',
+      tone: 'warn',
+      icon: 'restart_alt',
+    });
     if (!motif) return;
     try {
       await apiFetch(`/coordination/incidents/${incidentId}/rouvrir`, {
         method: 'POST',
         body: JSON.stringify({ motif }),
       });
+      showToast(`Incident #${incidentId} rouvert et remis en file active.`);
       await afterChange();
     } catch (err: any) {
-      alert(`Erreur : ${err.message}`);
+      await showAlert({
+        eyebrow: 'Réouverture de dossier',
+        title: `Impossible de rouvrir l'incident #${incidentId}`,
+        message: err.message || 'Une erreur est survenue lors de la réouverture.',
+        tone: 'danger',
+      });
     }
   };
 
