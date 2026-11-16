@@ -24,7 +24,18 @@ export const SiteFooter: React.FC = () => {
       <footer className={`site-footer${hasDock ? ' has-dock' : ''}`}>
         <div className="site-wrap site-footer-main">
           <div className="site-footer-about">
-            <div className="site-footer-title">OID · Observatoire Inondations &amp; Dommages</div>
+            <Link to="/" className="site-footer-brand" aria-label="OID — Accueil">
+              <span className="site-footer-logo-wrap" aria-hidden="true">
+                <img
+                  src="/images/oid-logo.png"
+                  alt=""
+                  className="site-footer-logo"
+                  width={58}
+                  height={28}
+                />
+              </span>
+              <span className="site-footer-title">Observatoire Inondations &amp; Dommages</span>
+            </Link>
             <p>
               Outil citoyen indépendant pour faire remonter les données de crues et de dommages.
             </p>

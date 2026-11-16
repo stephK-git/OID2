@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, LogIn, LogOut, Menu, Waves, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, LogIn, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useActiveSection } from './useActiveSection';
 import './site.css';
@@ -120,21 +120,22 @@ export const SiteHeader: React.FC<SiteHeaderProps> = ({ variant = 'public' }) =>
 
   const brand = (
     <Link to="/" className="site-brand" aria-label="OID — Accueil">
-      <span className="site-brand-badge" aria-hidden="true">
-        <Waves size={20} strokeWidth={2.5} />
-      </span>
-      <span className="site-brand-text">
-        <span className="site-brand-name">OID</span>
-        <span className="site-brand-sub">
-          {variant === 'auth' ? "Portail d'accès opérationnel" : 'Observatoire Inondations & Dommages'}
-        </span>
+      <img
+        src="/images/oid-logo.png"
+        alt=""
+        className="site-brand-logo"
+        width={78}
+        height={38}
+      />
+      <span className="site-brand-sub">
+        {variant === 'auth' ? "Portail d'accès opérationnel" : 'Observatoire Inondations & Dommages'}
       </span>
     </Link>
   );
 
   if (variant === 'auth') {
     return (
-      <header className="site-header">
+      <header className="site-header is-auth">
         <a className="site-skip" href="#contenu">
           Aller au contenu principal
         </a>
@@ -220,10 +221,13 @@ export const SiteHeader: React.FC<SiteHeaderProps> = ({ variant = 'public' }) =>
       >
         <div className="site-drawer-head">
           <Link to="/" className="site-brand" aria-label="OID — Accueil" onClick={() => setMenuOpen(false)}>
-            <span className="site-brand-badge" aria-hidden="true">
-              <Waves size={20} strokeWidth={2.5} />
-            </span>
-            <span className="site-brand-name">OID</span>
+            <img
+              src="/images/oid-logo.png"
+              alt=""
+              className="site-brand-logo"
+              width={69}
+              height={34}
+            />
           </Link>
           <button
             type="button"

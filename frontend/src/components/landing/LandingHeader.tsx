@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, LogIn, LogOut, Menu, Waves, X } from 'lucide-react';
+import { ChevronRight, LogIn, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface LandingHeaderProps {
@@ -58,19 +58,18 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
         <div className="mx-auto flex h-16 max-w-[1200px] 2xl:max-w-[1320px] items-center justify-between gap-4 px-4 sm:h-[68px] sm:px-6">
           <Link
             to="/"
-            className="inline-flex items-center gap-2.5 sm:gap-3"
+            className="inline-flex items-center gap-3"
             aria-label="OID — Accueil"
           >
-            <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[var(--water)] text-white sm:h-9 sm:w-9">
-              <Waves size={20} strokeWidth={2.5} aria-hidden="true" />
-            </span>
-            <span className="flex flex-col leading-tight">
-              <span className="font-display text-[18px] font-extrabold tracking-[-0.02em] text-ink">
-                OID
-              </span>
-              <span className="hidden text-[12px] font-medium text-ink2 sm:block lg:hidden xl:block">
-                Observatoire Inondations &amp; Dommages
-              </span>
+            <img
+              src="/images/oid-logo.png"
+              alt=""
+              className="block h-[34px] w-auto shrink-0 object-contain sm:h-[38px]"
+              width={78}
+              height={38}
+            />
+            <span className="hidden border-l border-line pl-3 text-[12.5px] font-semibold text-ink2 sm:block lg:hidden xl:block">
+              Observatoire Inondations &amp; Dommages
             </span>
           </Link>
 
@@ -173,15 +172,16 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-line px-4 sm:h-[68px]">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[var(--water)] text-white">
-              <Waves size={19} strokeWidth={2.5} aria-hidden="true" />
+            <img
+              src="/images/oid-logo.png"
+              alt="OID"
+              className="block h-[34px] w-auto shrink-0 object-contain"
+              width={69}
+              height={34}
+            />
+            <span className="border-l border-line pl-2.5 text-[11px] font-semibold text-ink2">
+              Menu principal
             </span>
-            <div className="flex flex-col leading-tight">
-              <span className="font-display text-[17px] font-extrabold tracking-[-0.02em] text-ink">
-                OID
-              </span>
-              <span className="text-[11px] font-medium text-ink2">Menu principal</span>
-            </div>
           </div>
 
           <button

@@ -1,0 +1,21 @@
+{
+  "name": "OID — Observatoire Inondations & Dommages",
+  "short_name": "OID",
+  "description": "Plateforme citoyenne et territoriale de veille, d'alerte et de suivi des crues et inondations en temps réel.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f6fa",
+  "theme_color": "#0b5fc4",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

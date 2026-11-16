@@ -1253,7 +1253,8 @@
     border-bottom: 1px solid var(--line);
     z-index: 40;
   }
-  .enq-mobile-bar .logo-text-subtitle { display: none; }
+  .enq-mobile-bar .logo-text-subtitle,
+  .enq-mobile-bar .oid-brandmark-meta { display: none; }
   .enq-burger {
     display: grid;
     place-items: center;
@@ -1289,6 +1290,19 @@
   .page-enqueteur .sidebar-nav .nav-item { width: 100%; padding: 10px 14px; font-size: 14px; margin-bottom: 4px; }
   .page-enqueteur .main-content { height: calc(100dvh - 56px) !important; min-height: 0; }
 }
+@media (max-width: 520px) {
+  .page-coordinateur .sidebar-header .oid-brandmark-meta {
+    display: none;
+  }
+}
+
+[data-theme="dark"] .oid-brandmark-logo,
+[data-theme="dark"] .site-brand-logo {
+  background: #ffffff;
+  padding: 3px 6px;
+  border-radius: 7px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-enqueteur .sidebar { transition: none; }
 }
