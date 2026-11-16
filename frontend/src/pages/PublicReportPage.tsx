@@ -253,6 +253,8 @@ export const PublicReportPage: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const errorRef = useRef<HTMLDivElement>(null);
   const toastTimeoutRef = useRef<number | null>(null);
 
@@ -471,8 +473,12 @@ export const PublicReportPage: React.FC = () => {
   };
 
   const stopCameraStream = () => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    setCameraReady(false);
   };
 
   const closeCamera = () => {
@@ -480,18 +486,54 @@ export const PublicReportPage: React.FC = () => {
     setCameraOpen(false);
   };
 
-  // Branche le flux vidéo sur l'aperçu quand la fenêtre caméra s'ouvre ; coupe la caméra à la fermeture
+  const startCameraStream = async (mode: 'environment' | 'user') => {
+    stopCameraStream();
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: mode },
+          width: { ideal: 1280 },
+          height: { ideal: 960 },
+        },
+        audio: false,
+      });
+    } catch {
+      // Repli sans contrainte de caméra si le pilote refuse facingMode/résolution
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+    }
+
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      await videoRef.current.play().catch(() => {});
+    }
+  };
+
+  // Branche le flux vidéo sur l'aperçu dès que la modale caméra est montée
   useEffect(() => {
-    if (cameraOpen && videoRef.current && streamRef.current) {
+    if (!cameraOpen) return;
+    if (videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
       videoRef.current.play().catch(() => {});
     }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeCamera();
+    };
+    window.addEventListener('keydown', onKeyDown);
     return () => {
-      if (!cameraOpen) stopCameraStream();
+      window.removeEventListener('keydown', onKeyDown);
     };
   }, [cameraOpen]);
 
-  useEffect(() => stopCameraStream, []);
+  // Coupe proprement la caméra au démontage de la page
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+  }, []);
 
   const openCamera = async () => {
     if (photos.length >= MAX_PHOTOS) return;
@@ -504,15 +546,13 @@ export const PublicReportPage: React.FC = () => {
     }
 
     try {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
+      await startCameraStream(facingMode);
       setCameraOpen(true);
     } catch (err: any) {
+      stopCameraStream();
       if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
         setError(
-          "L'accès à l'appareil photo est bloqué. Autorisez la caméra pour ce site dans votre navigateur (icône de cadenas près de l'adresse), puis réessayez, ou utilisez « Importer »."
+          "L'accès à l'appareil photo est bloqué. Autorisez la caméra pour ce site dans votre navigateur (icône près de la barre d'adresse), puis réessayez, ou utilisez « Importer »."
         );
       } else if (err?.name === 'NotFoundError' || err?.name === 'OverconstrainedError') {
         setError("Aucun appareil photo détecté sur cet appareil. Utilisez « Importer » pour choisir une photo.");
@@ -523,9 +563,19 @@ export const PublicReportPage: React.FC = () => {
     }
   };
 
+  const handleSwitchCamera = async () => {
+    const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextMode);
+    try {
+      await startCameraStream(nextMode);
+    } catch {
+      showToast('Impossible de changer de caméra sur cet appareil.');
+    }
+  };
+
   const takeSnapshot = () => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth) return;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
     const ratio = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(video.videoWidth * ratio);
@@ -533,12 +583,12 @@ export const PublicReportPage: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
     const sizeKb = Math.round((dataUrl.length * 0.75) / 1024);
     photoIdRef.current += 1;
     const item: PhotoItem = { id: photoIdRef.current, dataUrl, meta: `JPG • ${sizeKb} Ko` };
     setPhotos((prev) => [...prev, item].slice(0, MAX_PHOTOS));
-    showToast('Photo prête pour envoi.');
+    showToast('Photo capturée et ajoutée au signalement.');
     closeCamera();
   };
 
@@ -622,16 +672,73 @@ export const PublicReportPage: React.FC = () => {
 
       {/* Caméra en direct */}
       {cameraOpen && (
-        <div className="oid-overlay" role="dialog" aria-modal="true" aria-label="Prendre une photo">
+        <div
+          className="oid-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Prendre une photo"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeCamera();
+          }}
+        >
           <div className="oid-camera-modal">
-            <video ref={videoRef} className="oid-camera-video" playsInline muted autoPlay />
+            <div className="oid-camera-head">
+              <div className="oid-camera-head-title">
+                <span aria-hidden="true" className="material-symbols-outlined">photo_camera</span>
+                <span>Appareil photo ({photos.length + 1}/{MAX_PHOTOS})</span>
+              </div>
+              <div className="oid-camera-head-actions">
+                <button
+                  type="button"
+                  onClick={handleSwitchCamera}
+                  className="oid-camera-icon-btn"
+                  title="Changer de caméra (avant / arrière)"
+                  aria-label="Changer de caméra"
+                >
+                  <span aria-hidden="true" className="material-symbols-outlined">sync</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={closeCamera}
+                  className="oid-camera-icon-btn"
+                  title="Fermer"
+                  aria-label="Fermer l'appareil photo"
+                >
+                  <span aria-hidden="true" className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="oid-camera-viewport">
+              <video
+                ref={videoRef}
+                className="oid-camera-video"
+                playsInline
+                muted
+                autoPlay
+                onLoadedMetadata={() => setCameraReady(true)}
+                onPlaying={() => setCameraReady(true)}
+              />
+              {!cameraReady && (
+                <div className="oid-camera-loading">
+                  <span aria-hidden="true" className="material-symbols-outlined spin">sync</span>
+                  <span>Activation de la caméra…</span>
+                </div>
+              )}
+            </div>
+
             <div className="oid-camera-controls">
               <button type="button" onClick={closeCamera} className="oid-secondary-btn">
                 <span>Annuler</span>
               </button>
-              <button type="button" onClick={takeSnapshot} className="oid-submit-btn">
+              <button
+                type="button"
+                onClick={takeSnapshot}
+                disabled={!cameraReady}
+                className="oid-submit-btn"
+              >
                 <span aria-hidden="true" className="material-symbols-outlined">photo_camera</span>
-                <span>Capturer</span>
+                <span>Capturer la photo</span>
               </button>
             </div>
           </div>
