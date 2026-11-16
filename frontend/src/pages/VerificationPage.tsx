@@ -275,7 +275,17 @@ const VerificationMiniMap: React.FC<{
 
   // Initialisation de la carte
   useEffect(() => {
-    if (!containerRef.current || !signalement.coords) return;
+    if (!signalement.coords) {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        layerGroupRef.current = null;
+        tileLayerRef.current = null;
+      }
+      return;
+    }
+
+    if (!containerRef.current) return;
 
     if (!mapRef.current) {
       const map = L.map(containerRef.current, {
@@ -293,6 +303,7 @@ const VerificationMiniMap: React.FC<{
       tileLayerRef.current = tl;
       layerGroupRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
+      requestAnimationFrame(() => map.invalidateSize());
     }
   }, [signalement.coords]);
 
